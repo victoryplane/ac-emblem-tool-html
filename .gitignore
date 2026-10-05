@@ -1,50 +1,33 @@
-# Prerequisites
-*.d
+# ─────────────────────────────────────────────────────────────────────────────
+# 仓库里**不**包含的东西（都是"本机才有"的：体积大、或与这台机器绑定）
+#   ⚠ 这些目录**不是被删了** —— 它们仍在你本地的 emblem-tool/ 里，只是不进 git。
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# ① 真记忆卡镜像 + 预览图（42 MB）
+#    4 张证据卡（33 MB）是机主自己的存档镜像 ⇒ 不进公开仓库。
+#    ⇒ `web/test/card.test.ts` 里依赖它们的两节会**明确打印原因并跳过**（不算失败）；
+#      想跑就把卡放回 out/evidence/（文件名见 web/test/fixtures/card-manifest.json）。
+out/
 
-# Precompiled Headers
-*.gch
-*.pch
+# ② 上游官方发行的二进制（21 MB：v0.0 / v0.1 / v1.0.0 / v1.0.1 / v1.0.2 的 exe + zip）
+#    ⇒ `node web/check.mjs` 里"与官方 exe 交叉验证"那一步会**明确跳过并说明怎么补**。
+dist/
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# ③ 上游完整 git 仓库（本机是 clone，自带 .git；内容在上游仓库与各 fork 里都有）
+src/ac-emblem-tool/
 
-# Fortran module files
-*.mod
-*.smod
+# ─────────────────────────────────────────────────────────────────────────────
+# 生成物 / 缓存（可随时重建）
+# ─────────────────────────────────────────────────────────────────────────────
+testdata/_work/
+**/__pycache__/
+*.pyc
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# 打包器与测试的临时产物（web/dist/emblem-tool.html 是**交付物**，必须提交 ⇒ 不忽略它）
+web/dist/*.tmp
 
-# Executables
-*.exe
-*.out
-*.app
-
-CMakeLists.txt.user
-CMakeCache.txt
-CMakeFiles
-CMakeScripts
-Testing
-Makefile
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps
-
-[Bb][Uu][Ii][Ll][Dd]*
-
-testing
-.cache
-.vscode
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

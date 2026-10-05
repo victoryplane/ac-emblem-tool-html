@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<!--
+  PS2《装甲核心》徽章工具 —— 界面外壳（**开发期**用的模板）。
+
+  ⚠ 这个文件**不是**给最终用户双击的。用户双击的是构建产物 web\dist\emblem-tool.html
+    （由 node web\build.mjs 生成：把样式表链接换成内联 style 块，
+     再把下面那行占位注释换成内联的经典脚本块）。
+
+  布局依据：web\SPEC.md §四（顶栏 / 上=图片处理 / 下=8 槽）。
+
+  ★ 写这份外壳时的一条纪律（踩过）：**注释里不要出现尖括号标签字面量**
+    （比如 link 标签、script 标签的写法）。构建自检要按标签数与外部引用扫全文，
+    注释里的标签字面量会被当成真标签，于是"明明只有 1 个脚本"却报出 7 个。
+    需要举例时就用文字描述，或者在构建器里改扫描方式。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PS2 装甲核心 · 徽章工具</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<!-- ══════════════════════ 顶栏 ══════════════════════ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-title">PS2 装甲核心 · 徽章工具</span>
+    <!--
+      版本号：这里只放一个**占位符**，构建时由 build.mjs 从 src/ui/logic/version.ts
+      的 APP_VERSION 替换成真值（main.ts 里还有一次 JS 兜底赋值，开发期直接开 shell 也对）。
+      ⇒ 版本号只有**一个**来源，且 JS 没跑起来时也不会显示 `v?`。
+    -->
+    <span class="brand-sub" id="app-version" data-app-version="v?">v?</span>
+  </div>
+
+  <div class="topbar-block" id="card-drop" title="把 .ps2 记忆卡拖到这里（Chrome 下能拿到写句柄 ⇒ 保存时可直接覆盖原文件）">
+    <span class="lbl">记忆卡</span>
+    <span id="card-info" class="card-info"><span class="dim">未选择记忆卡</span></span>
+    <button id="btn-card-open" class="primary">选择记忆卡（可覆盖保存）</button>
+    <!--
+      ★ 2026-10-05（0.10）：〔拖入 / 只读选择〕那个按钮**已按用户要求删除**（"没用"）。
+        路径没丢，只是不再占一个按钮：
+          · **拖入**：本块（`#card-drop`）仍是拖放目标（见 `main.ts::installDropZones`）；
+          · **只读方式**：`showOpenFilePicker` 不可用/被拒时，`openCardViaPicker()` 会**自动**
+            退化成下面这个隐藏文件框（只读 ⇒ 保存变成"下载一份改好的卡"，不会静默丢数据）。
+        所以 `#card-input` 必须留着 —— 它是兜底入口，不是死代码。
+    -->
+    <input type="file" id="card-input" accept=".ps2,.mcr,.mc2,.bin,.psv" hidden>
+  </div>
+
+  <div class="topbar-block">
+    <span class="lbl">作品</span>
+    <select id="game-select"></select>
+    <span id="custom-serial-row" style="display:none">
+      <input type="text" id="custom-serial" placeholder="盘序列号，如 SLUS-20435" size="18">
+    </span>
+    <!-- ⚠ 只用来放"⚠ 未验证"这类提醒；已验证的作品在这里**什么都不显示**（0.10 用户要求删掉那行"✅ 有实机证据 …"） -->
+    <span id="game-note" class="game-note"></span>
+    <span id="game-error" class="game-error"></span>
+  </div>
+
+  <!--
+    ★ 2026-10-05（0.10）：顶栏这块「PCSX2 自检 + 未提供任何 PCSX2 文件」的摘要**已按用户要求整块删除**。
+      ⚠ 删的只是**顶栏这一行摘要**：页面最下面那块常驻的 PCSX2 自检面板（选择目录 / 结论表 /
+      "判读方法"）**还在**、功能一个都没少 —— 用户要的是别在顶栏重复一遍。
+  -->
+</header>
+
+<!-- ══════════════════════ 【上】图片处理：1 格当前图片 + 右侧参数 ══════════════════════ -->
+<!--
+  结构（2026-10-06 / 0.22 用户定稿）：
+    .upper = 2 列：左 ≈2/3 是"当前图片"那一格，右 ≈1/3 是**参数侧栏**。
+    ★ 0.22：右栏原来是「工具侧栏」（像素编辑器 M4b 的结构占位）—— 用户想清楚之后决定
+      **不做内置编辑器**（"其他优秀的图像处理工具有很多"），那一栏整块删掉，位置给了参数
+      （参数原来在 `</main>` 之后独立一整行）。理由与替代流程见 SPEC.md §六。
+    · 左格顶部是一条**细工具条**：选择/粘贴图片 · 取景 · 预览倍率 · 名称与尺寸
+    · 左格中间是**同一块画布**：平时显示"当前图片"（索引 0 口径 = 游戏所见），
+      点〔取景〕后在**同一格里**切成取景视图（固定的白色方框 + 可拖动的源图，见下面那段注释）。
+    · 「原图」面板已经**删除**（不再常驻显示），但选图/粘贴/拖入的功能一个都没少（搬到了细工具条）。
+-->
+<main class="upper">
+  <section class="card pane-image">
+    <div class="image-toolbar">
+      <button id="btn-image-open" class="primary">选择 / 粘贴图片</button>
+      <input type="file" id="image-input" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.ico,.avif,.svg" hidden>
+      <button id="btn-crop">取景…</button>
+      <span class="lbl">预览倍率</span>
+      <select id="preview-zoom"></select>
+      <span id="original-badge" class="orig-badge"></span>
+    </div>
+    <div id="image-drop" class="stage">
+      <!-- 显示"当前图片"（索引 0 口径）。★ 0.22 起它**只是预览**，不再是编辑画布（内置编辑器不做了） -->
+      <div id="stage-final" class="stage-layer"><div id="view-preview"></div></div>
+      <!--
+        取景视图（用户 2026-10-05 定的方案，只有一个动体）：
+          · #crop-frame = **固定的白色方框**（"取景示意区"，位置/边长只看舞台大小，不随拖动改变）；
+          · #view-source 里那张源图按 transform 缩放/平移 —— **用户拖的是图片**，把要的部分拖进白框；
+          · 滚轮以白框中心缩放。默认隐藏。
+      -->
+      <div id="stage-crop" class="stage-layer crop-layer" hidden>
+        <div id="crop-stage" class="crop-stage">
+          <div id="view-source" class="view-source"><!-- cropView.ts 在这里塞画布 --></div>
+          <div id="crop-frame" class="crop-frame"></div>
+        </div>
+      </div>
+    </div>
+    <div id="preview-zoom-note" class="zoom-note-host"></div>
+    <div class="row crop-actions" id="crop-actions" hidden>
+      <span class="crop-hint">拖动图片，把要用的部分放进白框里（滚轮缩放）</span>
+      <!--
+        ★ 0.12：随拖动/滚轮**实时更新**的读数（白框 = 源图哪一块、倍率、有没有到最小）。
+        ⚠ 为什么要有它：原来这些只写在 `#status` 里，而状态行在**页面最下面**（8 槽那一块），
+          取景时根本看不到（用户："ok了，然后状态行在哪"）。这条就在白框正下方。
+      -->
+      <span id="crop-readout" class="crop-readout"></span>
+      <button id="btn-crop-ok" class="primary">确定取景</button>
+      <button id="btn-crop-cancel">取消</button>
+    </div>
+  </section>
+
+  <!--
+    ══════════════ 右栏：参数（0.22 起从"独立整行"搬到这里） ══════════════
+    ★ 2026-10-06（0.22）用户定：**右栏放参数**。
+      来由：原来右栏是「工具侧栏」（像素编辑器 M4b 的结构占位），用户想清楚之后决定
+      **不做内置编辑器**（理由与替代流程见 SPEC.md §六）⇒ 那一栏整块删掉，
+      空出来的位置正好给参数；参数格少（只有两格），侧栏宽度（≥260px）绰绰有余。
+    ★ 参数**一个都没少**：缩放核 / alpha 阈值仍由 `main.ts::bindParams()` 接线，
+      `state.params` 与核心 `image.ts` 一个字没动。
+    ⚠ 参数块**必须在 `.upper` 的栅格内部**（它是第 2 列）；`ui.test.ts` 分节 (j) ⑦ 钉住这一条。
+  -->
+  <aside class="card pane-params">
+    <div class="pane-head">
+      <span class="pane-title">参数</span>
+      <!-- ★ 0.23：原来这里还有一句副标题「两格：缩放核 / alpha 阈值」——
+           参数栏收窄到 220px 之后它把标题挤成了竖排的"参 数"，而且下面两格的标签本来就写着
+           "缩放核 / alpha 阈值"，属于重复的说明性文字 ⇒ 整句删掉（用户一贯要求：界面上不放说明性长句）。 -->
+    </div>
+    <div class="params-grid">
+      <!--
+        ★ 2026-10-05（0.13）：原来这里有个「取景」四档下拉（适应留边 / 铺满 / 拉伸 / 手动），**已删**
+          （用户："取景这四个下拉选项有什么意义呢，我感觉只需要一个就行了"）。
+          理由（代码口径）：`core/image.ts::fitToTarget()` 里只有 `manual` 会读界面的 `scale/offsetX/offsetY`，
+          另外三档**无视**你手动调好的取景、自己重算一套 ⇒ 那个下拉实际上是"偷偷把你的取景丢掉"的开关；
+          而手动这一档已经能覆盖前两档（滚轮往里 = 铺满；往外滚到底 = 适应留边），
+          「拉伸」（非等比）是唯一做不到的 —— 但徽章本来就不该被拉伸。
+          核心 `image.ts` 的四个模式**一个都没动**（要加回来只差一个控件）。
+          取景视图的入口仍是左上的〔取景…〕；下面「取景数值」那段说明里也写着怎么调。
+      -->
+      <div class="field">
+        <label for="kernel">缩放核</label>
+        <select id="kernel"></select>
+        <!-- ★ 0.18：原来下面还有一句「默认「自动判断」：源=目标→原样；整数倍缩小→最近邻；…」，
+             按用户要求删掉（"这几句话也删掉"）。规则本身没变 —— `core/image.ts::chooseKernel()`
+             与 SPEC §五 ③ 一个字没动，只是界面上不再解释它。 -->
+      </div>
+
+      <div class="field">
+        <label for="alpha-threshold">alpha 阈值</label>
+        <input type="range" id="alpha-threshold" min="1" max="254" step="1">
+        <input type="number" id="alpha-threshold-num" min="1" max="254" step="1" class="num">
+        <div class="hint">默认 128。半透明像素在这一步被归成"全透明 / 全不透明"。</div>
+      </div>
+
+      <!--
+        ★ 2026-10-05（0.15）：原本还有三格 —— 「收边（去杂点）」「减色上限」「取景数值（倍率/X/Y）」，
+          **按用户要求整块删除**（他说"我感觉这三个选项都没什么用啊"，讨论后选了"三样全删"）。
+          删 UI **不等于删能力**：核心 `image.ts` 的三项参数、默认值（收边关 / 减色 255）与全部测试
+          **一个字都没动**，所以现有行为完全不变 —— 只是没有界面入口了：
+            · 收边：只有"照片来源、二值化后留孤立脏点"时才需要，重新裁一下通常就够了；
+            · 减色上限：默认 255 就是格式上限（= 不动作），调小只会有损，而存档块固定 0x4000、不会变小；
+            · 取景数值：**输入**没有独占价值（需要精确值的地方是边界，而拖到边界会被自动夹住 = 精确值）；
+              想看当前取景的几个数就点左上的〔取景…〕，白框下面那行实时读数一直在写。
+          ⚠ 这三个 id（despeckle / max-colors / manual-scale / manual-x / manual-y）**不许长回来**，
+            `ui.test.ts` 有闸门。
+      -->
+
+      <!--
+        ★ 2026-10-05（0.17）：原本这里还有一格「★ 实时统计」（`#stats` + `#compliance-inline`，9 行诊断数字），
+        **按用户要求整块删除**（他说"我认为实时统计这个部分，整个就没什么作用"，讨论后选了"整个删掉"）。
+        那些数字是移植管线时给自己看的东西（原图色数 / 半透明像素 / 补的背景 / 二值化改动 /
+        减色前后 / 是否无损），日常流程里确实用不上。**核心照旧**（`prepareEmblem()` 的 report 一个字段没动）：
+          · 想知道"到底做了什么"：F12 里 `EmblemToolCore.ui.state.prepared.report`；
+          · **合规**这件事仍然挡在写卡那一步 —— 不合规会被 `writeGuard` 拒绝并说明原因，
+            写完之后日志里也会写一行"图像合规（128×128 / 实色 ≤255 / 半透明 0）"。
+        ⚠ `#stats` / `#compliance-inline` 这两个 id 与 `renderStats()` **不许长回来**，`ui.test.ts` 有闸门。
+      -->
+    </div>
+  </aside>
+</main>
+
+<!-- ══════════════════════ 【下】8 个槽位 ══════════════════════ -->
+<section class="card lower">
+  <div class="pane-head">
+    <span class="pane-title">8 个徽章槽</span>
+    <!-- ★ 0.18：原来这里还有一句「LR = data0..7；SL/NX/AC3/… = E00..E07；空的显示「＋新建」」，
+         按用户要求删掉。文件名规则本身没变（每个槽卡片上照样写着实际目录\文件）。 -->
+  </div>
+  <div id="slot-summary" class="slot-summary dim"></div>
+  <div id="slot-grid" class="slot-grid"></div>
+
+  <div class="lower-bottom">
+    <div class="actions">
+      <button id="btn-write" class="primary big">写入选中槽</button>
+      <button id="btn-export-png">导出 PNG</button>
+      <button id="btn-delete">删除槽</button>
+      <!-- ★ 0.26（用户）：〔导出整卡〕改名〔另存为〕，行为就是"另存一张记忆卡"：
+           走 showSaveFilePicker 让你选位置和文件名（拿不到那个对话框时退化成下载）。 -->
+      <button id="btn-save-as">另存为…</button>
+      <button id="btn-debug" class="quiet">看目录项（调试）</button>
+      <span id="busy" class="busy" style="display:none">⏳ 正在处理…</span>
+    </div>
+    <div class="hintblock">
+      <div id="write-hint" class="write-hint"></div>
+      <div id="status" class="status"></div>
+    </div>
+    <!-- ★ 0.18：写入日志默认**空着且隐藏**（界面上不再有"欢迎/说明"那几行 ⇒ 没内容时不该出现一个空框）。
+         `slotsView.ts::renderLog()` 会在有内容时把它显示出来。 -->
+    <div id="write-log" class="write-log" hidden></div>
+  </div>
+</section>
+
+<!--
+  ══════════════════════ 最下：PCSX2 自检（全宽、**默认折叠**、可展开） ══════════════════════
+
+  位置由用户定：整页最底部（8 槽 → 写卡提示/日志 → 这里）。
+  ★ 这块面板存在的理由：PCSX2 的「设置 → 记忆卡插槽」里选的卡，**可能不是游戏实际读的那张**
+    —— 还有一层"每游戏设置"（gamesettings\<序列号>_<CRC>.ini）会盖掉全局设置。
+    我们就因为这个白排查过一轮。文案必须**自解释**，不能只写"把文件拖进来"。
+  ★ 浏览器不允许网页凭路径读本地文件（file:// 也一样），所以"默认找到 PCSX2 目录"= 一次点击 + 记住上次位置。
+  ★ 2026-10-06（0.23）用户："自检改成默认折叠起来"。做法：
+    · 头一行（标题 + 说明 + 〔展开/收起〕按钮）常驻；
+    · 其余全部（三条入口 + 结论表 + 那段"这块面板是干什么的"）放进 `#pcsx2-panel`，默认 `hidden`；
+    · **但**读进文件之后会自动展开一次（`main.ts::setPcsx2Open(true)`），否则用户点了目录却看不到结论。
+    ⚠ 折叠靠 `[hidden]`（`styles.css` 里有 `[hidden] { display: none !important }`），不用 inline style。
+-->
+<section class="card pcsx2-bar">
+  <div class="pane-head">
+    <span class="pane-title">PCSX2 自检</span>
+    <span class="dim">确认游戏实际会读哪张卡，避免全局设置与独立设置不同导致的记忆卡读取问题</span>
+    <!-- ★ 0.24（用户）："展开按钮改成其他几个按钮也用的蓝色，不然不够显眼" ⇒ `quiet` → `primary`
+         （`button.primary` = `#2f4a68` 蓝底，与〔选择记忆卡〕〔选择 PCSX2 目录〕〔写入选中槽〕同一个蓝）。
+         ⚠ 它是**面板头一行里唯一的操作**，用低调的透明按钮确实找不到；判据在 `ui.test.ts` 分节 k2。 -->
+    <button id="btn-pcsx2-toggle" class="primary" aria-expanded="false" aria-controls="pcsx2-panel">展开</button>
+  </div>
+
+  <div id="pcsx2-panel" hidden>
+    <div class="row">
+      <button id="btn-pcsx2-dir" class="primary">选择 PCSX2 目录（一次点击，之后自动记住）</button>
+      <button id="btn-pcsx2-input">用目录输入框选（兜底方式）</button>
+      <button id="btn-pcsx2-clear">清空</button>
+      <!-- 兜底路径：没有 showDirectoryPicker（或它抛 SecurityError）时用这个；不依赖 File System Access API -->
+      <input type="file" id="pcsx2-dir-input" webkitdirectory multiple hidden>
+      <span id="pcsx2-drop" class="dropzone-inline">也可以把 inis\PCSX2.ini、gamesettings\*.ini、logs\emulog.txt（或整个 PCSX2 目录）拖到这里</span>
+    </div>
+
+    <div id="pcsx2-default-dir" class="pcsx2-default"></div>
+    <div class="row">
+      <span id="pcsx2-route" class="dim"></span>
+    </div>
+
+    <div id="pcsx2-body"></div>
+  </div>
+</section>
+
+<!--
+  ★ 0.26：必须点掉的弹窗（两处在用：打开页面时的"未经测试 / 自行备份"告知、写入前的"你还在取景模式"）。
+  结构写在这里（不是 JS 现造）——这样 `ui.test.ts` 那条"代码里引用的每个 id 都在 index.html 里"的闸门能管到它，
+  F12 里也能直接看到它。文字由 `dom.ts::showModal()` 填。
+-->
+<div class="modal-host" id="modal-host" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-actions"><button class="primary" id="modal-ok">知道了</button></div>
+  </div>
+</div>
+
+<!-- 内联脚本占位符：构建时替换成经典脚本块（**不是** type="module"） -->
+<!--BUNDLE-->
+
+</body>
+</html>

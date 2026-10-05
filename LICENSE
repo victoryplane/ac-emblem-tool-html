@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2021 Marcellus Parley
+Copyright (c) 2026 victoryplane
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+本仓库里的**网页版工具**（`web/`）、格式理解文档（`docs/`）、交叉验证判据层（`tools/`）与
+自检报告（`_selftest/`）由 victoryplane 编写，按上面的 MIT 条款发布。
+
+它建立在对 [mparley/ac-emblem-tool](https://github.com/mparley/ac-emblem-tool) 的阅读与验证之上 ——
+上游同样是 **MIT**（`Copyright (c) 2021 Marcellus Parley`）。本仓库**不再分发**上游的源码与二进制，
+只保留引用与致谢；需要上游本体请去它的仓库。
+
+`testdata/real/` 里的第三方真实存档样本来自
+[bucanero/apollo-saves](https://github.com/bucanero/apollo-saves)，只作本地测试用；
+每个文件的 SHA256 与出处见 `docs/03-来源与校验和.md`。

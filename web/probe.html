@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<!--
+  文件协议体检页 v2（probe.html）
+  ────────────────────────────────────────────────────────────────────────
+  目的：实测**双击打开（file://）**这一档到底能做什么。这决定"改完的卡怎么存回去"。
+
+  ① 读文件        <input type=file>                 → 能不能把记忆卡读进来
+  ② 下载文件      Blob URL + <a download>           → 导出/兜底路径
+  ③ 另存为        showSaveFilePicker()              → 已实测：✅ 可用（Chrome 154 / file://）
+  ④ 选目录        showDirectoryPicker()             → ★ 能不能直接列/读写 memcards 整个目录
+  ⑤ 句柄写回      showOpenFilePicker + createWritable → ★ 能不能"打开原卡→直接覆盖保存"
+                                                       （本页只申请权限并 abort，**不写任何数据**）
+
+  用法：双击打开 → 点 ①②③④⑤ → 点「复制结果」发我。
+       ④ 会弹出目录选择框（建议就选 C:\Users\M\Documents\PCSX2）；
+          它会新建一个 `__徽章工具体检__.txt` 然后立刻删掉（证明可写），不改别的文件。
+       ⑤ 建议随便选一个**可以随便动的文件**（比如桌面新建一个 a.txt），
+          它只读文件头、申请写权限、然后 abort —— **不会写入任何内容**。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>文件协议体检 v2 — 徽章工具</title>
+<style>
+  :root { --bg:#14171c; --fg:#dfe4ea; --dim:#8b97a8; --ok:#41c07a; --bad:#e0554a; --warn:#e0a94a; --box:#1d2229; --line:#2b323c; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--fg);
+         font:14px/1.7 "Microsoft YaHei",system-ui,sans-serif; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:18px; }
+  .box { background:var(--box); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  td { padding:3px 8px 3px 0; vertical-align:top; }
+  td:first-child { color:var(--dim); white-space:nowrap; width:220px; }
+  code { background:#0f1216; padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  button { background:#2a323d; color:var(--fg); border:1px solid #3b4552; border-radius:6px;
+           padding:8px 14px; font-size:13.5px; cursor:pointer; margin:4px 8px 4px 0; }
+  button:hover { background:#333d4a; }
+  .step { margin:12px 0 2px; font-weight:600; }
+  .res { margin:2px 0 10px; color:var(--dim); font-size:13px; }
+  pre { background:#0f1216; border:1px solid var(--line); border-radius:6px; padding:12px;
+        white-space:pre-wrap; word-break:break-all; font-size:12.5px; max-height:340px; overflow:auto; }
+</style>
+</head>
+<body>
+
+<h1>文件协议体检 v2</h1>
+<div class="sub">双击打开（<code>file://</code>）能做什么 —— 五项都点一遍，然后点最下面「复制结果」发我。</div>
+
+<div class="box"><table id="env"></table></div>
+
+<div class="box">
+  <div class="step">① 能不能读文件？</div>
+  <input type="file" id="f1">
+  <div class="res" id="r1">随便选一个文件（记忆卡 <code>Mcd001.ps2</code> 最好，8.25 MB）</div>
+
+  <div class="step">② 能不能下载文件？</div>
+  <button id="dl">生成并下载一个测试文件</button>
+  <div class="res" id="r2">点完看下载栏／下载文件夹里有没有出现 <code>体检测试.txt</code></div>
+
+  <div class="step">③ 能不能"另存为"？</div>
+  <button id="sv">弹出「另存为」框</button>
+  <div class="res" id="r3">弹出保存框 = 能用（按取消即可）</div>
+
+  <div class="step">④ ★ 能不能选一个<b>目录</b>并读写它？（能的话：直接列记忆卡、做自检、批量）</div>
+  <button id="dir">选择目录（建议选 <code>C:\Users\M\Documents\PCSX2</code>）</button>
+  <div class="res" id="r4">会新建 <code>__徽章工具体检__.txt</code> 再立刻删掉，不改别的文件</div>
+
+  <div class="step">⑤ ★ 能不能"打开原卡 → 直接覆盖保存"？（最理想的一步保存）</div>
+  <button id="rw">选一个文件并申请写权限（不写数据）</button>
+  <div class="res" id="r5">只读文件头 + 申请写权限 + 立刻 abort；<b>不会写入任何内容</b></div>
+</div>
+
+<div class="box">
+  <button id="cp">复制结果</button>
+  <button id="cl">清空</button>
+  <pre id="log">（点上面的按钮，结果会追加到这里）</pre>
+</div>
+
+<script>
+"use strict";
+var L = [];
+function log(s) { L.push(s); document.getElementById('log').textContent = L.join('\n'); }
+function row(k, v, cls) {
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td>' + k + '</td><td class="' + (cls || '') + '">' + v + '</td>';
+  document.getElementById('env').appendChild(tr);
+}
+function has(n) { return typeof window[n] === 'function'; }
+function out(id, html) { document.getElementById(id).innerHTML = html; }
+
+// ---------- 环境表 ----------
+row('地址协议', '<code>' + location.protocol + '</code>');
+row('安全上下文', String(window.isSecureContext), window.isSecureContext ? 'ok' : 'bad');
+row('浏览器', navigator.userAgent);
+row('createImageBitmap', has('createImageBitmap') ? '有' : '没有', has('createImageBitmap') ? 'ok' : 'bad');
+row('clipboard（粘贴图）', has('ClipboardItem') ? '有' : '没有');
+row('showOpenFilePicker', has('showOpenFilePicker') ? '有' : '没有', has('showOpenFilePicker') ? 'ok' : 'warn');
+row('showSaveFilePicker', has('showSaveFilePicker') ? '有' : '没有', has('showSaveFilePicker') ? 'ok' : 'warn');
+row('showDirectoryPicker', has('showDirectoryPicker') ? '有' : '没有', has('showDirectoryPicker') ? 'ok' : 'warn');
+row('Worker', typeof Worker === 'function' ? '构造函数在' : '没有');
+
+log('=== 环境 ===');
+log('protocol=' + location.protocol + '  isSecureContext=' + window.isSecureContext);
+log('open/save/dir picker = ' + has('showOpenFilePicker') + '/' + has('showSaveFilePicker') + '/' + has('showDirectoryPicker'));
+
+// ---------- ① ----------
+document.getElementById('f1').addEventListener('change', function (ev) {
+  var f = ev.target.files && ev.target.files[0];
+  if (!f) { out('r1', '没选文件'); return; }
+  var fr = new FileReader();
+  fr.onload = function () {
+    var u8 = new Uint8Array(fr.result, 0, Math.min(16, fr.result.byteLength));
+    var hex = Array.prototype.map.call(u8, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(' ');
+    out('r1', '<span class="ok">✅ 读到了</span> ' + f.name + ' ・ ' + f.size + ' 字节 ・ 头 16 字节 <code>' + hex + '</code>');
+    log('① 读文件: OK  ' + f.name + ' size=' + f.size + ' head=' + hex);
+  };
+  fr.onerror = function () { out('r1', '<span class="bad">❌ 读失败: ' + fr.error + '</span>'); log('① 读文件: 失败 ' + fr.error); };
+  fr.readAsArrayBuffer(f);
+});
+
+// ---------- ② ----------
+document.getElementById('dl').addEventListener('click', function () {
+  try {
+    var blob = new Blob(['徽章工具体检 ' + new Date().toISOString()], { type: 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = '体检测试.txt';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    out('r2', '<span class="warn">已触发</span> —— 请确认下载栏/下载文件夹里出现了 <code>体检测试.txt</code>');
+    log('② 下载: 已触发（待人工确认文件是否出现）');
+  } catch (e) { out('r2', '<span class="bad">❌ ' + e + '</span>'); log('② 下载: 异常 ' + e); }
+});
+
+// ---------- ③ ----------
+document.getElementById('sv').addEventListener('click', function () {
+  if (!has('showSaveFilePicker')) { out('r3', '<span class="bad">❌ 没有该 API</span>'); log('③ 另存为: 不可用'); return; }
+  window.showSaveFilePicker({ suggestedName: '体检测试.txt',
+      types: [{ description: '文本', accept: { 'text/plain': ['.txt'] } }] })
+    .then(function (h) {
+      out('r3', '<span class="ok">✅ 拿到保存句柄</span> ⇒ 可以直接覆盖原文件');
+      log('③ 另存为: OK（拿到句柄）');
+      return h.createWritable().then(function (w) { return w.abort(); });   // 不写数据
+    })
+    .catch(function (e) {
+      out('r3', '<span class="bad">❌ ' + e.name + '</span> — ' + e.message + '<br>（AbortError=你按了取消，正常）');
+      log('③ 另存为: ' + e.name + ' — ' + e.message);
+    });
+});
+
+// ---------- ④ 目录 ----------
+document.getElementById('dir').addEventListener('click', function () {
+  if (!has('showDirectoryPicker')) { out('r4', '<span class="bad">❌ 没有该 API</span>'); log('④ 目录: 不可用'); return; }
+  window.showDirectoryPicker({ mode: 'readwrite', id: 'probeDir' })
+    .then(function (dir) {
+      return (async function () {
+        var names = [];
+        for await (var ent of dir.entries()) {
+          names.push(ent[0] + (ent[1].kind === 'directory' ? '/' : ''));
+          if (names.length >= 40) { names.push('…'); break; }
+        }
+        log('④ 目录: 打开 OK，name=' + dir.name + '，顶层条目: ' + names.join(' '));
+        out('r4', '<span class="ok">✅ 能打开并列出目录</span> <code>' + dir.name + '</code><br>顶层 ' +
+            names.length + ' 项: ' + names.slice(0, 20).join(' ') + '…<br><span class="warn">正在测可写…</span>');
+
+        // 试写 + 立刻删除（证明可写）
+        var fh = await dir.getFileHandle('__徽章工具体检__.txt', { create: true });
+        var w = await fh.createWritable();
+        await w.write('probe'); await w.close();
+        var back = await fh.getFile();
+        await dir.removeEntry('__徽章工具体检__.txt');
+        log('④ 目录写: OK（写入 ' + back.size + ' 字节后已删除）');
+        out('r4', '<span class="ok">✅ 目录可读可写</span> <code>' + dir.name + '</code>（写入 ' + back.size +
+            ' 字节的临时文件，已删除）<br>顶层 ' + names.length + ' 项: ' + names.slice(0, 20).join(' ') + '…');
+      })();
+    })
+    .catch(function (e) {
+      out('r4', '<span class="bad">❌ ' + e.name + '</span> — ' + e.message + '<br>（AbortError=你按了取消）');
+      log('④ 目录: ' + e.name + ' — ' + e.message);
+    });
+});
+
+// ---------- ⑤ 句柄写回 ----------
+document.getElementById('rw').addEventListener('click', function () {
+  if (!has('showOpenFilePicker')) { out('r5', '<span class="bad">❌ 没有该 API</span>'); log('⑤ 写回: 不可用'); return; }
+  window.showOpenFilePicker({ mode: 'readwrite', multiple: false })
+    .then(function (hs) {
+      var h = hs[0];
+      return h.queryPermission({ mode: 'readwrite' }).then(function (p) {
+        return h.getFile().then(function (f) {
+          var fr = new FileReader();
+          return new Promise(function (res) {
+            fr.onload = function () {
+              var u8 = new Uint8Array(fr.result, 0, Math.min(16, fr.result.byteLength));
+              res(Array.prototype.map.call(u8, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(' '));
+            };
+            fr.readAsArrayBuffer(f);
+          }).then(function (hex) {
+            return h.createWritable().then(function (w) {
+              return w.abort().then(function () {
+                log('⑤ 写回: OK  文件=' + h.name + ' 大小=' + f.size + ' 权限=' + p +
+                    ' 头16=' + hex + '（createWritable 成功并已 abort，未写入）');
+                out('r5', '<span class="ok">✅ 可以"打开原卡 → 直接覆盖保存"</span> 文件 <code>' + h.name +
+                    '</code> ・ ' + f.size + ' 字节 ・ 写权限 <b>' + p + '</b> ・ createWritable 成功（未写入）');
+              });
+            });
+          });
+        });
+      });
+    })
+    .catch(function (e) {
+      out('r5', '<span class="bad">❌ ' + e.name + '</span> — ' + e.message + '<br>（AbortError=你按了取消）');
+      log('⑤ 写回: ' + e.name + ' — ' + e.message);
+    });
+});
+
+// ---------- 复制 ----------
+document.getElementById('cp').addEventListener('click', function () {
+  var txt = L.join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(
+      function () { alert('结果已复制到剪贴板 ✅'); },
+      function () { alert('复制失败，请手动选中下面的文字'); });
+  } else {
+    var ta = document.createElement('textarea'); ta.value = txt;
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); alert('结果已复制（兼容方式）✅'); }
+    catch (e) { alert('复制失败，请手动选中下面的文字'); }
+    ta.remove();
+  }
+});
+document.getElementById('cl').addEventListener('click', function () { L = []; log('（已清空）'); });
+</script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+{
+  "alphaThreshold": 128,
+  "format": {
+    "bytesFormula": "width * height * 4",
+    "colorSpace": "sRGB（与 canvas getImageData 一致，非线性域直接处理）",
+    "file": "裸 RGBA，行优先，每像素 4 字节（R,G,B,A），无文件头"
+  },
+  "generator": "web/test/make_image_fixtures.py",
+  "images": [
+    {
+      "bytes": 65536,
+      "file": "web/test/fixtures/images/pixel-art-128.rgba",
+      "height": 128,
+      "judge": "(b) ★ 无损：输入即输出（逐像素等价）；(a) auto 核必须判 nearest（40 ≤ 256）",
+      "name": "pixel-art-128",
+      "reference": {
+        "notes": [
+          "源: pixel-art-128.src.png  RGBA 128x128",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 尺寸已是 128x128，未缩放",
+          "③ 颜色数 40 ≤ 上限 255，未减色",
+          "④ 最终：16384 个不透明像素用 40 种颜色（acet 调色板占 41 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 40,
+        "opaquePixels": 16384,
+        "rgbaSha256": "b4f09eb0461941f85bd6367eec45b20cd0c4b95522b2afd25df65de7eb4eade4",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "b4f09eb0461941f85bd6367eec45b20cd0c4b95522b2afd25df65de7eb4eade4",
+      "sourceStats": {
+        "height": 128,
+        "opaqueColors": 40,
+        "opaquePixels": 16384,
+        "pixels": 16384,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 0,
+        "width": 128
+      },
+      "why": "已是 128×128 且只有 40 色的像素风图",
+      "width": 128
+    },
+    {
+      "bytes": 65536,
+      "file": "web/test/fixtures/images/gradient-128.rgba",
+      "height": 128,
+      "judge": "(c) 合规：必须减色到 ≤255 且不透明像素全保留；(e) 色阶不失真",
+      "name": "gradient-128",
+      "reference": {
+        "notes": [
+          "源: gradient-128.src.png  RGBA 128x128",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 尺寸已是 128x128，未缩放",
+          "③ 减色：16384 色 → 255 色 (中位切分，仅对不透明像素)",
+          "④ 最终：16384 个不透明像素用 255 种颜色（acet 调色板占 256 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 255,
+        "opaquePixels": 16384,
+        "rgbaSha256": "f957269567ed2a69198be49935bb49d2313e5262f672a6193fedaa824559f5c3",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "0220cb187730d02e3bab209c610e47ff243a03dcbaeb1d14c320be45748fddaa",
+      "sourceStats": {
+        "height": 128,
+        "opaqueColors": 16384,
+        "opaquePixels": 16384,
+        "pixels": 16384,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 0,
+        "width": 128
+      },
+      "why": "已是 128×128 的渐变图（16,384 色，远超 255）",
+      "width": 128
+    },
+    {
+      "bytes": 360000,
+      "file": "web/test/fixtures/images/photo-noise-300.rgba",
+      "height": 300,
+      "judge": "(a) 缩放路径；(c) 合规；(e) ★ 感知合理：输出块平均色 vs 源图对应区域平均色",
+      "name": "photo-noise-300",
+      "reference": {
+        "notes": [
+          "源: photo-noise-300.src.png  RGBA 300x300",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 缩放 300x300 → 128x128 (LANCZOS)，alpha 重新二值化",
+          "③ 减色：7725 色 → 248 色 (中位切分，仅对不透明像素)",
+          "④ 最终：16384 个不透明像素用 248 种颜色（acet 调色板占 249 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 248,
+        "opaquePixels": 16384,
+        "rgbaSha256": "c544b744900039aa6c43ab998f3ded195aa4d40eb5ad8cec054f19f09f39562d",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "2d65d34a544dbf39fc7f92448c6da268e05becaa955b56695190d8d494f89836",
+      "sourceStats": {
+        "height": 300,
+        "opaqueColors": 18741,
+        "opaquePixels": 90000,
+        "pixels": 90000,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 0,
+        "width": 300
+      },
+      "why": "300×300 照片感噪声图（色数很多，含低频色块与光斑）",
+      "width": 300
+    },
+    {
+      "bytes": 405616,
+      "file": "web/test/fixtures/images/banner-logo-502x202.rgba",
+      "height": 202,
+      "judge": "(a) ★ 取景：contain 必补背景 / cover 必无背景 / stretch 无背景；(c) 非方图也必须产出 128×128",
+      "name": "banner-logo-502x202",
+      "reference": {
+        "notes": [
+          "源: banner-logo-502x202.src.png  RGBA 502x202",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 缩放 502x202 → 128x128 (LANCZOS)，alpha 重新二值化",
+          "③ 减色：1016 色 → 250 色 (中位切分，仅对不透明像素)",
+          "④ 最终：16384 个不透明像素用 250 种颜色（acet 调色板占 251 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 250,
+        "opaquePixels": 16384,
+        "rgbaSha256": "1e8a45a4672d753ab86fbd2c7a4060d5bd51ac0f932fd1817277fc69eae211a8",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "bc42904e63560336c74a72d7c1703b9f7bd2d52b5de1941fa46ce3b35f627056",
+      "sourceStats": {
+        "height": 202,
+        "opaqueColors": 9,
+        "opaquePixels": 101404,
+        "pixels": 101404,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 0,
+        "width": 502
+      },
+      "why": "502×202 非方长条 logo（不透明，色数少 ⇒ nearest）",
+      "width": 502
+    },
+    {
+      "bytes": 78400,
+      "file": "web/test/fixtures/images/soft-edge-140.rgba",
+      "height": 140,
+      "judge": "(a) 二值化阈值两侧都有效；(c) 半透明必须归零；despeckle 选项的样本",
+      "name": "soft-edge-140",
+      "reference": {
+        "notes": [
+          "源: soft-edge-140.src.png  RGBA 140x140",
+          "① alpha 二值化(阈值 128)：半透明像素 2432 个已归一",
+          "② 缩放 140x140 → 128x128 (LANCZOS)，alpha 重新二值化",
+          "③ 减色：415 色 → 255 色 (中位切分，仅对不透明像素)",
+          "④ 最终：6291 个不透明像素用 255 种颜色（acet 调色板占 256 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 255,
+        "opaquePixels": 6291,
+        "rgbaSha256": "b460481e7ae7ebe10bb5b50b613dc3b6b31fefea5f50b29ad3643be5c54405bb",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "8107edcce0e15584f0748df305948eaed2997c5155e5de727cdd7e54884012ea",
+      "sourceStats": {
+        "height": 140,
+        "opaqueColors": 1,
+        "opaquePixels": 6077,
+        "pixels": 19600,
+        "semiTransparentPixels": 2432,
+        "transparentPixels": 11091,
+        "width": 140
+      },
+      "why": "140×140 带半透明边缘的圆盘（+24 个 alpha=200 的孤立点）",
+      "width": 140
+    },
+    {
+      "bytes": 36,
+      "file": "web/test/fixtures/images/tiny-3x3.rgba",
+      "height": 3,
+      "judge": "(a) ★ 几何：contain 放大后中心/四角可精确断言；浮点边界样本",
+      "name": "tiny-3x3",
+      "reference": {
+        "notes": [
+          "源: tiny-3x3.src.png  RGBA 3x3",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 缩放 3x3 → 128x128 (LANCZOS)，alpha 重新二值化",
+          "③ 减色：8566 色 → 255 色 (中位切分，仅对不透明像素)",
+          "④ 最终：16384 个不透明像素用 255 种颜色（acet 调色板占 256 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 255,
+        "opaquePixels": 16384,
+        "rgbaSha256": "bcc47c0ee17d2a91d175cf8ffe7ebfd0771976efcbc86d88d3bbe2bb9eb568d8",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "18261395ab38e96b5f2834f8f33babf450534444984da0f4130a45a83ee9c1c8",
+      "sourceStats": {
+        "height": 3,
+        "opaqueColors": 9,
+        "opaquePixels": 9,
+        "pixels": 9,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 0,
+        "width": 3
+      },
+      "why": "3×3 极小图（9 色，全部不透明）",
+      "width": 3
+    },
+    {
+      "bytes": 4,
+      "file": "web/test/fixtures/images/one-pixel.rgba",
+      "height": 1,
+      "judge": "(a) 几何特例：contain 时 128×128 全图恒等于该像素（四角不是背景）",
+      "name": "one-pixel",
+      "reference": {
+        "notes": [
+          "源: one-pixel.src.png  RGBA 1x1",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 缩放 1x1 → 128x128 (LANCZOS)，alpha 重新二值化",
+          "③ 颜色数 1 ≤ 上限 255，未减色",
+          "④ 最终：16384 个不透明像素用 1 种颜色（acet 调色板占 2 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 1,
+        "opaquePixels": 16384,
+        "rgbaSha256": "b29a9e00ea5310cfc0837ba92f24b92d4b14be74192bcaff78b3066f6b28390d",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "0a28758309bf7e82d2258afa38b0251d27ca7a7c168bbdf5912cbdf1975d2c8c",
+      "sourceStats": {
+        "height": 1,
+        "opaqueColors": 1,
+        "opaquePixels": 1,
+        "pixels": 1,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 0,
+        "width": 1
+      },
+      "why": "1×1 单像素图",
+      "width": 1
+    },
+    {
+      "bytes": 16384,
+      "file": "web/test/fixtures/images/small-64-with-transparent.rgba",
+      "height": 64,
+      "judge": "(b) 变体：有透明的无损（透明保持透明、实色逐像素相同）；(a) 放大 2× 走 nearest，不许发明中间色",
+      "name": "small-64-with-transparent",
+      "reference": {
+        "notes": [
+          "源: small-64-with-transparent.src.png  RGBA 64x64",
+          "① alpha 二值化(阈值 128)：半透明像素 0 个已归一",
+          "② 缩放 64x64 → 128x128 (LANCZOS)，alpha 重新二值化",
+          "③ 减色：11337 色 → 255 色 (中位切分，仅对不透明像素)",
+          "④ 最终：11580 个不透明像素用 255 种颜色（acet 调色板占 256 项，含透明项 1）"
+        ],
+        "ok": true,
+        "opaqueColors": 255,
+        "opaquePixels": 11580,
+        "rgbaSha256": "cd8b8ad848f39e709f780fe3bcd418cde7f0ff4af25eb99cfa6d2682395fcf23",
+        "semiTransparentPixels": 0,
+        "size": "128x128"
+      },
+      "sha256": "9aac08b8351f8c6301916c4b8b4899a3d14f492879f5ddf5b59314be50c61568",
+      "sourceStats": {
+        "height": 64,
+        "opaqueColors": 32,
+        "opaquePixels": 2895,
+        "pixels": 4096,
+        "semiTransparentPixels": 0,
+        "transparentPixels": 1201,
+        "width": 64
+      },
+      "why": "64×64 小图，32 色 + 大量全透明像素（无半透明）",
+      "width": 64
+    }
+  ],
+  "maxColors": 255,
+  "note": "图像管线的测试**输入**夹具（裸 RGBA）。参考结论来自 tools/prepare_image.py（Pillow），只作合规统计参考，**不作为逐像素判据**（LANCZOS/MEDIANCUT 不可复刻，见 docs/01-项目理解/03-图片处理管线.md §六）。",
+  "targetSize": 128
+}

@@ -1,0 +1,657 @@
+/*
+ * PS2 装甲核心 · 徽章工具 —— 暗色主题样式。
+ * 配色参考 `web/probe.html`（同一套 CSS 变量名，方便对照）。
+ *
+ * ⚠ 本文件只在**开发期**被 `web/index.html` 用 <link> 引用；
+ *   构建产物把整份 CSS 内联进 <style>，运行时**没有任何外部文件**。
+ */
+
+:root {
+  --bg: #14171c;
+  --fg: #dfe4ea;
+  --dim: #8b97a8;
+  --ok: #41c07a;
+  --bad: #e0554a;
+  --warn: #e0a94a;
+  --box: #1d2229;
+  --box2: #232931;
+  --line: #2b323c;
+  --accent: #4a90d9;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13.5px/1.65 "Microsoft YaHei", system-ui, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 14px;
+}
+
+code { font-family: Consolas, "Courier New", monospace; }
+
+.dim { color: var(--dim); }
+.small { font-size: 12px; }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+.warn { color: var(--warn); }
+
+/* ─────────────────────────── 通用块 ─────────────────────────── */
+
+.card {
+  background: var(--box);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.pane-title { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/*
+ * ★★ `hidden` 属性必须真的不显示 —— 这条**不能省**（0.9 用无头浏览器截图抓到的真 bug）。
+ *
+ * 浏览器默认样式里 `[hidden] { display: none }` 的优先级**低于**任何作者写的 class 规则，
+ * 所以 `#crop-actions`（同时带 `.row { display: flex }`）即使有 `hidden` 也照样渲染出来 ——
+ * 用户没进取景视图时也会看到那行"拖动图片，把要用的部分放进白框里（滚轮缩放）〔确定取景〕〔取消〕"。
+ * 放在最前面 + `!important`：后面无论谁再给它加 `display`，都不会把这个语义盖掉。
+ */
+[hidden] { display: none !important; }
+.lbl { color: var(--dim); font-size: 12.5px; white-space: nowrap; }
+
+button {
+  background: #2a323d;
+  color: var(--fg);
+  border: 1px solid #3b4552;
+  border-radius: 6px;
+  padding: 6px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #333d4a; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: #2f4a68; border-color: #3f6489; }
+button.primary:hover:not(:disabled) { background: #3a5b7e; }
+button.quiet { background: transparent; color: var(--dim); }
+button.big { padding: 9px 16px; font-size: 13.5px; }
+
+select, input[type=text], input[type=number] {
+  background: #0f1216;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12.5px;
+}
+select { min-width: 90px; }
+input.num { width: 78px; }
+input[type=range] { width: 130px; vertical-align: middle; }
+
+.hint { color: var(--dim); font-size: 11.5px; line-height: 1.5; margin-top: 3px; }
+
+/* ─────────────────────────── 顶栏 ─────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--box);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.brand { display: flex; flex-direction: column; line-height: 1.25; }
+.brand-title { font-weight: 700; font-size: 14.5px; }
+.brand-sub { color: var(--dim); font-size: 11.5px; }
+
+.topbar-block {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 4px 10px;
+  border-left: 1px solid var(--line);
+}
+.card-info { font-size: 12.5px; }
+/* ⚠ 只用来放"⚠ 未验证"这类提醒；已验证的作品这里是空的（0.10 起顶栏不再重复作品说明） */
+.game-note { color: var(--dim); font-size: 11.5px; max-width: 460px; }
+.game-error { color: var(--bad); font-size: 12px; }
+/* （0.10 删掉了 `.pcsx2-summary`：顶栏那行 PCSX2 摘要按用户要求整块删除，面板本身仍在最下面） */
+
+#card-drop.drop-hot { outline: 2px dashed var(--accent); outline-offset: 2px; }
+
+/* ─────────────────────────── PCSX2 自检（页面最下面、全宽、★ 默认折叠） ─────────────────────────── */
+
+/*
+ * 位置与宽度：它现在是 `<body>` 里最后一个 section（8 槽 → 写卡提示/日志 → 这里），
+ * 而且是**普通块级元素** —— body 是 flex column，所以它自然占满整行（全宽），
+ * 不参与 `.upper` / `.slot-grid` 的栅格，也就不会留下空列。
+ *
+ * ★ 0.23（用户："自检改成默认折叠起来"）：头一行常驻（标题 + 说明 + 〔展开/收起〕），
+ *   其余整块（三条入口 + 结论表 + "这块面板是干什么的"）放进 `#pcsx2-panel[hidden]`。
+ *   折叠靠 `[hidden] { display: none !important }`（见文件上方那条，**不能**用 inline display）。
+ */
+.pcsx2-bar {
+  border-color: #4a4128;
+  margin-top: 2px;
+}
+/* 头一行三个元素（标题 / 说明 / 折叠按钮）：说明占住剩余宽度，按钮推到最右；太窄时整行可换行 */
+.pcsx2-bar .pane-head { flex-wrap: wrap; }
+.pcsx2-bar .pane-head .dim { flex: 1 1 320px; }
+#btn-pcsx2-toggle { margin-left: auto; }
+.pcsx2-default { font-size: 12.5px; margin: 6px 0 2px; }
+.pcsx2-default code {
+  background: #0f1216;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--fg);
+}
+.dropzone-inline {
+  border: 1px dashed #4a5260;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--dim);
+  font-size: 12px;
+  flex: 1 1 320px;
+}
+.dropzone-inline.drop-hot { border-color: var(--accent); color: var(--fg); }
+#pcsx2-body { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.pcsx2-table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 4px; }
+.pcsx2-table th, .pcsx2-table td {
+  text-align: left;
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.pcsx2-table th { color: var(--dim); font-weight: 500; }
+.pcsx2-table .row-warn { background: #2a2418; }
+
+/*
+ * 自检条的"这块面板是干什么的"说明块。
+ * ★ 用户反馈"我有点没懂"，所以空状态时不是只说"把文件拖进来"，
+ *   而是先说清：它解决什么问题 / 什么时候该看 / 怎么用 / 结论怎么读。
+ */
+.pcsx2-help {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: #191e25;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+.pcsx2-help-title { font-weight: 600; margin-bottom: 4px; }
+.pcsx2-help-body { margin-top: 4px; color: var(--fg); }
+.pcsx2-help-body b { color: var(--accent); margin-right: 5px; }
+
+/* ────────────── 上：图片处理（1 格当前图片 + 右侧参数侧栏） ────────────── */
+
+/*
+ * ★ 布局演变（三轮，理由都写在这里，免得以后来回改）：
+ *
+ *   第一版：`minmax(200px,1fr) auto auto minmax(280px,340px)`
+ *     → 中间两块 `auto` 按画布内容撑开，唯一可压缩的 `1fr`（原图列）**被压成一条窄缝**（用户截图 ①）。
+ *   第二版：`repeat(3, minmax(220px,1fr)) minmax(260px,320px)` + 1400/900 折行
+ *     → 三块视图等宽了，但**参数列仍占第 4 列**，把三块视图一起挤窄。
+ *   第三版：`repeat(3, minmax(240px,1fr))` + 参数整行 + ≤1100 两列 / ≤760 单列
+ *     → 三块等宽等高、无滚动条（用户截图 ② 的"白滚动条"也修掉了）。
+ *   第四版（用户 2026-10-05 定稿）：
+ *     "不需要始终显示原图，只需要一张当前的图片即可，也就是变成一格；
+ *      然后右边 1/3 的空间放之后要用到的工具。"
+ *   第五版（**本版**，0.22，用户 2026-10-06 定）：右栏**不放工具、放参数**。
+ *     "我突然觉得我们是不是没有必要做工具这一栏，毕竟其他优秀的图像处理工具有很多"
+ *     ⇒ 内置像素编辑器（M4b）**明确不做**（理由与替代流程见 SPEC.md §六）；
+ *       「工具侧栏」整块删掉，右栏给**参数**（原来它在 `</main>` 之后独立一整行）。
+ *     · `.upper` = **2 列**：左 `minmax(0, 1fr)` 是"当前图片"那一格，右 `minmax(190px, 220px)` 是**参数侧栏**；
+ *       ★ 0.23（用户）："参数一栏可以把水平宽度缩小了，现在太大了" ⇒ 右列从 `1fr`（≈1/3 宽）
+ *         改成**固定上限 220px**。参数只有两格（一个下拉 + 一条滑杆），220px 富余；
+ *         省下来的宽度全给图片格（4× 预览更容易铺满）。
+ *     · 「原图」面板**整个删掉**（DOM + CSS 都不留），
+ *       选图/粘贴/拖入搬到左格上方的**细工具条**（`.image-toolbar`）；
+ *     · 左格中间是**一块** `.stage`：平时显示"当前图片"（`#stage-final`，索引 0 口径），
+ *       点〔取景…〕后**在同一格里**切成取景视图（`#stage-crop`：**固定的白色方框** + 可拖动的源图）；
+ *       第五版（0.6）：白框固定 + 拖图片 + 滚轮绕框心缩放 + 复位/适应（见 `.crop-stage` 那段注释）；
+ *       第六版（0.7）：取景拖动改成"只动视觉"（rAF 合帧，样式只写 transform，不再每帧刷面板）；
+ *       第七版（0.8）：`.stage` 这块工作区改成**正方形**（`aspect-ratio: 1 / 1` + 最大边长上限 560px + 居中）。
+ *       第八版（0.9）：用户看了 0.8 的截图后改口 ——「我截图中红圈部分，能不能改成
+ *         **自动填满**或者说适应这一个长方形区域」⇒ `.stage` 去掉 `aspect-ratio` 与 `max-width`，
+ *         改成"填满左格"（`flex: 1 1 auto` + `min-height` 兜底）。取景默认也从"整张图缩进框里"
+ *         改成"**填满白框**"，并删掉了〔↺ 复位 / 适应〕按钮（见 `.stage` 那段注释）。
+ *     · 断点：宽屏 2 列 → **≤1100px 上下堆叠**（图片格在上、参数在下，都整行）→ **≤760px** 仍单列。
+ *       `.slot-grid` / `.lower-bottom` 的 1100 断点**没动**。
+ */
+.upper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 220px);
+  gap: 10px;
+  align-items: stretch;
+}
+/*
+ * ⚠ 列定义的历史（别来回改）：
+ *   0.9–0.21：`minmax(0, 2fr) minmax(260px, 1fr)`（右栏当时是"工具侧栏"，要放一堆工具按钮）
+ *   0.22：右栏改成参数侧栏（内置编辑器不做了），列定义先原样留着
+ *   0.23：★ 用户"参数一栏可以把水平宽度缩小了，现在太大了" ⇒ 右列改成 `minmax(190px, 220px)`
+ *         （固定上限：参数就两个控件，不需要 1/3 屏宽）
+ *
+ * 备选方案（用户**没定**，别默认启用）：
+ *   · "整页**太长了**"：把 `.stage` 的 `min-height` 上限调小（现在是 `clamp(320px, 62vh, 760px)`），
+ *     例如 `clamp(280px, 44vh, 560px)`（代价：4× 预览会被容器压小，那行"已按容器缩放显示"会重新出现）。
+ */
+/* ≤1100px：改成上下堆叠（图片格在上、参数侧栏在下；两块都整行） */
+@media (max-width: 1100px) {
+  .upper { grid-template-columns: minmax(0, 1fr); }
+}
+/* ≤760px：仍然是单列（参数格本身已经没有最小高度限制，这里不需要额外规则了） */
+
+/* ── 左格：细工具条 + 画布舞台 ── */
+
+/*
+ * ★ 2026-10-05（0.7 那一版，用户追加的一条）：**图片这块大面板改成规规矩矩的方角矩形**。
+ *
+ *   `.card` 的默认外观是"圆角 8px 的卡片"；用户要的是这一块（以及它内部的工具栏、舞台、
+ *   取景图层）**方角 + 1px 细边框 + 深色底铺满** —— 也就是"一块画布面板"，不是一张卡片。
+ *   ⚠ **只改这一块**：工具侧栏 / 参数行 / 8 槽 / 自检区仍是原来的圆角卡片
+ *     （用户没让全局改；他要是想全局方角会另说）。
+ *   ⚠ 白框（`.crop-frame`）的形状**不受影响**：它本来就是正方形，见下面的注释。
+ */
+.pane-image {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;                       /* 允许在 2fr 里被压缩，不要把栅格撑破 */
+  border: 1px solid var(--line);      /* 细边框（与 .card 同款；写出来是为了"方角 + 细边"一眼可见） */
+  border-radius: 0;                   /* ★ 方角 */
+}
+.image-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.image-toolbar .lbl { color: var(--dim); font-size: 12.5px; }
+.image-toolbar .orig-badge { margin: 0; }
+
+/*
+ * 画布舞台 = **自动填满左侧面板的工作区**（2026-10-05，0.9 用户：
+ * "我截图中红圈部分，能不能改成自动填满或者说适应这一个长方形区域"）。
+ *
+ * ## 尺寸规则
+ *
+ *   1. `flex: 1 1 auto` + `width: 100%` —— 宽度 = 列宽，高度 = **这一行剩下的全部高度**
+ *      （同排的参数侧栏把行撑起来，舞台再长满它）⇒ 工作区随窗口大小**自动填满**，
+ *      形状是**长方形**，不再是固定边长的正方形；
+ *   2. `min-height: clamp(320px, 62vh, 760px)` —— ★ **兜底 + 下限**。窄屏（≤1100px）时上下堆叠，
+ *      这一格的高度不再由同排元素决定；而舞台里那两层都是**绝对定位**（没有内在高度），
+ *      没有这个下限它会塌成 0。宽屏时它同时决定"这块工作区**至少**多高"。
+ *      ⚠ 取 62vh 是**量出来的**（0.10 那一版改的）：4× 预览要 512px，加内边距要 ≥ 524px 的舞台；
+ *      原来写 56vh，在 852px 高的视口上只有 477px ⇒ 预览被压到 465px，还点亮了那句
+ *      "已按容器缩放显示：期望 4×（512px）→ 实际约 3.63×（465px）"（用户："我希望它是完全展开的"）。
+ *      62vh 在 852 上给 528px ⇒ 512 装得下；再高对取景/预览都没有帮助（白框上限 420px），只把页面拉长；
+ *   3. **没有 `aspect-ratio`、也没有 `max-width`** —— 上一版（0.8）用
+ *      `aspect-ratio: 1 / 1 + max-width: 560px + margin-inline: auto` 把它做成 560×560 的方块；
+ *      用户看过后要求改成"填满"（"可以挤压右侧的工具"那句只保留了备选注释，0.22 起右侧是参数侧栏）。
+ *
+ * ## 白框规则一个字没动
+ *
+ *   白框仍是**固定的正方形**、边长 = 工作区**短边** × 70%（夹在 `[120, 420]`，
+ *   见 `logic/cropGeometry.ts::frameSizeFor`）、框外照旧压暗。工作区变大 ⇒ 白框通常也更大
+ *   （例如 700×430 的工作区 ⇒ 白框 301px），但那条"框只看舞台短边"的语义没变（`ui.test.ts` 有断言）。
+ *
+ * `position: relative` + `overflow: hidden`：里面叠两层（`#stage-final` 与 `#stage-crop`），
+ * 同一时刻只显示一层 ⇒ "预览"与"取景"共用同一格，且永远不出滚动条（上一版定下的约定）。
+ */
+.stage {
+  position: relative;
+  flex: 1 1 auto;                     /* ★ 高度填满左格剩下的空间（同排参数侧栏撑出这一行） */
+  width: 100%;
+  min-height: clamp(320px, 62vh, 760px); /* ★ 兜底 + 下限：≥524px 才装得下 4×（512px）预览 */
+  border: 1px solid var(--line);
+  border-radius: 0;                   /* ★ 方角（原来是 6px 圆角） */
+  background: #0f1216;
+  overflow: hidden;
+}
+/* 图片面板内部的这几块都跟着方角（工具栏 / 舞台 / 取景图层 / 取景舞台） */
+.pane-image .image-toolbar,
+.pane-image .stage,
+.pane-image .crop-layer,
+.pane-image .crop-stage {
+  border-radius: 0;
+}
+.stage-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage-layer[hidden] { display: none; }
+
+/*
+ * 取景区：**中性深色**底。
+ * ⚠ 上一版这里是**棋盘格**（表示"透明"）—— 用户明确否掉了：
+ *   "棋盘格会让人以为在看透明度"，而取景要看的只是"白框里那块图"。
+ *   深色还能和白框形成对比，一眼看清哪块会被裁下来。
+ */
+.crop-layer {
+  background: #0b0e12;
+}
+
+/*
+ * ★★ `#view-preview` **必须自己有尺寸**（`width/height: 100%`），不能让浏览器"按内容收缩"。
+ *
+ * 0.9 用户报的"载入图片以后默认这么小"就是这个 bug：`.stage-layer` 是 flex 容器，而
+ * `#view-preview` 没有任何尺寸规则 ⇒ 它的盒子 = 里面那张 canvas 的盒子（content 决定），
+ * 可 canvas 的尺寸**正是** `pipeline.ts::fitDisplaySize()` 量了 `#view-preview` 之后算出来的
+ * ⇒ **量一次缩一次**（128 → 116 → 104 → …），最后缩成 68px，还把那句
+ * "已按容器缩放显示：期望 4×（512px）→ 实际约 0.53×（68px）"给点亮了。
+ *
+ * 现在它是"铺满舞台 + 居中"的一层：量到的就是舞台的可用尺寸 ⇒ 4× 就是 512px（只有真的装不下才缩）。
+ */
+#stage-final #view-preview {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 当前图片（= 将来编辑画布）：128×128 的方画布，等比自适应 */
+#stage-final #view-preview canvas {
+  display: block;
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  image-rendering: pixelated;
+  background: #14181d;
+}
+
+/*
+ * 取景视图：白框固定在舞台正中，**图片**在它下面按 transform 缩放/平移。
+ *
+ * ★ `#view-source` 的坐标原点 = `#crop-stage` 的原点（都从 0,0 起）⇒ 白框与图片
+ *   共用同一个坐标系，cropView.ts 的换算只需要"框矩形 + 显示倍率 k"两个量。
+ */
+.crop-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.view-source {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+/*
+ * ⚠ 画布按**源图自然尺寸**做 CSS 像素，再整体 scale —— 所以这里**绝对不能**有
+ *   `max-width/max-height: 100%`（那会让浏览器二次缩放，指针换算就跟屏幕对不上了）。
+ */
+.view-source canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  max-width: none;
+  max-height: none;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+/*
+ * ★ 白色方框 = "取景区"（用户要的示意区域）。位置/边长由 cropView.ts 按舞台算出来，**拖不动**。
+ *   ⚠ 它**永远是正方形**（`frameRectFor()` 只给一个 `size`，宽高都写这个值），
+ *     用户说的"改成矩形"指的是**外面那块大面板**（见 `.pane-image` 的方角注释）—— 别动这里。
+ * `box-shadow: 0 0 0 9999px` 把框外压暗：既突出白框，也直观地表示"框外的部分不要"。
+ */
+.crop-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #ffffff;
+  box-shadow:
+    0 0 0 9999px rgba(6, 8, 11, 0.62),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.crop-frame::after {
+  content: '128×128';
+  position: absolute;
+  left: 0;
+  top: -18px;
+  font-size: 10.5px;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+.crop-stage.dragging { cursor: grabbing; }
+.crop-stage.dragging .crop-frame { border-color: #ffffff; }
+
+.crop-actions {
+  flex: 0 0 auto;
+  margin-top: 8px;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/*
+ * ★ 0.12：取景动作行里的**实时读数**（就一行，跟着拖动/滚轮变）。
+ * ⚠ 存在的理由：这些数字原来只写在 `#status` 里，而状态行在页面最下面（8 槽那一块），
+ *   取景时看不到 —— 用户问"状态行在哪"，所以把同一份信息搬到白框正下方。
+ * `tabular-nums` 让数字跳动时不抖；到"最小（1:1）"时换成警示色，一眼看出滚轮到底了。
+ */
+.crop-readout {
+  flex: 0 0 auto;
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.crop-readout.at-min { color: var(--warn); }
+/* 取景那行的一句话说明（用户要的：一行就够） */
+.crop-hint {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+/* "已按容器缩放显示：期望 8×（1024px）→ 实际约 3×（384px）" —— 淡色小字 */
+.zoom-note-host { flex: 0 0 auto; min-height: 0; }
+.zoom-note { color: var(--dim); font-size: 11px; }
+
+/* ── 右格：参数侧栏（0.22：原来这里是「工具侧栏」，内置编辑器不做了 ⇒ 位置给了参数） ── */
+
+.pane-params {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+/* 侧栏里字段**竖排**（宽屏时不再是"独立整行 + 横向成对"那套） */
+.params-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.params-grid .field {
+  /* 每个字段是一组"标签 + 控件 + 小字说明" */
+  min-width: 0;
+  margin: 0;
+}
+.params-grid .field > label {
+  display: block;
+  color: var(--dim);
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}
+.params-grid .field > select,
+.params-grid .field > input[type='number'] { width: 100%; }
+.params-grid .field > input[type='range'] { width: 100%; }
+.params-grid .hint { margin-top: 4px; }
+
+/* ── ★ 0.26：必须点掉的弹窗（打开页面时的告知 / 取景模式拦截） ── */
+
+.modal-host {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(4, 6, 9, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-host[hidden] { display: none !important; }
+.modal-box {
+  max-width: 620px;
+  background: var(--box);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+.modal-title { font-weight: 600; font-size: 14.5px; margin-bottom: 8px; }
+.modal-body { font-size: 13px; color: var(--fg); white-space: pre-wrap; }
+.modal-actions { margin-top: 14px; text-align: right; }
+
+/* ─────────────────────────── 下：8 槽 ─────────────────────────── */
+
+.slot-summary { margin-bottom: 6px; font-size: 12px; }
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 8px;
+}
+@media (max-width: 1100px) { .slot-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
+
+.slot {
+  background: var(--box2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  outline: none;
+}
+.slot:hover { border-color: #46525f; }
+.slot-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.slot-empty { opacity: .78; }
+.slot-no { font-weight: 600; font-size: 12.5px; }
+.slot-name { font-size: 11.5px; word-break: break-all; }
+.slot-meta { font-size: 10.5px; }
+.slot-check { font-size: 11px; }
+.thumb-cv { image-rendering: pixelated; background: #0f1216; border-radius: 3px; display: block; }
+.thumb-empty {
+  width: 96px; height: 96px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; color: #4a5260;
+  background: #14181d;
+  border: 1px dashed #363e49;
+  border-radius: 4px;
+}
+
+.lower-bottom { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(260px, 1fr); gap: 10px; margin-top: 10px; }
+@media (max-width: 1100px) { .lower-bottom { grid-template-columns: 1fr; } }
+
+.actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.busy { color: var(--warn); font-size: 12.5px; }
+
+.hintblock { display: flex; flex-direction: column; gap: 5px; }
+.write-hint { font-size: 12px; }
+.write-hint .bad { white-space: pre-wrap; }
+.write-hint .warn { white-space: pre-wrap; }
+.status { color: var(--dim); font-size: 12px; }
+
+.write-log {
+  grid-column: 1 / -1;
+  background: #0f1216;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: Consolas, "Courier New", monospace;
+  max-height: 190px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.write-log .log-ok { color: var(--ok); }
+.write-log .log-bad { color: var(--bad); }
+.write-log .log-line { color: var(--dim); }
+
+/* ─────────────────────────── 提示条 ─────────────────────────── */
+
+/* ⚠ 页脚那一块（`.foot`）连同那两行文字已经按用户要求**整块删除**，
+   所以这里也不再保留 `.foot` 的样式（别留死代码）。
+   那句"先完全退出 PCSX2"的安全提示仍然存在 —— 在「写入选中槽」的**确认框**里
+   （`logic/writeGuard.ts::QUIT_PCSX2_WARNING`），`ui.test.ts` 有断言钉住它。 */
+
+#toasts {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  width: min(520px, 46vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  position: relative;
+  background: #20262e;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 7px;
+  padding: 9px 30px 9px 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  font-size: 12.5px;
+}
+.toast-title { font-weight: 600; margin-bottom: 2px; white-space: pre-wrap; }
+.toast-body { color: var(--dim); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
+.toast-ok { border-left-color: var(--ok); }
+.toast-info { border-left-color: var(--accent); }
+.toast-warn { border-left-color: var(--warn); }
+.toast-error { border-left-color: var(--bad); }
+.toast-x {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  padding: 1px 6px;
+  font-size: 14px;
+  line-height: 1.1;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+}

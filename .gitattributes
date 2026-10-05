@@ -1,0 +1,36 @@
+# ★ 0.26（发布整理）：行尾与二进制口径显式写死，别让 autocrlf 猜。
+#
+# 为什么必须写：仓库里有一批**二进制样本/夹具**（`*.raw` 徽章块、`testdata/synth_*.bin`、
+# 截图、归档 zip）。git 的 `text=auto` 只在"前 8000 字节里有 NUL"时才判成二进制 ——
+# 万一某个 .raw 恰好没有 NUL，签出时会被 CRLF 改写，判据就全错（而且是静默错）。
+# 所以数据文件一律 `binary`（= 不转换、不 diff）。
+
+* text=auto eol=lf
+
+# 二进制：禁止任何行尾转换
+*.raw    binary
+*.bin    binary
+*.ps2    binary
+*.mcr    binary
+*.mc2    binary
+*.ico    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.zip    binary
+*.exe    binary
+*.dll    binary
+
+# 这些文本文件统一 LF（仓库里存 LF，签出也 LF —— 与项目里既有的写法一致）
+*.ts     text eol=lf
+*.mjs    text eol=lf
+*.js     text eol=lf
+*.py     text eol=lf
+*.md     text eol=lf
+*.html   text eol=lf
+*.css    text eol=lf
+*.json   text eol=lf
+*.yml    text eol=lf
+.gitignore text eol=lf

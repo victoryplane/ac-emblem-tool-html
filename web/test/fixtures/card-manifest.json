@@ -1,0 +1,4957 @@
+{
+ "generatedBy": "web/test/make_card_fixtures.py",
+ "note": "由 Python 参考实现生成的期望值；TS 层必须逐字节复现。",
+ "constants": {
+  "pageSize": 512,
+  "spareSize": 16,
+  "stride": 528,
+  "bytesPerCluster": 1024,
+  "cardSize8MB": 8650752,
+  "pages8MB": 16384,
+  "clusters8MB": 8192
+ },
+ "eccReference": {
+  "zero": {
+   "page": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "ecc": "777f7f777f7f777f7f777f7f00000000",
+   "sha256Page": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+   "sha256Ecc": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+  },
+  "ones": {
+   "page": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "ecc": "777f7f777f7f777f7f777f7f00000000",
+   "sha256Page": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+   "sha256Ecc": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+  },
+  "ramp": {
+   "page": "030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0a7aeb5bcc3cad1d8dfe6edf4fb020910171e252c333a41484f565d646b727980878e959ca3aab1b8bfc6cdd4dbe2e9f0f7fe050c131a21282f363d444b525960676e757c838a91989fa6adb4bbc2c9d0d7dee5ecf3fa01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3dae1e8eff6fd040b121920272e353c434a51585f666d747b828990979ea5acb3bac1c8cfd6dde4ebf2f900070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc",
+   "ecc": "777f7f777f7f777f7f777f7f00000000",
+   "sha256Page": "c9d8e3352f9f790d8b0be13cb1c18ed7963009888be04acc065ee5efbd934076",
+   "sha256Ecc": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+  },
+  "card0_page0": {
+   "page": "536f6e7920505332204d656d6f7279204361726420466f726d617420312e322e302e30000000000000020200100000ff0020000029000000c71f000000000000ff030000fe03000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff022b0000000400000001000008000000ffffffff000000000000000000000000411f00000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "ecc": "07344b777f7f25710e777f7f00000000",
+   "sha256Page": "aa8cc903d471999723b6552b07a91814a8f5275c6256562d5763029d6eabcdff",
+   "sha256Ecc": "8c965340aaa0ed356a18a362287f8015f82542519e7b4cfb7e42517fe85d387e"
+  }
+ },
+ "cards": [
+  {
+   "name": "Mcd001_LRtest2.ps2",
+   "size": 8650752,
+   "sha256": "203fd6f7268cbf8bf637e7882a5e4cd7563593974de90983cbac016921bea903",
+   "npages": 16384,
+   "pageLen": 512,
+   "ppc": 2,
+   "ppb": 16,
+   "clusters": 8192,
+   "allocOffset": 41,
+   "allocEnd": 8135,
+   "rootdir": 0,
+   "ifc0": 8,
+   "rootChain": [
+    0,
+    1,
+    155,
+    348,
+    519,
+    1010,
+    1203,
+    1408,
+    1527,
+    1646,
+    1765
+   ],
+   "rootDotLength": 21,
+   "root": [
+    {
+     "index": 0,
+     "mode": 33831,
+     "length": 21,
+     "cluster": 0,
+     "parent": 0,
+     "name": "."
+    },
+    {
+     "index": 1,
+     "mode": 42022,
+     "length": 0,
+     "cluster": 0,
+     "parent": 0,
+     "name": ".."
+    },
+    {
+     "index": 2,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 2,
+     "parent": 0,
+     "name": "BASLUS-20014S00"
+    },
+    {
+     "index": 3,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 70,
+     "parent": 0,
+     "name": "BASLUS-20249S00"
+    },
+    {
+     "index": 4,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 156,
+     "parent": 0,
+     "name": "BASLUS-20435S00"
+    },
+    {
+     "index": 5,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 245,
+     "parent": 0,
+     "name": "BASLUS-20644S00"
+    },
+    {
+     "index": 6,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 349,
+     "parent": 0,
+     "name": "BISLPS-25338S00"
+    },
+    {
+     "index": 7,
+     "mode": 33831,
+     "length": 9,
+     "cluster": 465,
+     "parent": 0,
+     "name": "BISLPS-25462GAME"
+    },
+    {
+     "index": 8,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 520,
+     "parent": 0,
+     "name": "BISLPS-25408S00"
+    },
+    {
+     "index": 9,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 766,
+     "parent": 0,
+     "name": "BISLPS-25461sav00"
+    },
+    {
+     "index": 10,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1011,
+     "parent": 0,
+     "name": "BISLPS-25169S00"
+    },
+    {
+     "index": 11,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1114,
+     "parent": 0,
+     "name": "BISLPS-25112S00"
+    },
+    {
+     "index": 12,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1204,
+     "parent": 0,
+     "name": "BISLPS-25338S01"
+    },
+    {
+     "index": 13,
+     "mode": 33831,
+     "length": 8,
+     "cluster": 1320,
+     "parent": 0,
+     "name": "BISLPS-25462EMB"
+    },
+    {
+     "index": 14,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1409,
+     "parent": 0,
+     "name": "BISLPS-25338E00"
+    },
+    {
+     "index": 15,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1468,
+     "parent": 0,
+     "name": "BISLPS-25338E01"
+    },
+    {
+     "index": 16,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1528,
+     "parent": 0,
+     "name": "BISLPS-25338E02"
+    },
+    {
+     "index": 17,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1587,
+     "parent": 0,
+     "name": "BISLPS-25338E03"
+    },
+    {
+     "index": 18,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1647,
+     "parent": 0,
+     "name": "BISLPS-25338E04"
+    },
+    {
+     "index": 19,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1706,
+     "parent": 0,
+     "name": "BISLPS-25169E00"
+    },
+    {
+     "index": 20,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1766,
+     "parent": 0,
+     "name": "BISLPS-25169E01"
+    }
+   ],
+   "emblemDirs": [
+    {
+     "name": "BISLPS-25462EMB",
+     "declaredCount": 8,
+     "cluster": 1320,
+     "chain": [
+      1320,
+      1321,
+      1368,
+      1371
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "static.ico",
+       "mode": 33943,
+       "length": 28110,
+       "cluster": 1322,
+       "chain": [
+        1322,
+        1323,
+        1324,
+        1325,
+        1326,
+        1327,
+        1328,
+        1329,
+        1330,
+        1331,
+        1332,
+        1333,
+        1334,
+        1335,
+        1336,
+        1337,
+        1338,
+        1339,
+        1340,
+        1341,
+        1342,
+        1343,
+        1344,
+        1345,
+        1346,
+        1347,
+        1348,
+        1349
+       ],
+       "sha256": "266b6203e8f0078f954579c8f697509026ac217a5782ad6cb085bbf5730f56d3",
+       "readLength": 28110
+      },
+      {
+       "index": 3,
+       "name": "data0",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1350,
+       "chain": [
+        1350,
+        1351,
+        1352,
+        1353,
+        1354,
+        1355,
+        1356,
+        1357,
+        1358,
+        1359,
+        1360,
+        1361,
+        1362,
+        1363,
+        1364,
+        1365,
+        1366,
+        1367
+       ],
+       "sha256": "547c7b719574da015c3d8f61ea4c8e53e998d391e4043b076efbf93b0247f085",
+       "readLength": 17440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1369,
+       "chain": [
+        1369
+       ],
+       "sha256": "8554ce3765c511d39d3da540cd138a83b06d88d41d3ff15a279bd24b619d0345",
+       "readLength": 964
+      },
+      {
+       "index": 5,
+       "name": "BISLPS-25462EMB",
+       "mode": 33943,
+       "length": 32,
+       "cluster": 1370,
+       "chain": [
+        1370
+       ],
+       "sha256": "909f22c2b34103bf854580c5f2c4f64c2520aa57b492e422d1801a160b6c6e67",
+       "readLength": 32
+      },
+      {
+       "index": 6,
+       "name": "data1",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1372,
+       "chain": [
+        1372,
+        1373,
+        1374,
+        1375,
+        1376,
+        1377,
+        1378,
+        1379,
+        1380,
+        1381,
+        1382,
+        1383,
+        1384,
+        1385,
+        1386,
+        1387,
+        1388,
+        1389
+       ],
+       "sha256": "0bedd56d57c1c1db44a44f1df2fe8a21c4b991b73672ca76417a6768863052a5",
+       "readLength": 17440
+      },
+      {
+       "index": 7,
+       "name": "data2",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1390,
+       "chain": [
+        1390,
+        1391,
+        1392,
+        1393,
+        1394,
+        1395,
+        1396,
+        1397,
+        1398,
+        1399,
+        1400,
+        1401,
+        1402,
+        1403,
+        1404,
+        1405,
+        1406,
+        1407
+       ],
+       "sha256": "6442d19c7b7fc8a91ba3c0ad0ff8764840111f2bb764aa5a45c2e369bf651caa",
+       "readLength": 17440
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E00",
+     "declaredCount": 5,
+     "cluster": 1409,
+     "chain": [
+      1409,
+      1410,
+      1466
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E00",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1411,
+       "chain": [
+        1411,
+        1412,
+        1413,
+        1414,
+        1415,
+        1416,
+        1417,
+        1418,
+        1419,
+        1420,
+        1421,
+        1422,
+        1423,
+        1424,
+        1425,
+        1426,
+        1427,
+        1428
+       ],
+       "sha256": "e23909dba5a76d0315c3df8ecd54fd50874eebb4f592f0cc8fb4d4344d67889f",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1429,
+       "chain": [
+        1429,
+        1430,
+        1431,
+        1432,
+        1433,
+        1434,
+        1435,
+        1436,
+        1437,
+        1438,
+        1439,
+        1440,
+        1441,
+        1442,
+        1443,
+        1444,
+        1445,
+        1446,
+        1447,
+        1448,
+        1449,
+        1450,
+        1451,
+        1452,
+        1453,
+        1454,
+        1455,
+        1456,
+        1457,
+        1458,
+        1459,
+        1460,
+        1461,
+        1462,
+        1463,
+        1464,
+        1465
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1467,
+       "chain": [
+        1467
+       ],
+       "sha256": "aff8d8c5b5a6c76ac04a5182dfe55e65c3b9aaf333f7a6d3b78b683e6d77cdd3",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E01",
+     "declaredCount": 5,
+     "cluster": 1468,
+     "chain": [
+      1468,
+      1469,
+      1525
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E01",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1470,
+       "chain": [
+        1470,
+        1471,
+        1472,
+        1473,
+        1474,
+        1475,
+        1476,
+        1477,
+        1478,
+        1479,
+        1480,
+        1481,
+        1482,
+        1483,
+        1484,
+        1485,
+        1486,
+        1487
+       ],
+       "sha256": "f13232b82c1079bb36f2ccd652a5c8dc61a788cde545eb7f3fe23c42f8fedec6",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1488,
+       "chain": [
+        1488,
+        1489,
+        1490,
+        1491,
+        1492,
+        1493,
+        1494,
+        1495,
+        1496,
+        1497,
+        1498,
+        1499,
+        1500,
+        1501,
+        1502,
+        1503,
+        1504,
+        1505,
+        1506,
+        1507,
+        1508,
+        1509,
+        1510,
+        1511,
+        1512,
+        1513,
+        1514,
+        1515,
+        1516,
+        1517,
+        1518,
+        1519,
+        1520,
+        1521,
+        1522,
+        1523,
+        1524
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1526,
+       "chain": [
+        1526
+       ],
+       "sha256": "fe51c7c7fafeeb495f174a706be795414f74b991685cb04abc1c05a3a54887e0",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E02",
+     "declaredCount": 5,
+     "cluster": 1528,
+     "chain": [
+      1528,
+      1529,
+      1585
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E02",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1530,
+       "chain": [
+        1530,
+        1531,
+        1532,
+        1533,
+        1534,
+        1535,
+        1536,
+        1537,
+        1538,
+        1539,
+        1540,
+        1541,
+        1542,
+        1543,
+        1544,
+        1545,
+        1546,
+        1547
+       ],
+       "sha256": "d5d0033c6cfc9dc96febdb8a87b3e9bf2c9cc2b915aee59697e29f600ebf7ca4",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1548,
+       "chain": [
+        1548,
+        1549,
+        1550,
+        1551,
+        1552,
+        1553,
+        1554,
+        1555,
+        1556,
+        1557,
+        1558,
+        1559,
+        1560,
+        1561,
+        1562,
+        1563,
+        1564,
+        1565,
+        1566,
+        1567,
+        1568,
+        1569,
+        1570,
+        1571,
+        1572,
+        1573,
+        1574,
+        1575,
+        1576,
+        1577,
+        1578,
+        1579,
+        1580,
+        1581,
+        1582,
+        1583,
+        1584
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1586,
+       "chain": [
+        1586
+       ],
+       "sha256": "f46a0dc8d05b52f04de50f8fb72a2160cf460a092ca9305684b5358522af2be8",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E03",
+     "declaredCount": 5,
+     "cluster": 1587,
+     "chain": [
+      1587,
+      1588,
+      1644
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E03",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1589,
+       "chain": [
+        1589,
+        1590,
+        1591,
+        1592,
+        1593,
+        1594,
+        1595,
+        1596,
+        1597,
+        1598,
+        1599,
+        1600,
+        1601,
+        1602,
+        1603,
+        1604,
+        1605,
+        1606
+       ],
+       "sha256": "935b9a0da47a45a623b1a6fcec9172757c29264714cc229a69e55d4049f63534",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1607,
+       "chain": [
+        1607,
+        1608,
+        1609,
+        1610,
+        1611,
+        1612,
+        1613,
+        1614,
+        1615,
+        1616,
+        1617,
+        1618,
+        1619,
+        1620,
+        1621,
+        1622,
+        1623,
+        1624,
+        1625,
+        1626,
+        1627,
+        1628,
+        1629,
+        1630,
+        1631,
+        1632,
+        1633,
+        1634,
+        1635,
+        1636,
+        1637,
+        1638,
+        1639,
+        1640,
+        1641,
+        1642,
+        1643
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1645,
+       "chain": [
+        1645
+       ],
+       "sha256": "a4ec4f0a1ffede1c08d88d3971790b2eb5fd9a17d206a98f92b8f366caba5d10",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E04",
+     "declaredCount": 5,
+     "cluster": 1647,
+     "chain": [
+      1647,
+      1648,
+      1704
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E04",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1649,
+       "chain": [
+        1649,
+        1650,
+        1651,
+        1652,
+        1653,
+        1654,
+        1655,
+        1656,
+        1657,
+        1658,
+        1659,
+        1660,
+        1661,
+        1662,
+        1663,
+        1664,
+        1665,
+        1666
+       ],
+       "sha256": "becd88b1b6b8247bfb195cc8842602901b1a7d2df071d8fd33177fee72a7fc96",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1667,
+       "chain": [
+        1667,
+        1668,
+        1669,
+        1670,
+        1671,
+        1672,
+        1673,
+        1674,
+        1675,
+        1676,
+        1677,
+        1678,
+        1679,
+        1680,
+        1681,
+        1682,
+        1683,
+        1684,
+        1685,
+        1686,
+        1687,
+        1688,
+        1689,
+        1690,
+        1691,
+        1692,
+        1693,
+        1694,
+        1695,
+        1696,
+        1697,
+        1698,
+        1699,
+        1700,
+        1701,
+        1702,
+        1703
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1705,
+       "chain": [
+        1705
+       ],
+       "sha256": "7719af632f35a9a4440e590dd4558bdd2efa3da00963f2a845b52ab4081b2159",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25169E00",
+     "declaredCount": 5,
+     "cluster": 1706,
+     "chain": [
+      1706,
+      1707,
+      1763
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25169E00",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1708,
+       "chain": [
+        1708,
+        1709,
+        1710,
+        1711,
+        1712,
+        1713,
+        1714,
+        1715,
+        1716,
+        1717,
+        1718,
+        1719,
+        1720,
+        1721,
+        1722,
+        1723,
+        1724,
+        1725
+       ],
+       "sha256": "34ae580c3e5d42b533c3fe5c276af65d78283ad3b2624bb62acaf7e4c7674f84",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "AC3SLE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1726,
+       "chain": [
+        1726,
+        1727,
+        1728,
+        1729,
+        1730,
+        1731,
+        1732,
+        1733,
+        1734,
+        1735,
+        1736,
+        1737,
+        1738,
+        1739,
+        1740,
+        1741,
+        1742,
+        1743,
+        1744,
+        1745,
+        1746,
+        1747,
+        1748,
+        1749,
+        1750,
+        1751,
+        1752,
+        1753,
+        1754,
+        1755,
+        1756,
+        1757,
+        1758,
+        1759,
+        1760,
+        1761,
+        1762
+       ],
+       "sha256": "324daf196398fedd56a030b29ee06d35f9b17627bb616d401b40c6cf9a83ece4",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1764,
+       "chain": [
+        1764
+       ],
+       "sha256": "d139d141953847775556d1e7ed0e72ba0374f2d896b2b41554305383aaeae416",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25169E01",
+     "declaredCount": 5,
+     "cluster": 1766,
+     "chain": [
+      1766,
+      1767,
+      1823
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25169E01",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1768,
+       "chain": [
+        1768,
+        1769,
+        1770,
+        1771,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776,
+        1777,
+        1778,
+        1779,
+        1780,
+        1781,
+        1782,
+        1783,
+        1784,
+        1785
+       ],
+       "sha256": "34ae580c3e5d42b533c3fe5c276af65d78283ad3b2624bb62acaf7e4c7674f84",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "AC3SLE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1786,
+       "chain": [
+        1786,
+        1787,
+        1788,
+        1789,
+        1790,
+        1791,
+        1792,
+        1793,
+        1794,
+        1795,
+        1796,
+        1797,
+        1798,
+        1799,
+        1800,
+        1801,
+        1802,
+        1803,
+        1804,
+        1805,
+        1806,
+        1807,
+        1808,
+        1809,
+        1810,
+        1811,
+        1812,
+        1813,
+        1814,
+        1815,
+        1816,
+        1817,
+        1818,
+        1819,
+        1820,
+        1821,
+        1822
+       ],
+       "sha256": "324daf196398fedd56a030b29ee06d35f9b17627bb616d401b40c6cf9a83ece4",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1824,
+       "chain": [
+        1824
+       ],
+       "sha256": "44267e5f4bff160457300a56b7416d69cf1cb3d2dfbf653422c116be9f42e325",
+       "readLength": 964
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Mcd001_TEST.ps2",
+   "size": 8650752,
+   "sha256": "541b63d1ad4951e6a78b423eca1fcdf8bb99e78cf471d360589501766d1742e9",
+   "npages": 16384,
+   "pageLen": 512,
+   "ppc": 2,
+   "ppb": 16,
+   "clusters": 8192,
+   "allocOffset": 41,
+   "allocEnd": 8135,
+   "rootdir": 0,
+   "ifc0": 8,
+   "rootChain": [
+    0,
+    1,
+    155,
+    348,
+    519,
+    1010,
+    1203,
+    1408,
+    1527,
+    1646,
+    1765
+   ],
+   "rootDotLength": 21,
+   "root": [
+    {
+     "index": 0,
+     "mode": 33831,
+     "length": 21,
+     "cluster": 0,
+     "parent": 0,
+     "name": "."
+    },
+    {
+     "index": 1,
+     "mode": 42022,
+     "length": 0,
+     "cluster": 0,
+     "parent": 0,
+     "name": ".."
+    },
+    {
+     "index": 2,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 2,
+     "parent": 0,
+     "name": "BASLUS-20014S00"
+    },
+    {
+     "index": 3,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 70,
+     "parent": 0,
+     "name": "BASLUS-20249S00"
+    },
+    {
+     "index": 4,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 156,
+     "parent": 0,
+     "name": "BASLUS-20435S00"
+    },
+    {
+     "index": 5,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 245,
+     "parent": 0,
+     "name": "BASLUS-20644S00"
+    },
+    {
+     "index": 6,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 349,
+     "parent": 0,
+     "name": "BISLPS-25338S00"
+    },
+    {
+     "index": 7,
+     "mode": 33831,
+     "length": 9,
+     "cluster": 465,
+     "parent": 0,
+     "name": "BISLPS-25462GAME"
+    },
+    {
+     "index": 8,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 520,
+     "parent": 0,
+     "name": "BISLPS-25408S00"
+    },
+    {
+     "index": 9,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 766,
+     "parent": 0,
+     "name": "BISLPS-25461sav00"
+    },
+    {
+     "index": 10,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1011,
+     "parent": 0,
+     "name": "BISLPS-25169S00"
+    },
+    {
+     "index": 11,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1114,
+     "parent": 0,
+     "name": "BISLPS-25112S00"
+    },
+    {
+     "index": 12,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1204,
+     "parent": 0,
+     "name": "BISLPS-25338S01"
+    },
+    {
+     "index": 13,
+     "mode": 33831,
+     "length": 8,
+     "cluster": 1320,
+     "parent": 0,
+     "name": "BISLPS-25462EMB"
+    },
+    {
+     "index": 14,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1409,
+     "parent": 0,
+     "name": "BISLPS-25338E00"
+    },
+    {
+     "index": 15,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1468,
+     "parent": 0,
+     "name": "BISLPS-25338E01"
+    },
+    {
+     "index": 16,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1528,
+     "parent": 0,
+     "name": "BISLPS-25338E02"
+    },
+    {
+     "index": 17,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1587,
+     "parent": 0,
+     "name": "BISLPS-25338E03"
+    },
+    {
+     "index": 18,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1647,
+     "parent": 0,
+     "name": "BISLPS-25338E04"
+    },
+    {
+     "index": 19,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1706,
+     "parent": 0,
+     "name": "BISLPS-25169E00"
+    },
+    {
+     "index": 20,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1766,
+     "parent": 0,
+     "name": "BISLPS-25169E01"
+    }
+   ],
+   "emblemDirs": [
+    {
+     "name": "BISLPS-25462EMB",
+     "declaredCount": 8,
+     "cluster": 1320,
+     "chain": [
+      1320,
+      1321,
+      1368,
+      1371
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "static.ico",
+       "mode": 33943,
+       "length": 28110,
+       "cluster": 1322,
+       "chain": [
+        1322,
+        1323,
+        1324,
+        1325,
+        1326,
+        1327,
+        1328,
+        1329,
+        1330,
+        1331,
+        1332,
+        1333,
+        1334,
+        1335,
+        1336,
+        1337,
+        1338,
+        1339,
+        1340,
+        1341,
+        1342,
+        1343,
+        1344,
+        1345,
+        1346,
+        1347,
+        1348,
+        1349
+       ],
+       "sha256": "266b6203e8f0078f954579c8f697509026ac217a5782ad6cb085bbf5730f56d3",
+       "readLength": 28110
+      },
+      {
+       "index": 3,
+       "name": "data0",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1350,
+       "chain": [
+        1350,
+        1351,
+        1352,
+        1353,
+        1354,
+        1355,
+        1356,
+        1357,
+        1358,
+        1359,
+        1360,
+        1361,
+        1362,
+        1363,
+        1364,
+        1365,
+        1366,
+        1367
+       ],
+       "sha256": "bcfc233a2957e24c979595000651832e98f134c30e93c8d7ee97318d36da1326",
+       "readLength": 17440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1369,
+       "chain": [
+        1369
+       ],
+       "sha256": "889b50fddcfe727b2766bfc048eaf67ddf17a181200fca17893f2c9791b6779e",
+       "readLength": 964
+      },
+      {
+       "index": 5,
+       "name": "BISLPS-25462EMB",
+       "mode": 33943,
+       "length": 32,
+       "cluster": 1370,
+       "chain": [
+        1370
+       ],
+       "sha256": "909f22c2b34103bf854580c5f2c4f64c2520aa57b492e422d1801a160b6c6e67",
+       "readLength": 32
+      },
+      {
+       "index": 6,
+       "name": "data1",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1372,
+       "chain": [
+        1372,
+        1373,
+        1374,
+        1375,
+        1376,
+        1377,
+        1378,
+        1379,
+        1380,
+        1381,
+        1382,
+        1383,
+        1384,
+        1385,
+        1386,
+        1387,
+        1388,
+        1389
+       ],
+       "sha256": "bcfc233a2957e24c979595000651832e98f134c30e93c8d7ee97318d36da1326",
+       "readLength": 17440
+      },
+      {
+       "index": 7,
+       "name": "data2",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1390,
+       "chain": [
+        1390,
+        1391,
+        1392,
+        1393,
+        1394,
+        1395,
+        1396,
+        1397,
+        1398,
+        1399,
+        1400,
+        1401,
+        1402,
+        1403,
+        1404,
+        1405,
+        1406,
+        1407
+       ],
+       "sha256": "bcfc233a2957e24c979595000651832e98f134c30e93c8d7ee97318d36da1326",
+       "readLength": 17440
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E00",
+     "declaredCount": 5,
+     "cluster": 1409,
+     "chain": [
+      1409,
+      1410,
+      1466
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E00",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1411,
+       "chain": [
+        1411,
+        1412,
+        1413,
+        1414,
+        1415,
+        1416,
+        1417,
+        1418,
+        1419,
+        1420,
+        1421,
+        1422,
+        1423,
+        1424,
+        1425,
+        1426,
+        1427,
+        1428
+       ],
+       "sha256": "3575d858f9388eee746d78453eaab776073d8dd899cf205ee7b631159d725fc9",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1429,
+       "chain": [
+        1429,
+        1430,
+        1431,
+        1432,
+        1433,
+        1434,
+        1435,
+        1436,
+        1437,
+        1438,
+        1439,
+        1440,
+        1441,
+        1442,
+        1443,
+        1444,
+        1445,
+        1446,
+        1447,
+        1448,
+        1449,
+        1450,
+        1451,
+        1452,
+        1453,
+        1454,
+        1455,
+        1456,
+        1457,
+        1458,
+        1459,
+        1460,
+        1461,
+        1462,
+        1463,
+        1464,
+        1465
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1467,
+       "chain": [
+        1467
+       ],
+       "sha256": "aa611ce3f9819fe4249ca4df7f11a37d6868d5b9264060caf1aee1e3082efa33",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E01",
+     "declaredCount": 5,
+     "cluster": 1468,
+     "chain": [
+      1468,
+      1469,
+      1525
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E01",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1470,
+       "chain": [
+        1470,
+        1471,
+        1472,
+        1473,
+        1474,
+        1475,
+        1476,
+        1477,
+        1478,
+        1479,
+        1480,
+        1481,
+        1482,
+        1483,
+        1484,
+        1485,
+        1486,
+        1487
+       ],
+       "sha256": "3575d858f9388eee746d78453eaab776073d8dd899cf205ee7b631159d725fc9",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1488,
+       "chain": [
+        1488,
+        1489,
+        1490,
+        1491,
+        1492,
+        1493,
+        1494,
+        1495,
+        1496,
+        1497,
+        1498,
+        1499,
+        1500,
+        1501,
+        1502,
+        1503,
+        1504,
+        1505,
+        1506,
+        1507,
+        1508,
+        1509,
+        1510,
+        1511,
+        1512,
+        1513,
+        1514,
+        1515,
+        1516,
+        1517,
+        1518,
+        1519,
+        1520,
+        1521,
+        1522,
+        1523,
+        1524
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1526,
+       "chain": [
+        1526
+       ],
+       "sha256": "2f67be0ce8f8ecc4c0d6115181ac22bfe1d45eca32ccbb5b13809a025fc434a1",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E02",
+     "declaredCount": 5,
+     "cluster": 1528,
+     "chain": [
+      1528,
+      1529,
+      1585
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E02",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1530,
+       "chain": [
+        1530,
+        1531,
+        1532,
+        1533,
+        1534,
+        1535,
+        1536,
+        1537,
+        1538,
+        1539,
+        1540,
+        1541,
+        1542,
+        1543,
+        1544,
+        1545,
+        1546,
+        1547
+       ],
+       "sha256": "3575d858f9388eee746d78453eaab776073d8dd899cf205ee7b631159d725fc9",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1548,
+       "chain": [
+        1548,
+        1549,
+        1550,
+        1551,
+        1552,
+        1553,
+        1554,
+        1555,
+        1556,
+        1557,
+        1558,
+        1559,
+        1560,
+        1561,
+        1562,
+        1563,
+        1564,
+        1565,
+        1566,
+        1567,
+        1568,
+        1569,
+        1570,
+        1571,
+        1572,
+        1573,
+        1574,
+        1575,
+        1576,
+        1577,
+        1578,
+        1579,
+        1580,
+        1581,
+        1582,
+        1583,
+        1584
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1586,
+       "chain": [
+        1586
+       ],
+       "sha256": "6c4ae1ed0c7c8478f4474603c1280ba347c9b587864883cb2c94a1fb9d94317c",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E03",
+     "declaredCount": 5,
+     "cluster": 1587,
+     "chain": [
+      1587,
+      1588,
+      1644
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E03",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1589,
+       "chain": [
+        1589,
+        1590,
+        1591,
+        1592,
+        1593,
+        1594,
+        1595,
+        1596,
+        1597,
+        1598,
+        1599,
+        1600,
+        1601,
+        1602,
+        1603,
+        1604,
+        1605,
+        1606
+       ],
+       "sha256": "3575d858f9388eee746d78453eaab776073d8dd899cf205ee7b631159d725fc9",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1607,
+       "chain": [
+        1607,
+        1608,
+        1609,
+        1610,
+        1611,
+        1612,
+        1613,
+        1614,
+        1615,
+        1616,
+        1617,
+        1618,
+        1619,
+        1620,
+        1621,
+        1622,
+        1623,
+        1624,
+        1625,
+        1626,
+        1627,
+        1628,
+        1629,
+        1630,
+        1631,
+        1632,
+        1633,
+        1634,
+        1635,
+        1636,
+        1637,
+        1638,
+        1639,
+        1640,
+        1641,
+        1642,
+        1643
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1645,
+       "chain": [
+        1645
+       ],
+       "sha256": "4491b323663f990023e702bdac8a9cadb884ad6adfbd95f4f3956157288b5e18",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E04",
+     "declaredCount": 5,
+     "cluster": 1647,
+     "chain": [
+      1647,
+      1648,
+      1704
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E04",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1649,
+       "chain": [
+        1649,
+        1650,
+        1651,
+        1652,
+        1653,
+        1654,
+        1655,
+        1656,
+        1657,
+        1658,
+        1659,
+        1660,
+        1661,
+        1662,
+        1663,
+        1664,
+        1665,
+        1666
+       ],
+       "sha256": "3575d858f9388eee746d78453eaab776073d8dd899cf205ee7b631159d725fc9",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1667,
+       "chain": [
+        1667,
+        1668,
+        1669,
+        1670,
+        1671,
+        1672,
+        1673,
+        1674,
+        1675,
+        1676,
+        1677,
+        1678,
+        1679,
+        1680,
+        1681,
+        1682,
+        1683,
+        1684,
+        1685,
+        1686,
+        1687,
+        1688,
+        1689,
+        1690,
+        1691,
+        1692,
+        1693,
+        1694,
+        1695,
+        1696,
+        1697,
+        1698,
+        1699,
+        1700,
+        1701,
+        1702,
+        1703
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1705,
+       "chain": [
+        1705
+       ],
+       "sha256": "9ff0055bd802c812d9cbcb6f618ce4e1d19bf2557b7243112f8ad7cd71d71e8a",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25169E00",
+     "declaredCount": 5,
+     "cluster": 1706,
+     "chain": [
+      1706,
+      1707,
+      1763
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25169E00",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1708,
+       "chain": [
+        1708,
+        1709,
+        1710,
+        1711,
+        1712,
+        1713,
+        1714,
+        1715,
+        1716,
+        1717,
+        1718,
+        1719,
+        1720,
+        1721,
+        1722,
+        1723,
+        1724,
+        1725
+       ],
+       "sha256": "a09dbf593ccecd516114ce71792c517e269f26be99d1612abbc32fdf0bf6fa8c",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "AC3SLE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1726,
+       "chain": [
+        1726,
+        1727,
+        1728,
+        1729,
+        1730,
+        1731,
+        1732,
+        1733,
+        1734,
+        1735,
+        1736,
+        1737,
+        1738,
+        1739,
+        1740,
+        1741,
+        1742,
+        1743,
+        1744,
+        1745,
+        1746,
+        1747,
+        1748,
+        1749,
+        1750,
+        1751,
+        1752,
+        1753,
+        1754,
+        1755,
+        1756,
+        1757,
+        1758,
+        1759,
+        1760,
+        1761,
+        1762
+       ],
+       "sha256": "324daf196398fedd56a030b29ee06d35f9b17627bb616d401b40c6cf9a83ece4",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1764,
+       "chain": [
+        1764
+       ],
+       "sha256": "d139d141953847775556d1e7ed0e72ba0374f2d896b2b41554305383aaeae416",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25169E01",
+     "declaredCount": 5,
+     "cluster": 1766,
+     "chain": [
+      1766,
+      1767,
+      1823
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25169E01",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1768,
+       "chain": [
+        1768,
+        1769,
+        1770,
+        1771,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776,
+        1777,
+        1778,
+        1779,
+        1780,
+        1781,
+        1782,
+        1783,
+        1784,
+        1785
+       ],
+       "sha256": "a09dbf593ccecd516114ce71792c517e269f26be99d1612abbc32fdf0bf6fa8c",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "AC3SLE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1786,
+       "chain": [
+        1786,
+        1787,
+        1788,
+        1789,
+        1790,
+        1791,
+        1792,
+        1793,
+        1794,
+        1795,
+        1796,
+        1797,
+        1798,
+        1799,
+        1800,
+        1801,
+        1802,
+        1803,
+        1804,
+        1805,
+        1806,
+        1807,
+        1808,
+        1809,
+        1810,
+        1811,
+        1812,
+        1813,
+        1814,
+        1815,
+        1816,
+        1817,
+        1818,
+        1819,
+        1820,
+        1821,
+        1822
+       ],
+       "sha256": "324daf196398fedd56a030b29ee06d35f9b17627bb616d401b40c6cf9a83ece4",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1824,
+       "chain": [
+        1824
+       ],
+       "sha256": "44267e5f4bff160457300a56b7416d69cf1cb3d2dfbf653422c116be9f42e325",
+       "readLength": 964
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Mcd001_embdata2.ps2",
+   "size": 8650752,
+   "sha256": "d91cd971e5a77617f5b8b93a19171930005d1bd94e2b474bd360ad0d9d0ede71",
+   "npages": 16384,
+   "pageLen": 512,
+   "ppc": 2,
+   "ppb": 16,
+   "clusters": 8192,
+   "allocOffset": 41,
+   "allocEnd": 8135,
+   "rootdir": 0,
+   "ifc0": 8,
+   "rootChain": [
+    0,
+    1,
+    155,
+    348,
+    519,
+    1010,
+    1203
+   ],
+   "rootDotLength": 14,
+   "root": [
+    {
+     "index": 0,
+     "mode": 33831,
+     "length": 14,
+     "cluster": 0,
+     "parent": 0,
+     "name": "."
+    },
+    {
+     "index": 1,
+     "mode": 42022,
+     "length": 0,
+     "cluster": 0,
+     "parent": 0,
+     "name": ".."
+    },
+    {
+     "index": 2,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 2,
+     "parent": 0,
+     "name": "BASLUS-20014S00"
+    },
+    {
+     "index": 3,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 70,
+     "parent": 0,
+     "name": "BASLUS-20249S00"
+    },
+    {
+     "index": 4,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 156,
+     "parent": 0,
+     "name": "BASLUS-20435S00"
+    },
+    {
+     "index": 5,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 245,
+     "parent": 0,
+     "name": "BASLUS-20644S00"
+    },
+    {
+     "index": 6,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 349,
+     "parent": 0,
+     "name": "BISLPS-25338S00"
+    },
+    {
+     "index": 7,
+     "mode": 33831,
+     "length": 9,
+     "cluster": 465,
+     "parent": 0,
+     "name": "BISLPS-25462GAME"
+    },
+    {
+     "index": 8,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 520,
+     "parent": 0,
+     "name": "BISLPS-25408S00"
+    },
+    {
+     "index": 9,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 766,
+     "parent": 0,
+     "name": "BISLPS-25461sav00"
+    },
+    {
+     "index": 10,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1011,
+     "parent": 0,
+     "name": "BISLPS-25169S00"
+    },
+    {
+     "index": 11,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1114,
+     "parent": 0,
+     "name": "BISLPS-25112S00"
+    },
+    {
+     "index": 12,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1204,
+     "parent": 0,
+     "name": "BISLPS-25338S01"
+    },
+    {
+     "index": 13,
+     "mode": 33831,
+     "length": 8,
+     "cluster": 1320,
+     "parent": 0,
+     "name": "BISLPS-25462EMB"
+    }
+   ],
+   "emblemDirs": [
+    {
+     "name": "BISLPS-25462EMB",
+     "declaredCount": 8,
+     "cluster": 1320,
+     "chain": [
+      1320,
+      1321,
+      1368,
+      1371
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "static.ico",
+       "mode": 33943,
+       "length": 28110,
+       "cluster": 1322,
+       "chain": [
+        1322,
+        1323,
+        1324,
+        1325,
+        1326,
+        1327,
+        1328,
+        1329,
+        1330,
+        1331,
+        1332,
+        1333,
+        1334,
+        1335,
+        1336,
+        1337,
+        1338,
+        1339,
+        1340,
+        1341,
+        1342,
+        1343,
+        1344,
+        1345,
+        1346,
+        1347,
+        1348,
+        1349
+       ],
+       "sha256": "266b6203e8f0078f954579c8f697509026ac217a5782ad6cb085bbf5730f56d3",
+       "readLength": 28110
+      },
+      {
+       "index": 3,
+       "name": "data0",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1350,
+       "chain": [
+        1350,
+        1351,
+        1352,
+        1353,
+        1354,
+        1355,
+        1356,
+        1357,
+        1358,
+        1359,
+        1360,
+        1361,
+        1362,
+        1363,
+        1364,
+        1365,
+        1366,
+        1367
+       ],
+       "sha256": "547c7b719574da015c3d8f61ea4c8e53e998d391e4043b076efbf93b0247f085",
+       "readLength": 17440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1369,
+       "chain": [
+        1369
+       ],
+       "sha256": "889b50fddcfe727b2766bfc048eaf67ddf17a181200fca17893f2c9791b6779e",
+       "readLength": 964
+      },
+      {
+       "index": 5,
+       "name": "BISLPS-25462EMB",
+       "mode": 33943,
+       "length": 32,
+       "cluster": 1370,
+       "chain": [
+        1370
+       ],
+       "sha256": "909f22c2b34103bf854580c5f2c4f64c2520aa57b492e422d1801a160b6c6e67",
+       "readLength": 32
+      },
+      {
+       "index": 6,
+       "name": "data1",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1372,
+       "chain": [
+        1372,
+        1373,
+        1374,
+        1375,
+        1376,
+        1377,
+        1378,
+        1379,
+        1380,
+        1381,
+        1382,
+        1383,
+        1384,
+        1385,
+        1386,
+        1387,
+        1388,
+        1389
+       ],
+       "sha256": "3a1d2c62df604d8c653e65c760f7efe6acda537a1475846c3e58ab4a5917be81",
+       "readLength": 17440
+      },
+      {
+       "index": 7,
+       "name": "data2",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1390,
+       "chain": [
+        1390,
+        1391,
+        1392,
+        1393,
+        1394,
+        1395,
+        1396,
+        1397,
+        1398,
+        1399,
+        1400,
+        1401,
+        1402,
+        1403,
+        1404,
+        1405,
+        1406,
+        1407
+       ],
+       "sha256": "e125c0336562c4b018b3094d7a369e0823dcba3018d0c881a4d9e09fcdad646f",
+       "readLength": 17440
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Mcd001_final.ps2",
+   "size": 8650752,
+   "sha256": "cda9af66956f282721aeb4b20896bd1f73bd123e3d8c68af66c651684b7b8bd2",
+   "npages": 16384,
+   "pageLen": 512,
+   "ppc": 2,
+   "ppb": 16,
+   "clusters": 8192,
+   "allocOffset": 41,
+   "allocEnd": 8135,
+   "rootdir": 0,
+   "ifc0": 8,
+   "rootChain": [
+    0,
+    1,
+    155,
+    348,
+    519,
+    1010,
+    1203,
+    1408,
+    1527,
+    1646,
+    1765
+   ],
+   "rootDotLength": 21,
+   "root": [
+    {
+     "index": 0,
+     "mode": 33831,
+     "length": 21,
+     "cluster": 0,
+     "parent": 0,
+     "name": "."
+    },
+    {
+     "index": 1,
+     "mode": 42022,
+     "length": 0,
+     "cluster": 0,
+     "parent": 0,
+     "name": ".."
+    },
+    {
+     "index": 2,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 2,
+     "parent": 0,
+     "name": "BASLUS-20014S00"
+    },
+    {
+     "index": 3,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 70,
+     "parent": 0,
+     "name": "BASLUS-20249S00"
+    },
+    {
+     "index": 4,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 156,
+     "parent": 0,
+     "name": "BASLUS-20435S00"
+    },
+    {
+     "index": 5,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 245,
+     "parent": 0,
+     "name": "BASLUS-20644S00"
+    },
+    {
+     "index": 6,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 349,
+     "parent": 0,
+     "name": "BISLPS-25338S00"
+    },
+    {
+     "index": 7,
+     "mode": 33831,
+     "length": 9,
+     "cluster": 465,
+     "parent": 0,
+     "name": "BISLPS-25462GAME"
+    },
+    {
+     "index": 8,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 520,
+     "parent": 0,
+     "name": "BISLPS-25408S00"
+    },
+    {
+     "index": 9,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 766,
+     "parent": 0,
+     "name": "BISLPS-25461sav00"
+    },
+    {
+     "index": 10,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1011,
+     "parent": 0,
+     "name": "BISLPS-25169S00"
+    },
+    {
+     "index": 11,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1114,
+     "parent": 0,
+     "name": "BISLPS-25112S00"
+    },
+    {
+     "index": 12,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1204,
+     "parent": 0,
+     "name": "BISLPS-25338S01"
+    },
+    {
+     "index": 13,
+     "mode": 33831,
+     "length": 8,
+     "cluster": 1320,
+     "parent": 0,
+     "name": "BISLPS-25462EMB"
+    },
+    {
+     "index": 14,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1409,
+     "parent": 0,
+     "name": "BISLPS-25338E00"
+    },
+    {
+     "index": 15,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1468,
+     "parent": 0,
+     "name": "BISLPS-25338E01"
+    },
+    {
+     "index": 16,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1528,
+     "parent": 0,
+     "name": "BISLPS-25338E02"
+    },
+    {
+     "index": 17,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1587,
+     "parent": 0,
+     "name": "BISLPS-25338E03"
+    },
+    {
+     "index": 18,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1647,
+     "parent": 0,
+     "name": "BISLPS-25338E04"
+    },
+    {
+     "index": 19,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1706,
+     "parent": 0,
+     "name": "BISLPS-25169E00"
+    },
+    {
+     "index": 20,
+     "mode": 33831,
+     "length": 5,
+     "cluster": 1766,
+     "parent": 0,
+     "name": "BISLPS-25169E01"
+    }
+   ],
+   "emblemDirs": [
+    {
+     "name": "BISLPS-25462EMB",
+     "declaredCount": 8,
+     "cluster": 1320,
+     "chain": [
+      1320,
+      1321,
+      1368,
+      1371
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "static.ico",
+       "mode": 33943,
+       "length": 28110,
+       "cluster": 1322,
+       "chain": [
+        1322,
+        1323,
+        1324,
+        1325,
+        1326,
+        1327,
+        1328,
+        1329,
+        1330,
+        1331,
+        1332,
+        1333,
+        1334,
+        1335,
+        1336,
+        1337,
+        1338,
+        1339,
+        1340,
+        1341,
+        1342,
+        1343,
+        1344,
+        1345,
+        1346,
+        1347,
+        1348,
+        1349
+       ],
+       "sha256": "266b6203e8f0078f954579c8f697509026ac217a5782ad6cb085bbf5730f56d3",
+       "readLength": 28110
+      },
+      {
+       "index": 3,
+       "name": "data0",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1350,
+       "chain": [
+        1350,
+        1351,
+        1352,
+        1353,
+        1354,
+        1355,
+        1356,
+        1357,
+        1358,
+        1359,
+        1360,
+        1361,
+        1362,
+        1363,
+        1364,
+        1365,
+        1366,
+        1367
+       ],
+       "sha256": "547c7b719574da015c3d8f61ea4c8e53e998d391e4043b076efbf93b0247f085",
+       "readLength": 17440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1369,
+       "chain": [
+        1369
+       ],
+       "sha256": "889b50fddcfe727b2766bfc048eaf67ddf17a181200fca17893f2c9791b6779e",
+       "readLength": 964
+      },
+      {
+       "index": 5,
+       "name": "BISLPS-25462EMB",
+       "mode": 33943,
+       "length": 32,
+       "cluster": 1370,
+       "chain": [
+        1370
+       ],
+       "sha256": "909f22c2b34103bf854580c5f2c4f64c2520aa57b492e422d1801a160b6c6e67",
+       "readLength": 32
+      },
+      {
+       "index": 6,
+       "name": "data1",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1372,
+       "chain": [
+        1372,
+        1373,
+        1374,
+        1375,
+        1376,
+        1377,
+        1378,
+        1379,
+        1380,
+        1381,
+        1382,
+        1383,
+        1384,
+        1385,
+        1386,
+        1387,
+        1388,
+        1389
+       ],
+       "sha256": "3a1d2c62df604d8c653e65c760f7efe6acda537a1475846c3e58ab4a5917be81",
+       "readLength": 17440
+      },
+      {
+       "index": 7,
+       "name": "data2",
+       "mode": 33943,
+       "length": 17440,
+       "cluster": 1390,
+       "chain": [
+        1390,
+        1391,
+        1392,
+        1393,
+        1394,
+        1395,
+        1396,
+        1397,
+        1398,
+        1399,
+        1400,
+        1401,
+        1402,
+        1403,
+        1404,
+        1405,
+        1406,
+        1407
+       ],
+       "sha256": "e125c0336562c4b018b3094d7a369e0823dcba3018d0c881a4d9e09fcdad646f",
+       "readLength": 17440
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E00",
+     "declaredCount": 5,
+     "cluster": 1409,
+     "chain": [
+      1409,
+      1410,
+      1466
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E00",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1411,
+       "chain": [
+        1411,
+        1412,
+        1413,
+        1414,
+        1415,
+        1416,
+        1417,
+        1418,
+        1419,
+        1420,
+        1421,
+        1422,
+        1423,
+        1424,
+        1425,
+        1426,
+        1427,
+        1428
+       ],
+       "sha256": "e23909dba5a76d0315c3df8ecd54fd50874eebb4f592f0cc8fb4d4344d67889f",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1429,
+       "chain": [
+        1429,
+        1430,
+        1431,
+        1432,
+        1433,
+        1434,
+        1435,
+        1436,
+        1437,
+        1438,
+        1439,
+        1440,
+        1441,
+        1442,
+        1443,
+        1444,
+        1445,
+        1446,
+        1447,
+        1448,
+        1449,
+        1450,
+        1451,
+        1452,
+        1453,
+        1454,
+        1455,
+        1456,
+        1457,
+        1458,
+        1459,
+        1460,
+        1461,
+        1462,
+        1463,
+        1464,
+        1465
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1467,
+       "chain": [
+        1467
+       ],
+       "sha256": "aa611ce3f9819fe4249ca4df7f11a37d6868d5b9264060caf1aee1e3082efa33",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E01",
+     "declaredCount": 5,
+     "cluster": 1468,
+     "chain": [
+      1468,
+      1469,
+      1525
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E01",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1470,
+       "chain": [
+        1470,
+        1471,
+        1472,
+        1473,
+        1474,
+        1475,
+        1476,
+        1477,
+        1478,
+        1479,
+        1480,
+        1481,
+        1482,
+        1483,
+        1484,
+        1485,
+        1486,
+        1487
+       ],
+       "sha256": "f13232b82c1079bb36f2ccd652a5c8dc61a788cde545eb7f3fe23c42f8fedec6",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1488,
+       "chain": [
+        1488,
+        1489,
+        1490,
+        1491,
+        1492,
+        1493,
+        1494,
+        1495,
+        1496,
+        1497,
+        1498,
+        1499,
+        1500,
+        1501,
+        1502,
+        1503,
+        1504,
+        1505,
+        1506,
+        1507,
+        1508,
+        1509,
+        1510,
+        1511,
+        1512,
+        1513,
+        1514,
+        1515,
+        1516,
+        1517,
+        1518,
+        1519,
+        1520,
+        1521,
+        1522,
+        1523,
+        1524
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1526,
+       "chain": [
+        1526
+       ],
+       "sha256": "2f67be0ce8f8ecc4c0d6115181ac22bfe1d45eca32ccbb5b13809a025fc434a1",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E02",
+     "declaredCount": 5,
+     "cluster": 1528,
+     "chain": [
+      1528,
+      1529,
+      1585
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E02",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1530,
+       "chain": [
+        1530,
+        1531,
+        1532,
+        1533,
+        1534,
+        1535,
+        1536,
+        1537,
+        1538,
+        1539,
+        1540,
+        1541,
+        1542,
+        1543,
+        1544,
+        1545,
+        1546,
+        1547
+       ],
+       "sha256": "d5d0033c6cfc9dc96febdb8a87b3e9bf2c9cc2b915aee59697e29f600ebf7ca4",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1548,
+       "chain": [
+        1548,
+        1549,
+        1550,
+        1551,
+        1552,
+        1553,
+        1554,
+        1555,
+        1556,
+        1557,
+        1558,
+        1559,
+        1560,
+        1561,
+        1562,
+        1563,
+        1564,
+        1565,
+        1566,
+        1567,
+        1568,
+        1569,
+        1570,
+        1571,
+        1572,
+        1573,
+        1574,
+        1575,
+        1576,
+        1577,
+        1578,
+        1579,
+        1580,
+        1581,
+        1582,
+        1583,
+        1584
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1586,
+       "chain": [
+        1586
+       ],
+       "sha256": "6c4ae1ed0c7c8478f4474603c1280ba347c9b587864883cb2c94a1fb9d94317c",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E03",
+     "declaredCount": 5,
+     "cluster": 1587,
+     "chain": [
+      1587,
+      1588,
+      1644
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E03",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1589,
+       "chain": [
+        1589,
+        1590,
+        1591,
+        1592,
+        1593,
+        1594,
+        1595,
+        1596,
+        1597,
+        1598,
+        1599,
+        1600,
+        1601,
+        1602,
+        1603,
+        1604,
+        1605,
+        1606
+       ],
+       "sha256": "935b9a0da47a45a623b1a6fcec9172757c29264714cc229a69e55d4049f63534",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1607,
+       "chain": [
+        1607,
+        1608,
+        1609,
+        1610,
+        1611,
+        1612,
+        1613,
+        1614,
+        1615,
+        1616,
+        1617,
+        1618,
+        1619,
+        1620,
+        1621,
+        1622,
+        1623,
+        1624,
+        1625,
+        1626,
+        1627,
+        1628,
+        1629,
+        1630,
+        1631,
+        1632,
+        1633,
+        1634,
+        1635,
+        1636,
+        1637,
+        1638,
+        1639,
+        1640,
+        1641,
+        1642,
+        1643
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1645,
+       "chain": [
+        1645
+       ],
+       "sha256": "4491b323663f990023e702bdac8a9cadb884ad6adfbd95f4f3956157288b5e18",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25338E04",
+     "declaredCount": 5,
+     "cluster": 1647,
+     "chain": [
+      1647,
+      1648,
+      1704
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25338E04",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1649,
+       "chain": [
+        1649,
+        1650,
+        1651,
+        1652,
+        1653,
+        1654,
+        1655,
+        1656,
+        1657,
+        1658,
+        1659,
+        1660,
+        1661,
+        1662,
+        1663,
+        1664,
+        1665,
+        1666
+       ],
+       "sha256": "becd88b1b6b8247bfb195cc8842602901b1a7d2df071d8fd33177fee72a7fc96",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "ACNEXUSE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1667,
+       "chain": [
+        1667,
+        1668,
+        1669,
+        1670,
+        1671,
+        1672,
+        1673,
+        1674,
+        1675,
+        1676,
+        1677,
+        1678,
+        1679,
+        1680,
+        1681,
+        1682,
+        1683,
+        1684,
+        1685,
+        1686,
+        1687,
+        1688,
+        1689,
+        1690,
+        1691,
+        1692,
+        1693,
+        1694,
+        1695,
+        1696,
+        1697,
+        1698,
+        1699,
+        1700,
+        1701,
+        1702,
+        1703
+       ],
+       "sha256": "97569415c15fcdde3529a20fa53b0556f716dadd8332d74e8389cd8f8bae0e9f",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1705,
+       "chain": [
+        1705
+       ],
+       "sha256": "9ff0055bd802c812d9cbcb6f618ce4e1d19bf2557b7243112f8ad7cd71d71e8a",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25169E00",
+     "declaredCount": 5,
+     "cluster": 1706,
+     "chain": [
+      1706,
+      1707,
+      1763
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25169E00",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1708,
+       "chain": [
+        1708,
+        1709,
+        1710,
+        1711,
+        1712,
+        1713,
+        1714,
+        1715,
+        1716,
+        1717,
+        1718,
+        1719,
+        1720,
+        1721,
+        1722,
+        1723,
+        1724,
+        1725
+       ],
+       "sha256": "2986f57cc7189137fd83596a698c377abdd8320c5f69bfc825b32bfe5d8404f0",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "AC3SLE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1726,
+       "chain": [
+        1726,
+        1727,
+        1728,
+        1729,
+        1730,
+        1731,
+        1732,
+        1733,
+        1734,
+        1735,
+        1736,
+        1737,
+        1738,
+        1739,
+        1740,
+        1741,
+        1742,
+        1743,
+        1744,
+        1745,
+        1746,
+        1747,
+        1748,
+        1749,
+        1750,
+        1751,
+        1752,
+        1753,
+        1754,
+        1755,
+        1756,
+        1757,
+        1758,
+        1759,
+        1760,
+        1761,
+        1762
+       ],
+       "sha256": "324daf196398fedd56a030b29ee06d35f9b17627bb616d401b40c6cf9a83ece4",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1764,
+       "chain": [
+        1764
+       ],
+       "sha256": "d139d141953847775556d1e7ed0e72ba0374f2d896b2b41554305383aaeae416",
+       "readLength": 964
+      }
+     ]
+    },
+    {
+     "name": "BISLPS-25169E01",
+     "declaredCount": 5,
+     "cluster": 1766,
+     "chain": [
+      1766,
+      1767,
+      1823
+     ],
+     "selfDotLength": 0,
+     "files": [
+      {
+       "index": 2,
+       "name": "BISLPS-25169E01",
+       "mode": 33943,
+       "length": 17472,
+       "cluster": 1768,
+       "chain": [
+        1768,
+        1769,
+        1770,
+        1771,
+        1772,
+        1773,
+        1774,
+        1775,
+        1776,
+        1777,
+        1778,
+        1779,
+        1780,
+        1781,
+        1782,
+        1783,
+        1784,
+        1785
+       ],
+       "sha256": "d1cd542c99b29b386a9aaed3fdbdf27648debdb119103ae531f24a8ecf49582c",
+       "readLength": 17472
+      },
+      {
+       "index": 3,
+       "name": "AC3SLE.ICO",
+       "mode": 33943,
+       "length": 37440,
+       "cluster": 1786,
+       "chain": [
+        1786,
+        1787,
+        1788,
+        1789,
+        1790,
+        1791,
+        1792,
+        1793,
+        1794,
+        1795,
+        1796,
+        1797,
+        1798,
+        1799,
+        1800,
+        1801,
+        1802,
+        1803,
+        1804,
+        1805,
+        1806,
+        1807,
+        1808,
+        1809,
+        1810,
+        1811,
+        1812,
+        1813,
+        1814,
+        1815,
+        1816,
+        1817,
+        1818,
+        1819,
+        1820,
+        1821,
+        1822
+       ],
+       "sha256": "324daf196398fedd56a030b29ee06d35f9b17627bb616d401b40c6cf9a83ece4",
+       "readLength": 37440
+      },
+      {
+       "index": 4,
+       "name": "icon.sys",
+       "mode": 33943,
+       "length": 964,
+       "cluster": 1824,
+       "chain": [
+        1824
+       ],
+       "sha256": "44267e5f4bff160457300a56b7416d69cf1cb3d2dfbf653422c116be9f42e325",
+       "readLength": 964
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "experiments": [
+  {
+   "label": "reuse-free-slot",
+   "note": "目录链内已有空槽 ⇒ 复用该槽，不扩簇",
+   "dirBefore": {
+    "name": "BISLPS-25462GAME",
+    "declaredCount": 9,
+    "cluster": 465,
+    "chain": [
+     465,
+     466,
+     516,
+     680,
+     737
+    ]
+   },
+   "usedClusterCount": 1408,
+   "dataClusters": [
+    1408,
+    1409,
+    1410,
+    1411,
+    1412,
+    1413,
+    1414,
+    1415,
+    1416,
+    1417,
+    1418,
+    1419,
+    1420,
+    1421,
+    1422,
+    1423,
+    1424,
+    1425
+   ],
+   "dirExtensionClusters": [],
+   "emptyDirentPages": [],
+   "slot": 9,
+   "templateFile": "static.ico",
+   "direntPage": 1557,
+   "direntSHA256": "717a06891a331507d65d3fc6e4d62e7f1d430bb81ce48b5fbe6e6eeea74f5358",
+   "rootEntry": {
+    "index": 7,
+    "page": 779,
+    "oldCount": 9,
+    "newCount": 10
+   },
+   "touchedPagesRaw": [
+    28,
+    29,
+    779,
+    1557,
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933
+   ],
+   "intendedWrites": [
+    {
+     "page": 28,
+     "sha256Data": "f346eb8ba7c0f42b1617e14a3fafa1403ada22282efc62954fa5a536f29106fd",
+     "sha256Spare": "38135b53bb8a440b1b4a66a1a3358119e8f828b80a4dd5e73dd4bd35e45058ef"
+    },
+    {
+     "page": 29,
+     "sha256Data": "994f01e68bcce977f7dbe4cb0e788efe3c990b5df2a205bd6019c4a80f2105f2",
+     "sha256Spare": "78cb7df203fb59a099aed1efb2eeea73cfee995468ea08b6d3220db992422064"
+    },
+    {
+     "page": 779,
+     "sha256Data": "373f832141ab060f13cf205ef25a7f9476ce41081fa041ddd851496840163d8f",
+     "sha256Spare": "92d6a9e382a3c1da810335509bb65d76d2324084dd40e28ae05fa03120cbaede"
+    },
+    {
+     "page": 1557,
+     "sha256Data": "717a06891a331507d65d3fc6e4d62e7f1d430bb81ce48b5fbe6e6eeea74f5358",
+     "sha256Spare": "4d2678600132e908b0b3417ae5358797c37b5099a7dff611e624a4f286b3b52a"
+    },
+    {
+     "page": 2898,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2899,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2900,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2901,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2902,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2903,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2904,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2905,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2906,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2907,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2908,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2909,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2910,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2911,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2912,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2913,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2914,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2915,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2916,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2917,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2918,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2919,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2920,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2921,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2922,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2923,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2924,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2925,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2926,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2927,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2928,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2929,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2930,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2931,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2932,
+     "sha256Data": "01437877b576ab63c38e28f96885b555e4cd4d833be181a62b47292237b397a8",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2933,
+     "sha256Data": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    }
+   ],
+   "noopWritePages": [
+    28
+   ],
+   "strideNoopWritePages": [
+    28
+   ],
+   "changedStridePages": [
+    29,
+    779,
+    1557,
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933
+   ],
+   "spareOnlyChangedPages": [],
+   "expectExtension": false,
+   "sourceCard": "Mcd001_embdata2.ps2",
+   "sourceSHA256": "d91cd971e5a77617f5b8b93a19171930005d1bd94e2b474bd360ad0d9d0ede71",
+   "resultSHA256": "729e0b904d4debd741be3327dc8fadf47d22589bc11bc87e1dcee9c6c407ae2a",
+   "fileName": "data4",
+   "fileLength": 17440,
+   "fileDataSHA256": "8491513858202951a70574402f42117d303d64da9f5559e318c1289d4c3e73a9",
+   "fileDataPattern": "bytes(range(256)) repeated and truncated to 17440 (first 64 B = 00..3F)",
+   "changedPageCount": 39,
+   "changedPages": [
+    {
+     "page": 29,
+     "sha256Before": "2f01a9bfd88d731d97ebaa264119035bfe74b1813916ed63c394cd36cb0f9f5c",
+     "sha256After": "994f01e68bcce977f7dbe4cb0e788efe3c990b5df2a205bd6019c4a80f2105f2"
+    },
+    {
+     "page": 779,
+     "sha256Before": "58e15b9746678a2c82238828e20e58f7079dce9bd4ef28dac986f8d0d1f2e0f8",
+     "sha256After": "373f832141ab060f13cf205ef25a7f9476ce41081fa041ddd851496840163d8f"
+    },
+    {
+     "page": 1557,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "717a06891a331507d65d3fc6e4d62e7f1d430bb81ce48b5fbe6e6eeea74f5358"
+    },
+    {
+     "page": 2898,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2899,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2900,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2901,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2902,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2903,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2904,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2905,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2906,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2907,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2908,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2909,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2910,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2911,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2912,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2913,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2914,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2915,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2916,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2917,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2918,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2919,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2920,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2921,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2922,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2923,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2924,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2925,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2926,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2927,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2928,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2929,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2930,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2931,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2932,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "01437877b576ab63c38e28f96885b555e4cd4d833be181a62b47292237b397a8"
+    },
+    {
+     "page": 2933,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560"
+    }
+   ],
+   "touchedPages": [
+    28,
+    29,
+    779,
+    1557,
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933
+   ],
+   "eccCheckedPages": [
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933,
+    1557,
+    779
+   ],
+   "eccBadPages": [],
+   "emptyDirentForms": [],
+   "readback": {
+    "dirDeclaredCount": 10,
+    "fileCount": 10,
+    "fileNames": [
+     ".",
+     "..",
+     "static.ico",
+     "data0",
+     "icon.sys",
+     "BISLPS-25462GAME",
+     "data1",
+     "data2",
+     "data3",
+     "data4"
+    ],
+    "fileCluster": 1408,
+    "fileLength": 17440,
+    "chain": [
+     1408,
+     1409,
+     1410,
+     1411,
+     1412,
+     1413,
+     1414,
+     1415,
+     1416,
+     1417,
+     1418,
+     1419,
+     1420,
+     1421,
+     1422,
+     1423,
+     1424,
+     1425
+    ]
+   }
+  },
+  {
+   "label": "extend-directory",
+   "note": "目录链全满 ⇒ 扩 1 簇，且新簇两页都初始化为「整页 FF 空 dirent + 正确 ECC」",
+   "dirBefore": {
+    "name": "BISLPS-25462EMB",
+    "declaredCount": 8,
+    "cluster": 1320,
+    "chain": [
+     1320,
+     1321,
+     1368,
+     1371
+    ]
+   },
+   "usedClusterCount": 1408,
+   "dataClusters": [
+    1408,
+    1409,
+    1410,
+    1411,
+    1412,
+    1413,
+    1414,
+    1415,
+    1416,
+    1417,
+    1418,
+    1419,
+    1420,
+    1421,
+    1422,
+    1423,
+    1424,
+    1425
+   ],
+   "dirExtensionClusters": [
+    1426
+   ],
+   "emptyDirentPages": [
+    2934,
+    2935
+   ],
+   "slot": 8,
+   "templateFile": "static.ico",
+   "direntPage": 2934,
+   "direntSHA256": "27e7881c5c5ebd9ac9dc65fa1a090df155dc40ec5fb8187d7093eed1c426758d",
+   "rootEntry": {
+    "index": 13,
+    "page": 2489,
+    "oldCount": 8,
+    "newCount": 9
+   },
+   "touchedPagesRaw": [
+    28,
+    29,
+    2489,
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933,
+    2934,
+    2935
+   ],
+   "intendedWrites": [
+    {
+     "page": 28,
+     "sha256Data": "f614024f67732109cdf84456e31e521bacf862f385ff3774e3531fd166fb6588",
+     "sha256Spare": "4de448287c0b782e96990ce0e2addcb68a979955d6a4fc5e06d4fb2e91578b93"
+    },
+    {
+     "page": 29,
+     "sha256Data": "df493a0743d11a4ce379a24d23754c8b0abba93e9bd61220333526cc15674fad",
+     "sha256Spare": "c441fd2984861cda9968ea462792de08366ee326e92fa33a99613017a4b1c42b"
+    },
+    {
+     "page": 2489,
+     "sha256Data": "5e761806e07a2c7da79f90db8d8a54cfd4dca1666d7b51ecbab7e7a7a62a4b1c",
+     "sha256Spare": "cddf26244beba2c230b55b745332e07773c266b13f40dc40b5d1e65d2f56fce1"
+    },
+    {
+     "page": 2898,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2899,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2900,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2901,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2902,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2903,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2904,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2905,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2906,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2907,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2908,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2909,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2910,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2911,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2912,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2913,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2914,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2915,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2916,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2917,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2918,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2919,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2920,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2921,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2922,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2923,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2924,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2925,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2926,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2927,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2928,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2929,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2930,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2931,
+     "sha256Data": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2932,
+     "sha256Data": "01437877b576ab63c38e28f96885b555e4cd4d833be181a62b47292237b397a8",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2933,
+     "sha256Data": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    },
+    {
+     "page": 2934,
+     "sha256Data": "27e7881c5c5ebd9ac9dc65fa1a090df155dc40ec5fb8187d7093eed1c426758d",
+     "sha256Spare": "5c9ec3655965e3ab9c7f9d5d33fdecdebf55ff34b13f24da54e55b6b36f8e309"
+    },
+    {
+     "page": 2935,
+     "sha256Data": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256Spare": "960431f5d7148d84d0a9954a6142e20f003e36e138da112fd571f08408bd424f"
+    }
+   ],
+   "noopWritePages": [
+    2935
+   ],
+   "strideNoopWritePages": [],
+   "changedStridePages": [
+    28,
+    29,
+    2489,
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933,
+    2934,
+    2935
+   ],
+   "spareOnlyChangedPages": [
+    2935
+   ],
+   "expectExtension": true,
+   "sourceCard": "Mcd001_embdata2.ps2",
+   "sourceSHA256": "d91cd971e5a77617f5b8b93a19171930005d1bd94e2b474bd360ad0d9d0ede71",
+   "resultSHA256": "002671978875ad1c9a5f1387c5b8f4e11e8168e6553d58795a4a6c9b2b005e45",
+   "fileName": "data7",
+   "fileLength": 17440,
+   "fileDataSHA256": "8491513858202951a70574402f42117d303d64da9f5559e318c1289d4c3e73a9",
+   "fileDataPattern": "bytes(range(256)) repeated and truncated to 17440 (first 64 B = 00..3F)",
+   "changedPageCount": 40,
+   "changedPages": [
+    {
+     "page": 28,
+     "sha256Before": "f346eb8ba7c0f42b1617e14a3fafa1403ada22282efc62954fa5a536f29106fd",
+     "sha256After": "f614024f67732109cdf84456e31e521bacf862f385ff3774e3531fd166fb6588"
+    },
+    {
+     "page": 29,
+     "sha256Before": "2f01a9bfd88d731d97ebaa264119035bfe74b1813916ed63c394cd36cb0f9f5c",
+     "sha256After": "df493a0743d11a4ce379a24d23754c8b0abba93e9bd61220333526cc15674fad"
+    },
+    {
+     "page": 2489,
+     "sha256Before": "7be9370afb10c742d8618abee135ea2dba0333dedffce0bbe47a985d9cbe936b",
+     "sha256After": "5e761806e07a2c7da79f90db8d8a54cfd4dca1666d7b51ecbab7e7a7a62a4b1c"
+    },
+    {
+     "page": 2898,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2899,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2900,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2901,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2902,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2903,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2904,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2905,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2906,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2907,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2908,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2909,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2910,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2911,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2912,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2913,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2914,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2915,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2916,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2917,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2918,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2919,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2920,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2921,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2922,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2923,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2924,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2925,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2926,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2927,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2928,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2929,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2930,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2931,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "110009dcee21620b166f3abfecb5eff7a873be729d1c2d53822e7acc5f34eb9b"
+    },
+    {
+     "page": 2932,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "01437877b576ab63c38e28f96885b555e4cd4d833be181a62b47292237b397a8"
+    },
+    {
+     "page": 2933,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560"
+    },
+    {
+     "page": 2934,
+     "sha256Before": "9f56cda75fefeab90f6fa5d5ddc9601544b121732c5ecccab32e631060453a5d",
+     "sha256After": "27e7881c5c5ebd9ac9dc65fa1a090df155dc40ec5fb8187d7093eed1c426758d"
+    }
+   ],
+   "touchedPages": [
+    28,
+    29,
+    2489,
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933,
+    2934,
+    2935
+   ],
+   "eccCheckedPages": [
+    2898,
+    2899,
+    2900,
+    2901,
+    2902,
+    2903,
+    2904,
+    2905,
+    2906,
+    2907,
+    2908,
+    2909,
+    2910,
+    2911,
+    2912,
+    2913,
+    2914,
+    2915,
+    2916,
+    2917,
+    2918,
+    2919,
+    2920,
+    2921,
+    2922,
+    2923,
+    2924,
+    2925,
+    2926,
+    2927,
+    2928,
+    2929,
+    2930,
+    2931,
+    2932,
+    2933,
+    2934,
+    2935,
+    2934,
+    2489
+   ],
+   "eccBadPages": [],
+   "emptyDirentForms": [
+    {
+     "page": 2934,
+     "dataAllFF": false,
+     "spareHex": "07126d777f7f777f7f777f7f00000000",
+     "spareHexSpaced": "07 12 6d 77 7f 7f 77 7f 7f 77 7f 7f 00 00 00 00",
+     "spareIsComputedECC": true,
+     "spareIsVirginFFFF": false,
+     "modeAllFF": false
+    },
+    {
+     "page": 2935,
+     "dataAllFF": true,
+     "spareHex": "777f7f777f7f777f7f777f7f00000000",
+     "spareHexSpaced": "77 7f 7f 77 7f 7f 77 7f 7f 77 7f 7f 00 00 00 00",
+     "spareIsComputedECC": true,
+     "spareIsVirginFFFF": false,
+     "modeAllFF": true
+    }
+   ],
+   "readback": {
+    "dirDeclaredCount": 9,
+    "fileCount": 9,
+    "fileNames": [
+     ".",
+     "..",
+     "static.ico",
+     "data0",
+     "icon.sys",
+     "BISLPS-25462EMB",
+     "data1",
+     "data2",
+     "data7"
+    ],
+    "fileCluster": 1408,
+    "fileLength": 17440,
+    "chain": [
+     1408,
+     1409,
+     1410,
+     1411,
+     1412,
+     1413,
+     1414,
+     1415,
+     1416,
+     1417,
+     1418,
+     1419,
+     1420,
+     1421,
+     1422,
+     1423,
+     1424,
+     1425
+    ]
+   }
+  }
+ ]
+}
