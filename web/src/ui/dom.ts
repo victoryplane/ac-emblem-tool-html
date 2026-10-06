@@ -10,6 +10,8 @@
  *   自己抄了一份 ⇒ 同一个格式两份实现。现在只有那一份，本文件只管 DOM。
  */
 
+import { t } from './logic/i18n.ts';
+
 export type Attrs = Record<string, string | number | boolean | null | undefined | EventListener>;
 
 /** `el('div', { class: 'x', onclick: fn }, '文字', child1, child2)` */
@@ -52,7 +54,7 @@ export function clear(node: Element): void {
 
 export function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const n = document.getElementById(id);
-  if (!n) throw new Error(`界面缺少必需的挂载点 #${id}（index.html 与 main.ts 不同步）`);
+  if (!n) throw new Error(t(`界面缺少必需的挂载点 #${id}（index.html 与 main.ts 不同步）`, `Missing required mount point #${id} (index.html and main.ts are out of sync)`));
   return n as T;
 }
 
@@ -87,7 +89,7 @@ export function toast(kind: ToastKind, title: string, detail?: string, ms?: numb
     el('div', { class: 'toast-title', text: title }),
     detail ? el('div', { class: 'toast-body', text: detail }) : null,
   );
-  const close = el('button', { class: 'toast-x', title: '关闭', onclick: () => node.remove() }, '×');
+  const close = el('button', { class: 'toast-x', title: t('关闭', 'Close'), onclick: () => node.remove() }, '×');
   node.appendChild(close);
   host().appendChild(node);
   const life = ms ?? (kind === 'error' ? 60_000 : kind === 'warn' ? 20_000 : 6000);
@@ -99,11 +101,19 @@ export function toast(kind: ToastKind, title: string, detail?: string, ms?: numb
 export function installGlobalErrorHandlers(): void {
   window.addEventListener('error', (ev) => {
     const e = (ev as ErrorEvent).error;
-    toast('error', '界面里冒出一个未捕获的错误', e && e.stack ? String(e.stack).split('\n').slice(0, 4).join('\n') : String(ev.message));
+    toast(
+      'error',
+      t('界面里冒出一个未捕获的错误', 'An uncaught error surfaced in the UI'),
+      e && e.stack ? String(e.stack).split('\n').slice(0, 4).join('\n') : String(ev.message),
+    );
   });
   window.addEventListener('unhandledrejection', (ev) => {
     const r = (ev as PromiseRejectionEvent).reason;
-    toast('error', '有个异步操作失败了', r && r.stack ? String(r.stack).split('\n').slice(0, 4).join('\n') : String(r));
+    toast(
+      'error',
+      t('有个异步操作失败了', 'An async operation failed'),
+      r && r.stack ? String(r.stack).split('\n').slice(0, 4).join('\n') : String(r),
+    );
   });
 }
 
@@ -138,7 +148,7 @@ export function showModal(opts: { title: string; body: string; ok?: string }): v
   if (title) title.textContent = opts.title;
   if (body) body.textContent = opts.body;
   if (ok) {
-    ok.textContent = opts.ok ?? '知道了';
+    ok.textContent = opts.ok ?? t('知道了', 'Got it');
     if (!modalWired) {
       ok.addEventListener('click', () => {
         const h = document.getElementById('modal-host');
@@ -159,8 +169,9 @@ export async function guard<T>(what: string, fn: () => Promise<T> | T): Promise<
     return await fn();
   } catch (e) {
     const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-    toast('error', `${what}失败`, msg);
-    console.error(`[徽章工具] ${what}失败`, e);
+    // ⚠ `what` 由调用方给：那边已经过 `t()`（见 `main.ts` 的 `guard(t('选择记忆卡', 'Choose memory card'), …)`）
+    toast('error', t(`${what}失败`, `${what} failed`), msg);
+    console.error(`[emblem tool] ${what} failed`, e);
     return undefined;
   }
 }

@@ -24,6 +24,7 @@
  */
 
 import { humanBytes } from './format.ts';
+import { t } from './i18n.ts';
 
 /** 一个文件在某一刻的状态（只需要能区分"变过没有"）。 */
 export interface FileStamp {
@@ -45,7 +46,7 @@ export function stampChanged(seen: FileStamp, now: FileStamp): boolean {
 
 /** 把时间戳渲染成人读的一行（本地时间；null = 没记到）。 */
 export function describeStamp(s: FileStamp | null): string {
-  if (!s) return '未知';
+  if (!s) return t('未知', 'unknown');
   const d = new Date(s.mtime);
   const p = (n: number): string => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
@@ -60,20 +61,44 @@ export function describeStamp(s: FileStamp | null): string {
 export function staleFileRefusal(opts: { fileName: string; seen: FileStamp; now: FileStamp }): string {
   const { fileName, seen, now } = opts;
   return [
-    `${fileName} 在工具读过之后**又被改过**了：`,
-    `　· 工具打开卡时：${describeStamp(seen)}（${humanBytes(seen.size)}）`,
-    `　· 现在　　　　：${describeStamp(now)}（${humanBytes(now.size)}）`,
+    t(
+      `${fileName} 在工具读过之后**又被改过**了：`,
+      `${fileName} was changed again after the tool read it:`,
+    ),
+    t(
+      `　· 工具打开卡时：${describeStamp(seen)}（${humanBytes(seen.size)}）`,
+      `  · when the tool opened the card: ${describeStamp(seen)} (${humanBytes(seen.size)})`,
+    ),
+    t(
+      `　· 现在　　　　：${describeStamp(now)}（${humanBytes(now.size)}）`,
+      `  · now: ${describeStamp(now)} (${humanBytes(now.size)})`,
+    ),
     '',
-    '最可能是 PCSX2：它还在运行，或者刚退出时把手里的卡写回了文件（需要在游戏里做的事，',
-    '要**先做完再退**）。也可能是同步盘 / 杀毒替它重写了文件。',
-    '⇒ 浏览器拒绝往**过期句柄**上写，以免覆盖那边的改动。**这次没有写盘。**',
+    t(
+      '最可能是 PCSX2：它还在运行，或者刚退出时把手里的卡写回了文件（需要在游戏里做的事，',
+      'Most likely PCSX2: it is still running, or it wrote its copy of the card back as it exited (anything you needed to do in-game',
+    ),
+    t(
+      '要**先做完再退**）。也可能是同步盘 / 杀毒替它重写了文件。',
+      'has to be finished BEFORE you quit). A sync client or antivirus may also have rewritten the file.',
+    ),
+    t(
+      '⇒ 浏览器拒绝往**过期句柄**上写，以免覆盖那边的改动。**这次没有写盘。**',
+      '=> The browser refuses to write through a stale handle, so the other side changes are not lost. Nothing was written to disk this time.',
+    ),
     '',
-    '现在这样做：',
-    '　① 完全退出 PCSX2（关窗口，不是 reset）；',
-    '　② 回到顶栏〔选择记忆卡〕**重新选一次**这张卡（重新读盘 ⇒ 句柄就新鲜了）；',
-    '　③ 再操作一次（写入 / 删除）。',
+    t('现在这样做：', 'Do this now:'),
+    t('　① 完全退出 PCSX2（关窗口，不是 reset）；', '  1) Fully exit PCSX2 (close the window, not a reset);'),
+    t(
+      '　② 回到顶栏〔选择记忆卡〕**重新选一次**这张卡（重新读盘 ⇒ 句柄就新鲜了）；',
+      '  2) Go back to the top bar and choose this card again with Choose memory card (re-reading the card makes the handle fresh);',
+    ),
+    t('　③ 再操作一次（写入 / 删除）。', '  3) Do the operation again (write / delete).'),
     '',
-    '⚠ 别用〔另存为〕存出来的副本盖回这张卡：内存里的副本是**旧的**，会抹掉 PCSX2 期间写进去的改动。',
+    t(
+      '⚠ 别用〔另存为〕存出来的副本盖回这张卡：内存里的副本是**旧的**，会抹掉 PCSX2 期间写进去的改动。',
+      '⚠ Do not copy the file produced by Save card as back over this card: the in-memory copy is out of date and would wipe out whatever PCSX2 wrote in the meantime.',
+    ),
   ].join('\n');
 }
 
@@ -81,7 +106,24 @@ export function staleFileRefusal(opts: { fileName: string; seen: FileStamp; now:
  * 兜底提示：万一"检查"与"落盘"之间又被改了（`InvalidStateError` 真抛出来时用这句）。
  * 内容与上面同一套步骤，只是短一点、适合放进 toast。
  */
-export const STALE_HANDLE_HINT =
+const STALE_HANDLE_HINT_ZH =
   '磁盘上的这张卡在工具读过之后又被改过（最可能是 PCSX2 还在运行 / 刚退出时写回了卡）' +
   '⇒ 浏览器拒绝往过期句柄上写。请：① 完全退出 PCSX2；② 顶栏重新选一次这张卡；③ 再操作一次。' +
   '⚠ 别用〔另存为〕存出来的副本盖回去 —— 内存副本是旧的。';
+
+/**
+ * ⚠ 0.28 起**界面请用 `staleHandleHint()`**（它按当前语言取文案）。
+ *   这个名字保留中文常量，是为了让 `ui.test.ts` 里"这句提示必须带〔另存为〕那条警告"的断言继续有效
+ *   （断言查的就是这个中文串）—— 中文永远是 `t()` 的第一个参数，所以两边不会漂。
+ */
+export const STALE_HANDLE_HINT = STALE_HANDLE_HINT_ZH;
+
+/** 兜底提示的**当前语言**版本（`InvalidStateError` 真抛出来时放进 toast 用）。 */
+export function staleHandleHint(): string {
+  return t(
+    STALE_HANDLE_HINT_ZH,
+    'The card on disk was changed after the tool read it (most likely PCSX2 is still running, or wrote the card back as it exited), ' +
+      'so the browser refuses to write through a stale handle. Please: 1) fully exit PCSX2; 2) choose this card again in the top bar; 3) do the operation again. ' +
+      '⚠ Do not copy the file produced by Save card as back over it - the in-memory copy is out of date.',
+  );
+}

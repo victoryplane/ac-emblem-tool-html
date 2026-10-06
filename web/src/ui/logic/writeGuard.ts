@@ -64,6 +64,7 @@ export interface Decision {
 }
 
 import { hex } from './format.ts';
+import { t } from './i18n.ts';
 
 /**
  * 决策。**任何一项不过 ⇒ `proceed: false`**，并且原因里带上具体数字/偏移，
@@ -91,15 +92,22 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
   const byteIdentical = !lengthMismatch && diffCount === 0;
   if (lengthMismatch) {
     reasons.push(
-      `回读长度 ${facts.readback.length} ≠ 期望 ${facts.expected.length} 字节（写进去的东西没完整落下来）`,
+      t(
+        `回读长度 ${facts.readback.length} ≠ 期望 ${facts.expected.length} 字节（写进去的东西没完整落下来）`,
+        `Read-back length ${facts.readback.length} != expected ${facts.expected.length} bytes (what we wrote did not land completely)`,
+      ),
     );
   } else if (diffCount > 0) {
     reasons.push(
-      `回读与期望**不一致**：${diffCount} 个字节不同，首个差异在 ${hex(firstDiffOffset)}` +
-        `（期望 ${hex(facts.expected[firstDiffOffset])}，实到 ${hex(facts.readback[firstDiffOffset])}）`,
+      t(
+        `回读与期望**不一致**：${diffCount} 个字节不同，首个差异在 ${hex(firstDiffOffset)}` +
+          `（期望 ${hex(facts.expected[firstDiffOffset])}，实到 ${hex(facts.readback[firstDiffOffset])}）`,
+        `Read-back does not match what was expected: ${diffCount} bytes differ, first at ${hex(firstDiffOffset)}` +
+          ` (expected ${hex(facts.expected[firstDiffOffset])}, got ${hex(facts.readback[firstDiffOffset])})`,
+      ),
     );
   } else {
-    passed.push(`逐字节比对一致（${facts.readback.length} 字节）`);
+    passed.push(t(`逐字节比对一致（${facts.readback.length} 字节）`, `Byte-for-byte identical (${facts.readback.length} bytes)`));
   }
 
   // ── ② 18 段校验独立复核 ──
@@ -108,30 +116,49 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
     const detail = bad.length
       ? bad
           .slice(0, 6)
-          .map((s) => `${s.name}@${hex(s.offset)} 实到 ${hex(s.got)} 期望 ${hex(s.expect)}`)
-          .join('；')
-      : '（没有明细）';
-    reasons.push(`18 段校验**不通过**：${bad.length} 段出错 —— ${detail}`);
+          .map((s) =>
+            t(
+              `${s.name}@${hex(s.offset)} 实到 ${hex(s.got)} 期望 ${hex(s.expect)}`,
+              `${s.name}@${hex(s.offset)} got ${hex(s.got)}, expected ${hex(s.expect)}`,
+            ),
+          )
+          .join(t('；', '; '))
+      : t('（没有明细）', '(no details)');
+    reasons.push(
+      t(
+        `18 段校验**不通过**：${bad.length} 段出错 —— ${detail}`,
+        `18-segment checksum FAILED: ${bad.length} segment(s) wrong - ${detail}`,
+      ),
+    );
   } else {
-    passed.push('18 段校验 18/18');
+    passed.push(t('18 段校验 18/18', '18/18 checksums'));
   }
 
   // ── ③ ECC 正确性 ──
   if (facts.badEccPages && facts.badEccPages.length > 0) {
     const list = facts.badEccPages.slice(0, 12).map((p) => String(p)).join(', ');
     reasons.push(
-      `ECC 坏页 ${facts.badEccPages.length} 个（绝对页 ${list}${facts.badEccPages.length > 12 ? ' …' : ''}）` +
-        ' —— 备用区与数据不自洽',
+      t(
+        `ECC 坏页 ${facts.badEccPages.length} 个（绝对页 ${list}${facts.badEccPages.length > 12 ? ' …' : ''}）` +
+          ' —— 备用区与数据不自洽',
+        `${facts.badEccPages.length} bad ECC page(s) (absolute pages ${list}${facts.badEccPages.length > 12 ? ' ...' : ''})` +
+          ' - the spare area and the data do not agree',
+      ),
     );
   } else {
-    passed.push('改动页 ECC 全对');
+    passed.push(t('改动页 ECC 全对', 'ECC correct on all changed pages'));
   }
 
   // ── ④ 图像合规（SPEC.md §八 3）──
   if (facts.compliance && !facts.compliance.ok) {
-    reasons.push(`图像不合规：${facts.compliance.issues.join('；')}`);
+    reasons.push(
+      t(
+        `图像不合规：${facts.compliance.issues.join('；')}`,
+        `Image is not compliant: ${facts.compliance.issues.join('; ')}`,
+      ),
+    );
   } else if (facts.compliance && facts.compliance.ok) {
-    passed.push('图像合规（128×128 / 实色 ≤255 / 半透明 0）');
+    passed.push(t('图像合规（128×128 / 实色 ≤255 / 半透明 0）', 'Image is compliant (128×128 / <=255 colors / 0 semi-transparent)'));
   }
 
   return {
@@ -150,7 +177,19 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
  * 理由（本项目实测教训）：PCSX2 若还开着，它**退出时会用手里的旧卡写回文件**，
  * 你刚写进去的改动会被覆盖掉。
  */
-export const QUIT_PCSX2_WARNING = '请先完全退出 PCSX2';
+const QUIT_PCSX2_WARNING_ZH = '请先完全退出 PCSX2';
+
+/** 这句硬提示的**当前语言**版本（落盘确认框里用）。 */
+export function quitPcsx2Warning(): string {
+  return t(QUIT_PCSX2_WARNING_ZH, 'Fully exit PCSX2 first');
+}
+
+/**
+ * ⚠ 0.28 起**别再直接用这个常量**：它只有中文（界面要用的走 `quitPcsx2Warning()`）。
+ *   保留原名是为了让 `ui.test.ts` 里"这句硬提示必须还在"的断言继续有效
+ *   （那条断言查的就是这个中文串；中文永远是 `t()` 的第一个参数，所以两边不会漂）。
+ */
+export const QUIT_PCSX2_WARNING = QUIT_PCSX2_WARNING_ZH;
 
 /** 落盘确认框的完整文案（"我到底在写哪个文件"必须写清楚，SPEC.md §八 4）。 */
 export function confirmWriteMessage(opts: {
@@ -162,16 +201,22 @@ export function confirmWriteMessage(opts: {
   changes: readonly string[];
 }): string {
   const head = opts.overwrite
-    ? `即将**直接覆盖** ${opts.fileName}`
-    : `即将**下载**改好的卡（文件名 ${opts.fileName}）；下载后请自己拷回 memcards\\`;
+    ? t(`即将**直接覆盖** ${opts.fileName}`, `About to OVERWRITE ${opts.fileName}`)
+    : t(
+        `即将**下载**改好的卡（文件名 ${opts.fileName}）；下载后请自己拷回 memcards\\`,
+        `About to DOWNLOAD the modified card (file name ${opts.fileName}); copy it back into memcards\\ yourself afterwards`,
+      );
   return [
     head,
     '',
     ...opts.changes.map((c) => '· ' + c),
     '',
-    `★ ${QUIT_PCSX2_WARNING}（关窗口，不是 reset）。`,
-    '  理由：PCSX2 还在运行时，它退出时会用手里的旧卡把文件写回去，你的改动会被覆盖。',
+    t(`★ ${QUIT_PCSX2_WARNING}（关窗口，不是 reset）。`, `★ ${quitPcsx2Warning()} (close the window, not a reset).`),
+    t(
+      '  理由：PCSX2 还在运行时，它退出时会用手里的旧卡把文件写回去，你的改动会被覆盖。',
+      '  Why: while PCSX2 is running it keeps its own copy of the card and writes it back on exit, overwriting your changes.',
+    ),
     '',
-    '确认继续？',
+    t('确认继续？', 'Continue?'),
   ].join('\n');
 }

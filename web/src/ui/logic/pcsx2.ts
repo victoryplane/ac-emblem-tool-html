@@ -19,6 +19,8 @@
  *   · 界面 Slot1 = 日志里的 `McdSlot 0`；Slot2 = `McdSlot 1`。
  */
 
+import { t } from './i18n.ts';
+
 export const PCSX2_SLOTS: readonly number[] = [1, 2];
 /** 界面 Slot N → 日志里的 McdSlot 号。 */
 export const MCD_SLOT_OF: Record<number, number> = { 1: 0, 2: 1 };
@@ -259,25 +261,25 @@ export function analyzePcsx2(input: {
     const low = base.toLowerCase();
     if (low === 'pcsx2.ini') {
       global = memoryCardSlots(f.text);
-      recognized.push(`${base}（全局设置）`);
+      recognized.push(t(`${base}（全局设置）`, `${base} (global settings)`));
       continue;
     }
     if (low === 'emulog.txt' || low === 'emulog.log') {
       emulogText = f.text;
-      recognized.push(`${base}（运行日志）`);
+      recognized.push(t(`${base}（运行日志）`, `${base} (run log)`));
       continue;
     }
     if (low.endsWith('.ini')) {
       const mc = memoryCardSlots(f.text);
       if (Object.keys(mc).length > 0) {
         overrides[base] = mc;
-        recognized.push(`${base}（每游戏覆盖）`);
+        recognized.push(t(`${base}（每游戏覆盖）`, `${base} (per-game override)`));
       } else {
-        recognized.push(`${base}（没有 [MemoryCards]，忽略）`);
+        recognized.push(t(`${base}（没有 [MemoryCards]，忽略）`, `${base} (no [MemoryCards], ignored)`));
       }
       continue;
     }
-    recognized.push(`${base}（不认识，已忽略）`);
+    recognized.push(t(`${base}（不认识，已忽略）`, `${base} (not recognised, ignored)`));
   }
 
   const boots = emulogText ? parseEmulog(emulogText) : [];
@@ -317,13 +319,21 @@ export function analyzePcsx2(input: {
   }
   for (const c of conflicts) {
     warnings.push(
-      `★★ ${c.file} 把 Slot ${c.slot} 钉死在「${c.gameValue || '(空)'}」，而全局设置里是「${c.globalValue || '(空)'}」。` +
-        `⇒ 游戏读到的是「${c.gameValue || '(空)'}」，不是你对话框里选的那张。` +
-        `改法：编辑该 ini，删掉 [MemoryCards] 的 Slot${c.slot}_Filename 行（先备份），` +
-        `或在模拟器里用 Game Properties → reset 取消该覆盖。`,
+      t(
+        `★★ ${c.file} 把 Slot ${c.slot} 钉死在「${c.gameValue || '(空)'}」，而全局设置里是「${c.globalValue || '(空)'}」。` +
+          `⇒ 游戏读到的是「${c.gameValue || '(空)'}」，不是你对话框里选的那张。` +
+          `改法：编辑该 ini，删掉 [MemoryCards] 的 Slot${c.slot}_Filename 行（先备份），` +
+          `或在模拟器里用 Game Properties → reset 取消该覆盖。`,
+        `★★ ${c.file} pins Slot ${c.slot} to "${c.gameValue || '(empty)'}", while the global setting says "${c.globalValue || '(empty)'}".` +
+          ` => The game reads "${c.gameValue || '(empty)'}", not the card you picked in the dialog.` +
+          ` Fix: edit that ini and delete the Slot${c.slot}_Filename line under [MemoryCards] (back it up first),` +
+          ` or clear the override in the emulator via Game Properties -> reset.`,
+      ),
     );
   }
-  if (Object.keys(overrides).length === 0) notes.push('没有任何游戏覆盖记忆卡设置 ✅');
+  if (Object.keys(overrides).length === 0) {
+    notes.push(t('没有任何游戏覆盖记忆卡设置 ✅', 'No per-game memory card override ✅'));
+  }
 
   // ── 日志 vs 推断 ──
   const actualMounts: ActualMount[] = [];
@@ -338,23 +348,46 @@ export function analyzePcsx2(input: {
       actualMounts.push({ slot: s, fileName: real.fileName, note: real.note, expected: want, differs });
       if (differs) {
         notes.push(
-          `上次启动 McdSlot ${MCD_SLOT_OF[s]} 实际挂的是「${real.fileName}」，而现在配置推断是「${want || '(空)'}」` +
-            `（若你刚改过设置，这条属正常：设置对**下一次**启动生效）。`,
+          t(
+            `上次启动 McdSlot ${MCD_SLOT_OF[s]} 实际挂的是「${real.fileName}」，而现在配置推断是「${want || '(空)'}」` +
+              `（若你刚改过设置，这条属正常：设置对**下一次**启动生效）。`,
+            `At the last launch McdSlot ${MCD_SLOT_OF[s]} actually had "${real.fileName}" mounted, while the config now implies "${want || '(empty)'}"` +
+              ` (if you just changed the settings this is normal: they take effect on the NEXT launch).`,
+          ),
         );
       }
     }
-    if (boots.length > 1) notes.push(`本次进程共 ${boots.length} 次启动；以上只列最后一次。`);
-    if (lastBoot.serial || lastBoot.crc) {
-      notes.push(`上次运行的游戏：Serial=${lastBoot.serial ?? '(未知)'}  CRC=${lastBoot.crc || '(未知)'}`);
+    if (boots.length > 1) {
+      notes.push(
+        t(
+          `本次进程共 ${boots.length} 次启动；以上只列最后一次。`,
+          `${boots.length} launches in this run; only the last one is listed above.`,
+        ),
+      );
     }
-    if (lastBoot.iso) notes.push(`上次运行的 ISO：${lastBoot.iso}`);
+    if (lastBoot.serial || lastBoot.crc) {
+      notes.push(
+        t(
+          `上次运行的游戏：Serial=${lastBoot.serial ?? '(未知)'}  CRC=${lastBoot.crc || '(未知)'}`,
+          `Last game run: Serial=${lastBoot.serial ?? '(unknown)'}  CRC=${lastBoot.crc || '(unknown)'}`,
+        ),
+      );
+    }
+    if (lastBoot.iso) notes.push(t(`上次运行的 ISO：${lastBoot.iso}`, `Last ISO run: ${lastBoot.iso}`));
   } else if (emulogText) {
-    notes.push('emulog 里没找到 `ELF changed, active CRC` —— 可能还没启动过游戏。');
+    notes.push(
+      t(
+        'emulog 里没找到 `ELF changed, active CRC` —— 可能还没启动过游戏。',
+        'No `ELF changed, active CRC` in emulog - a game may not have been launched yet.',
+      ),
+    );
   }
   if (key) {
     notes.push(
-      `生效的每游戏配置：gamesettings\\${key}` +
-        (overrides[key] ? '' : '（该文件不存在 ⇒ 纯用全局设置）'),
+      t(
+        `生效的每游戏配置：gamesettings\\${key}` + (overrides[key] ? '' : '（该文件不存在 ⇒ 纯用全局设置）'),
+        `Effective per-game config: gamesettings\\${key}` + (overrides[key] ? '' : ' (that file does not exist => global settings only)'),
+      ),
     );
   }
 

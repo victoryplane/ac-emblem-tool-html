@@ -37,12 +37,12 @@ import {
   reloadThumbs,
   sameGameBlocks,
   saveCardAs,
-  scanCard,
   writeSlot,
 } from './cardOps.ts';
 import { cardCore, emblemCore } from './cardOps.ts';
 import { noDirForGameText, slotSummaryText } from './logic/slots.ts';
 import { APP_VERSION, APP_VERSION_LABEL, UI_BUILD_TAG } from './logic/version.ts';
+import { LANGS, currentLang, detectLang, onLangChange, setLang, t, type Lang } from './logic/i18n.ts';
 import { decodeImageFile, fillManualToTarget, pipelineStats, recheckFinal, recompute, refreshImage, renderImageViews } from './pipeline.ts';
 import { applyDrag, applyZoom, cancelCrop, closeCropView, confirmCrop, cropInfo, flushCropLayout, initCropView, isCropActive, layoutCropView, openCropView, setCropView, toggleCropView } from './cropView.ts';
 import { fillGameSelect, renderGameNote, renderLog, renderSlots, renderStatus } from './slotsView.ts';
@@ -109,11 +109,15 @@ async function openCardViaPicker(): Promise<void> {
     showOpenFilePicker?: (o: unknown) => Promise<FileSystemFileHandle[]>;
   };
   if (typeof w.showOpenFilePicker !== 'function') {
-    toast('info', '这个浏览器没有 showOpenFilePicker', '改用文件选择框（**只读**：保存时会改成"下载一份改好的卡"）。');
+    toast(
+      'info',
+      t('这个浏览器没有 showOpenFilePicker', 'This browser has no showOpenFilePicker'),
+      t('改用文件选择框（**只读**：保存时会改成"下载一份改好的卡"）。', 'Falling back to the file picker (read-only: saving will download a modified copy of the card).'),
+    );
     ($('card-input') as HTMLInputElement).click();
     return;
   }
-  await guard('选择记忆卡', async () => {
+  await guard(t('选择记忆卡', 'Choose memory card'), async () => {
     let handles: FileSystemFileHandle[];
     try {
       handles = await w.showOpenFilePicker!({
@@ -122,18 +126,18 @@ async function openCardViaPicker(): Promise<void> {
         mode: 'readwrite',
         types: [
           {
-            description: 'PS2 记忆卡 / 存档',
+            description: t('PS2 记忆卡 / 存档', 'PS2 memory card / save'),
             accept: { 'application/octet-stream': ['.ps2', '.mcr', '.mc2', '.bin', '.psv'] },
           },
         ],
       });
     } catch (e) {
       if (isAbort(e)) {
-        setStatus('已取消选择记忆卡。');
+        setStatus(t('已取消选择记忆卡。', 'Cancelled choosing a memory card.'));
         return;
       }
       // 权限/类型过滤等失败 ⇒ 退化到只读路径，而不是让用户看到"没反应"
-      toast('warn', '打不开文件选择器，退化到只读方式', e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+      toast('warn', t('打不开文件选择器，退化到只读方式', "Can't open the file picker — falling back to read-only"), e instanceof Error ? `${e.name}: ${e.message}` : String(e));
       ($('card-input') as HTMLInputElement).click();
       return;
     }
@@ -156,7 +160,7 @@ async function openCardViaInput(file: File): Promise<void> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const r = await openCardFromBytes(file.name, bytes, null);
   if (r.ok) {
-    toast('info', '这是只读方式打开的', '保存时会改成"下载一份改好的卡"（这个环境没给写句柄）。');
+    toast('info', t('这是只读方式打开的', 'Opened in read-only mode'), t('保存时会改成"下载一份改好的卡"（这个环境没给写句柄）。', 'Saving will download a modified copy of the card instead (this environment gave no write handle).'));
     afterCardLoaded();
   } else {
     // ★ 0.19（D2）：**开卡失败也要刷新界面**。`openCardFromBytes` 已经把 `state.card` 置空，
@@ -173,42 +177,34 @@ export function afterCardLoaded(): void {
   if (state.model && state.model.dirNames.length === 0) {
     // 别让用户以为"卡打不开"——明确说清"卡没问题，是这个作品在卡上还没有目录"
     setStatus(noDirForGameText(state.model.serial, state.model.excludedDirNames.length));
-    toast('info', '这张卡上没有当前作品的徽章目录', noDirForGameText(state.model.serial, state.model.excludedDirNames.length), 20_000);
+    toast('info', t('这张卡上没有当前作品的徽章目录', 'No emblem folder for the selected game on this card'), noDirForGameText(state.model.serial, state.model.excludedDirNames.length), 20_000);
   } else {
-    setStatus(`${state.card?.fileName ?? ''}：${slotSummaryText(state.model)}`);
+    setStatus(t(`${state.card?.fileName ?? ''}：${slotSummaryText(state.model)}`, `${state.card?.fileName ?? ''}: ${slotSummaryText(state.model)}`));
   }
 }
 
-/** 卡上**所有**徽章目录（不过滤）——只给顶栏的"卡一览"用，不进 8 槽。 */
-function describeCardDirs(): string {
-  const scan = scanCard();
-  if (!scan) return '（未打开卡）';
-  if (!scan.dirs.length) return '这张卡上没有任何徽章目录（E## / EMB）';
-  return scan.dirs.map((d) => `${d.name}(${d.count} 项${d.isLrArchive ? ' · LR' : ''})`).join('  ');
-}
-
+/**
+ * 顶栏那一行"卡信息"：锁状态（能不能覆盖保存）+ 文件名 + 卡文件大小。
+ *
+ * ★ 0.27（用户）：原来还有第三段"整卡徽章目录清单"，用户说"没有显示价值的" ⇒ 删了。
+ *   ⚠ 别把那句 UI 文案写进注释：注释会进产物，`ui.test.ts` 分节 (o) 的判据正是
+ *   "产物里不该再出现它"。
+ */
 function renderCardInfo(): void {
   const host = $('card-info');
   clear(host);
   const lc = state.card;
   if (!lc) {
-    host.appendChild(el('span', { class: 'dim', text: '未选择记忆卡' }));
+    host.appendChild(el('span', { class: 'dim', text: t('未选择记忆卡', 'No memory card selected') }));
     return;
   }
   host.appendChild(
     el('span', {
       class: lc.handle ? 'ok' : 'warn',
-      text: lc.handle ? `🔓 ${lc.fileName}（可覆盖保存）` : `🔒 ${lc.fileName}（只读 · 保存=下载）`,
+      text: lc.handle ? t(`🔓 ${lc.fileName}（可覆盖保存）`, `🔓 ${lc.fileName} (can overwrite in place)`) : t(`🔒 ${lc.fileName}（只读 · 保存=下载）`, `🔒 ${lc.fileName} (read-only · save = download)`),
     }),
   );
   host.appendChild(el('span', { class: 'dim', text: `　${humanBytes(lc.sourceBytes.length)}` }));
-  host.appendChild(
-    el('span', {
-      class: 'dim',
-      title: '这张卡上所有的徽章目录（不过滤作品）',
-      text: `　卡上一共有：${describeCardDirs()}`,
-    }),
-  );
 }
 
 // --------------------------------------------------------------------------
@@ -237,7 +233,7 @@ function onGameChanged(): void {
   const err = $('game-error');
   clear(err);
   if (!r.ok) {
-    err.appendChild(el('span', { class: 'bad', text: r.error ?? '作品无法解析' }));
+    err.appendChild(el('span', { class: 'bad', text: r.error ?? t('作品无法解析', 'Cannot resolve the game') }));
     // 作品没法解析（例如自定义序列号还没填对）⇒ 退回"不过滤"，而不是把卡显示成空的。
     // ★ 0.19（D3）：这里也必须走 `refreshCardViews()` —— 原先手抄的版本漏了缩略图与卡片信息，
     //   于是"模型不过滤、缩略图还是上一次过滤的" ⇒ 槽名与缩略图可能来自不同目录。
@@ -252,7 +248,7 @@ function onGameChanged(): void {
     if (state.model && state.model.dirNames.length === 0) {
       setStatus(noDirForGameText(state.model.serial, state.model.excludedDirNames.length));
     } else {
-      setStatus(`已切到「${entry?.label ?? ''}」：${slotSummaryText(state.model)}`);
+      setStatus(t(`已切到「${entry?.label ?? ''}」：${slotSummaryText(state.model)}`, `Switched to "${entry?.en ?? ''}": ${slotSummaryText(state.model)}`));
     }
   }
 }
@@ -263,7 +259,7 @@ function updateWriteHints(): void {
   clear(host);
   const r = currentGameContext();
   if (!r.ok || !state.model) {
-    host.appendChild(el('span', { class: 'dim', text: state.card ? '（先选作品）' : '（先打开记忆卡）' }));
+    host.appendChild(el('span', { class: 'dim', text: state.card ? t('（先选作品）', '(pick a game first)') : t('（先打开记忆卡）', '(open a memory card first)') }));
     return;
   }
   const ctx = r.ctx;
@@ -273,9 +269,14 @@ function updateWriteHints(): void {
   if (plan.error) {
     host.appendChild(el('div', { class: 'bad', text: plan.error }));
   } else if (plan.target) {
-    const t = plan.target;
+    const target = plan.target;
     host.appendChild(
-      el('div', { text: `槽 ${t.slotIndex + 1} → ${t.dirName}\\${t.fileName}${t.isNew ? '（新建文件）' : '（覆盖）'}` }),
+      el('div', {
+        text: t(
+          `槽 ${target.slotIndex + 1} → ${target.dirName}\\${target.fileName}${target.isNew ? '（新建文件）' : '（覆盖）'}`,
+          `Slot ${target.slotIndex + 1} → ${target.dirName}\\${target.fileName}${target.isNew ? ' (new file)' : ' (overwrite)'}`,
+        ),
+      }),
     );
   }
   if (plan.warning) host.appendChild(el('div', { class: 'warn', text: '⚠ ' + plan.warning }));
@@ -288,8 +289,14 @@ function updateWriteHints(): void {
       el('div', {
         class: same.length ? 'dim' : 'warn',
         text: same.length
-          ? `作品常量可从卡上同作品的真实存档里取（找到 ${same.length} 个：${same.map((s) => `${s.dir}\\${s.file}`).join('、')}）`
-          : '⚠ 卡上没有同作品的真实存档，作品常量只能查核心层登记表（只有 SL / NX 有）；都没有时会拒绝写入。',
+          ? t(
+              `作品常量可从卡上同作品的真实存档里取（找到 ${same.length} 个：${same.map((s) => `${s.dir}\\${s.file}`).join('、')}）`,
+              `Game constants can be taken from real saves of this game on the card (found ${same.length}: ${same.map((s) => `${s.dir}\\${s.file}`).join(', ')})`,
+            )
+          : t(
+              '⚠ 卡上没有同作品的真实存档，作品常量只能查核心层登记表（只有 SL / NX 有）；都没有时会拒绝写入。',
+              '⚠ The card has no real save for this game, so the game constants can only come from the core registry (only SL / NX have one). If neither is available, the write is refused.',
+            ),
       }),
     );
   }
@@ -307,8 +314,8 @@ function selectSlot(i: number): void {
   const s = state.model?.slots[i];
   setStatus(
     s?.occupied
-      ? `已选槽 ${i + 1}：${s.dirName}\\${s.fileName}（${s.length} 字节，首簇 ${s.cluster}）`
-      : `已选槽 ${i + 1}：空（写入时会新建文件）`,
+      ? t(`已选槽 ${i + 1}：${s.dirName}\\${s.fileName}（${s.length} 字节，首簇 ${s.cluster}）`, `Slot ${i + 1}: ${s.dirName}\\${s.fileName} (${s.length} bytes, first cluster ${s.cluster})`)
+      : t(`已选槽 ${i + 1}：空（写入时会新建文件）`, `Slot ${i + 1}: empty (a new file is created when writing)`),
   );
   renderStatus();
 }
@@ -341,7 +348,7 @@ function selectSlot(i: number): void {
  *
  * 抽成独立函数有两个理由：
  *   1. **0.16 用户要求**："加载图片后默认启动取景模式" —— 导入图片的目的就是"圈出要用的那块"，
- *      所以这里最后一步直接 `openCropView()`，省掉"导入完还要再点一次〔取景…〕"；
+ *      所以这里最后一步直接 `openCropView()`，省掉"导入完还要再点一次〔取景〕"；
  *   2. 能在桩 DOM 冒烟 / 无头截图探针里**走真路**（`window.EmblemToolCore.ui.imageImport.applyImportedImage`），
  *      而不是在测试里手抄一遍"导入应该做什么"。
  */
@@ -359,24 +366,29 @@ function applyImportedImage(img: SourceImage, name: string): void {
   refreshImage();
   toast(
     r.ok ? 'ok' : 'warn',
-    r.ok ? `已导入 ${name}` : `已导入 ${name}，但还不合规`,
+    r.ok ? t(`已导入 ${name}`, `Imported ${name}`) : t(`已导入 ${name}，但还不合规`, `Imported ${name}, but it is not compliant yet`),
     r.ok
-      ? `${img.width}×${img.height} → ${state.params.targetSize}×${state.params.targetSize}，实色 ${state.prepared?.report.colorsAfter ?? '?'}；` +
-        `已按「填满白框」给好初始取景（倍率 ${state.params.manualFitScale.toFixed(3)}）。` +
-        '★ 已进入取景模式：拖动图片 / 滚轮缩放，白框下面那行是实时读数，满意就按〔确定取景〕。'
+      ? t(
+          `${img.width}×${img.height} → ${state.params.targetSize}×${state.params.targetSize}，实色 ${state.prepared?.report.colorsAfter ?? '?'}；` +
+            `已按「填满白框」给好初始取景（倍率 ${state.params.manualFitScale.toFixed(3)}）。` +
+            '★ 已进入取景模式：拖动图片 / 滚轮缩放，白框下面那行是实时读数，满意就按〔确定取景〕。',
+          `${img.width}×${img.height} → ${state.params.targetSize}×${state.params.targetSize}, solid colors ${state.prepared?.report.colorsAfter ?? '?'}; ` +
+            `initial crop set by "fill the white box" (scale ${state.params.manualFitScale.toFixed(3)}). ` +
+            '★ Crop mode is on: drag the image / scroll to zoom; the line under the white box is a live readout — press "Apply crop" when happy.',
+        )
       : r.error ?? '',
   );
   // ★ 0.16：直接进取景模式（这一步会顺手把状态行写成取景读数，所以上面不再另写"图片就绪…"）
   openCropView();
   if (!r.ok) {
     // 不合规时把原因也写进状态行 —— 取景读数会盖掉它，所以放在 openCropView() 之后**再刷一次**
-    setStatus(`图片不合规，拒绝写入：${r.error}`);
+    setStatus(t(`图片不合规，拒绝写入：${r.error}`, `Image is not compliant, write refused: ${r.error}`));
     renderStatus();
   }
 }
 
 async function loadImageFromBlob(blob: Blob, name: string): Promise<void> {
-  await guard('导入图片', async () => {
+  await guard(t('导入图片', 'Import image'), async () => {
     applyImportedImage(await decodeImageFile(blob, name), name);
   });
 }
@@ -397,12 +409,10 @@ function bindParams(): void {
   //   界面现在**永远**是 'manual'（`DEFAULT_PARAMS.fitMode`），理由写在 index.html 那段注释里：
   //   那三档自动模式会无视手动取景、自己重算一套，等于"偷偷丢掉你调好的取景"。
   //   核心 `image.ts` 的四个模式没动，`UiParams.fitMode` 字段也留着（`prepareEmblem()` 需要它）。
+
+  // ★ 0.28：填充抽成 `fillKernelSelect()` —— 语言切换时选项文案要跟着换（值不变）
+  fillKernelSelect();
   const kSel = $('kernel') as HTMLSelectElement;
-  clear(kSel);
-  for (const o of KERNEL_LABELS) kSel.appendChild(el('option', { value: o.value, selected: o.value === DEFAULT_PARAMS.kernel }, o.label));
-
-  kSel.value = state.params.kernel;
-
   kSel.addEventListener('change', () => {
     state.params.kernel = kSel.value as ScaleKernelChoice;
     commitParams();
@@ -430,7 +440,7 @@ function bindParams(): void {
   //   **按用户要求整块删除**（"我感觉这三个选项都没什么用啊" → 讨论后选"三样全删"）。
   //   ⚠ 删 UI 不等于删能力：`state.params.despeckle / maxColors / manualScale...` 都还在，
   //     默认值也还是"收边关 / 减色 255"（`DEFAULT_PARAMS`），核心 `image.ts` 一个字没动 ⇒ 行为不变。
-  //     要看当前取景的几个数：点左上的〔取景…〕，白框下面那行实时读数一直在写。
+  //     要看当前取景的几个数：点左上的〔取景〕，白框下面那行实时读数一直在写。
 
   const zoom = $('preview-zoom') as HTMLSelectElement;
   clear(zoom);
@@ -444,6 +454,65 @@ function bindParams(): void {
     //   （`refreshImage()` 里的 `renderOriginalBadge()` 会把整张源图扫一遍，0.8 M 像素实测 ~99 ms）
     renderImageViews();
   });
+}
+
+/** 填 `#kernel` 的选项（语言切换时要重跑一次 —— 值是同一个，只有文案换）。 */
+function fillKernelSelect(): void {
+  const kSel = $('kernel') as HTMLSelectElement;
+  clear(kSel);
+  for (const o of KERNEL_LABELS) {
+    kSel.appendChild(el('option', { value: o.value, selected: o.value === state.params.kernel }, t(o.label, o.en)));
+  }
+  kSel.value = state.params.kernel;
+}
+
+// --------------------------------------------------------------------------
+// 语言（0.28）
+// --------------------------------------------------------------------------
+
+/** 开机那句"就绪…"（语言切换后要按新语言重写一次状态行）。 */
+const READY_TEXT = (): string =>
+  t(
+    '就绪：先选一张记忆卡（顶栏），或把 .ps2 卡拖进顶栏。',
+    'Ready — pick a memory card in the top bar, or drop a .ps2 card onto it.',
+  );
+
+/** 填顶栏那个语言下拉。⚠ 选项文字**不翻译**：语言名各自用自己的语言写。 */
+function fillLangSelect(): void {
+  const sel = $('lang-select') as HTMLSelectElement;
+  clear(sel);
+  for (const l of LANGS) {
+    sel.appendChild(el('option', { value: l.value, selected: l.value === currentLang() }, l.label));
+  }
+  sel.value = currentLang();
+}
+
+/**
+ * 切语言之后把 **JS 生成的那部分文字**重画一遍（静态外壳由 `applyStaticI18n()` 管，不用这里操心）。
+ *
+ * 重画：作品下拉 · 缩放核下拉 · 顶栏卡信息 · 8 槽与摘要行 · 写卡提示 · 状态行 · 图片区小字 · PCSX2 面板。
+ * **有意不重画**：
+ *   · 写入日志 —— 那是**历史记录**（当时的操作结果），不该因为切语言就被改写；
+ *   · 已经弹过的 toast —— 它是瞬时提示，切语言时早就该消失了；
+ *   · 弹窗正文 —— `.modal-host` 是整页遮罩（`position: fixed`）⇒ 它开着的时候**点不到**语言下拉，
+ *     所以不存在"弹窗开着切语言"这个情形。
+ */
+function relayoutForLang(): void {
+  const gSel = document.getElementById('game-select') as HTMLSelectElement | null;
+  fillGameSelect(GAMES, gSel?.value || DEFAULT_GAME_ID);
+  fillKernelSelect();
+  fillLangSelect(); // 同步下拉的选中项（F12 里 `lang.set('en')` 也要让它跟着变）
+  setPcsx2Open(pcsx2Open); // 重写〔展开/收起〕那个按钮的文案（面板的展开状态不动）
+  renderPcsx2();
+  if (state.card) {
+    afterCardLoaded(); // 它内部会 refreshCardViews() + 按新语言重写状态行
+  } else {
+    refreshCardViews(null);
+    setStatus(READY_TEXT());
+  }
+  renderImageViews();
+  if (isCropActive()) layoutCropView(); // 取景读数那一行（白框下面）
+  renderStatus();
 }
 
 /**
@@ -470,25 +539,29 @@ async function doWrite(slotIndex: number, what: string): Promise<void> {
   //   这时候写下去的是"上一次的取景"，跟你在白框里看到的不一样。弹窗说清，然后中止。
   if (isCropActive()) {
     showModal({
-      title: '先在取景视图里点〔确定取景〕',
-      body:
+      title: t('先在取景视图里点〔确定取景〕', 'First press "Apply crop" in the crop view'),
+      body: t(
         '你现在还在取景模式：白框里的取景还没有生效，这时候写入用的是上一次确定的取景，' +
-        '和你在屏幕上看到的不一样。\n\n' +
-        '请点左边那行里的〔确定取景〕（想放弃这次调整就点〔取消〕），然后再点〔写入选中槽〕。',
-      ok: '知道了',
+          '和你在屏幕上看到的不一样。\n\n' +
+          '请点左边那行里的〔确定取景〕（想放弃这次调整就点〔取消〕），然后再点〔写入选中槽〕。',
+        'You are still in crop mode: the crop inside the white box has not taken effect yet, so writing now would use the previous confirmed crop, ' +
+          'which is not what you see on screen.\n\n' +
+          'Press "Apply crop" on the line at the left (press "Cancel" to drop this adjustment), then press "Write to selected slot".',
+      ),
+      ok: t('知道了', 'Got it'),
     });
     return;
   }
   const r = currentGameContext();
   if (!r.ok || !r.ctx) {
-    toast('error', '作品没选对', r.error ?? '请在下拉框里选一个作品');
+    toast('error', t('作品没选对', 'Wrong game selected'), r.error ?? t('请在下拉框里选一个作品', 'Pick a game in the dropdown'));
     return;
   }
   if (!state.prepared) {
-    toast('error', '还没有可写入的图像', state.prepareError ?? '先导入一张图（拖入 / 点击选择 / Ctrl+V 粘贴）。');
+    toast('error', t('还没有可写入的图像', 'No image ready to write'), state.prepareError ?? t('先导入一张图（拖入 / 点击选择 / Ctrl+V 粘贴）。', 'Import an image first (drop / click to choose / Ctrl+V paste).'));
     return;
   }
-  setBusy(true, `${what}中：生成徽章块 → 在内存副本上写 → 回读自检 …`);
+  setBusy(true, t(`${what}中：生成徽章块 → 在内存副本上写 → 回读自检 …`, `${what} in progress: build the emblem block → write to the in-memory copy → read back to verify …`));
   try {
     const isLr = r.ctx.entry.form === 'lr-archive';
     const outcome = await writeSlot(r.ctx, slotIndex, { isLr, finalCheck: recheckFinal });
@@ -496,10 +569,10 @@ async function doWrite(slotIndex: number, what: string): Promise<void> {
     if (outcome.ok) {
       // ★ 写入后按**当前作品**重建模型（新写的槽要出现在这 8 格里）
       refreshCardViews(r.ctx);
-      setStatus(`${outcome.persisted ?? '写入完成'}　｜　${slotSummaryText(state.model)}`);
-      toast('ok', `${what}成功`, outcome.persisted ?? '');
+      setStatus(t(`${outcome.persisted ?? '写入完成'}　｜　${slotSummaryText(state.model)}`, `${outcome.persisted ?? 'write complete'}　｜　${slotSummaryText(state.model)}`));
+      toast('ok', t(`${what}成功`, `${what} succeeded`), outcome.persisted ?? '');
     } else {
-      setStatus(`${what}被拒绝（见右侧日志）`);
+      setStatus(t(`${what}被拒绝（见右侧日志）`, `${what} was refused (see the log on the right)`));
     }
   } finally {
     setBusy(false);
@@ -526,10 +599,26 @@ const PCSX2_DB_STORE = 'handles';
 const PCSX2_HANDLE_KEY = 'pcsx2-dir';
 
 /** 这一次自检的文件是从哪来的（显示给用户，也用来判断 API 可用性）。 */
-type Pcsx2Route = '未提供' | '目录选择框' | '目录输入框' | '拖入文件' | '自动（记住的目录）';
+type Pcsx2Route = 'none' | 'picker' | 'input' | 'drop' | 'auto';
+
+/**
+ * `Pcsx2Route` ⇒ 界面那一行「本次来源：…」的文案（**中文原文 + 英文紧跟**）。
+ *
+ * ★ 值本身是**语言无关的代号**：切语言时 `relayoutForLang()` 会重跑 `renderPcsx2()`，
+ *   由这里按当前语言重新取一次文案 —— 否则那一行会停在切语言之前的语言。
+ *   ⚠ `'目录选择框'` / `'未提供'` 这些中文原文必须留在这里的 `t()` 第一参数里
+ *   （`ui.test.ts` 分节 k3 直接拿源码断言它们在）。
+ */
+function pcsx2RouteText(route: Pcsx2Route): string {
+  if (route === 'picker') return t('目录选择框', 'folder picker');
+  if (route === 'input') return t('目录输入框', 'the folder input box');
+  if (route === 'drop') return t('拖入文件', 'dropped files');
+  if (route === 'auto') return t('自动（记住的目录）', 'the remembered folder (automatic)');
+  return t('未提供', 'not provided');
+}
 
 let pcsx2Files: IniFileLike[] = [];
-let pcsx2Route: Pcsx2Route = '未提供';
+let pcsx2Route: Pcsx2Route = 'none';
 
 /**
  * ★ 0.23：PCSX2 自检面板**默认折叠**（用户："自检改成默认折叠起来"）。
@@ -550,7 +639,7 @@ function setPcsx2Open(open: boolean): void {
   if (panel) panel.hidden = !open;
   const btn = document.getElementById('btn-pcsx2-toggle') as HTMLButtonElement | null;
   if (btn) {
-    btn.textContent = open ? '收起' : '展开';
+    btn.textContent = open ? t('收起', 'Collapse') : t('展开', 'Expand');
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 }
@@ -565,7 +654,7 @@ async function setPcsx2Files(files: Iterable<File>, route: Pcsx2Route): Promise<
       // 名字用 webkitRelativePath（有就带上，界面上一眼能看出是哪个目录的）
       out.push({ name: f.webkitRelativePath || f.name, text: await f.text() });
     } catch (e) {
-      toast('warn', `读不了 ${f.name}`, e instanceof Error ? e.message : String(e));
+      toast('warn', t(`读不了 ${f.name}`, `Cannot read ${f.name}`), e instanceof Error ? e.message : String(e));
     }
   }
   // ★ 0.19（D12）：无论读到几个都更新 —— "本次来源"与结论面板必须说同一件事
@@ -578,16 +667,16 @@ async function setPcsx2Files(files: Iterable<File>, route: Pcsx2Route): Promise<
   if (out.length === 0) {
     toast(
       'warn',
-      '这个目录里没有找到 PCSX2 的自检文件',
+      t('这个目录里没有找到 PCSX2 的自检文件', 'No PCSX2 check files found in this folder'),
       describeFoundFiles(list.map((f) => f.webkitRelativePath || f.name)),
     );
     return 0;
   }
   toast(
     'ok',
-    `读到 ${out.length} 个文件（${route}）`,
+    t(`读到 ${out.length} 个文件（${pcsx2RouteText(route)}）`, `Read ${out.length} files (${pcsx2RouteText(route)})`),
     describeFoundFiles(out.map((f) => f.name)) +
-      (cls.skippedTooBig.length ? `；跳过 ${cls.skippedTooBig.length} 个超过 4 MiB 的文件（memcards 那些用不到）` : ''),
+      (cls.skippedTooBig.length ? t(`；跳过 ${cls.skippedTooBig.length} 个超过 4 MiB 的文件（memcards 那些用不到）`, `; skipped ${cls.skippedTooBig.length} files over 4 MiB (the memcards ones are not needed)`) : ''),
   );
   return out.length;
 }
@@ -653,7 +742,7 @@ async function openHandleDb(): Promise<IDBDatabase> {
       if (!d.objectStoreNames.contains(PCSX2_DB_STORE)) d.createObjectStore(PCSX2_DB_STORE);
     };
     req.onsuccess = () => res(req.result);
-    req.onerror = () => rej(req.error ?? new Error('indexedDB.open 失败'));
+    req.onerror = () => rej(req.error ?? new Error(t('indexedDB.open 失败', 'indexedDB.open failed')));
   });
 }
 
@@ -665,7 +754,7 @@ async function rememberPcsx2Handle(dir: FileSystemDirectoryHandle): Promise<void
       const tx = db.transaction(PCSX2_DB_STORE, 'readwrite');
       tx.objectStore(PCSX2_DB_STORE).put(dir, PCSX2_HANDLE_KEY);
       tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error ?? new Error('写入 IndexedDB 失败'));
+      tx.onerror = () => rej(tx.error ?? new Error(t('写入 IndexedDB 失败', 'Failed to write to IndexedDB')));
     });
     db.close();
   } catch {
@@ -681,7 +770,7 @@ async function recallPcsx2Handle(): Promise<FileSystemDirectoryHandle | null> {
       const tx = db.transaction(PCSX2_DB_STORE, 'readonly');
       const req = tx.objectStore(PCSX2_DB_STORE).get(PCSX2_HANDLE_KEY);
       req.onsuccess = () => res((req.result as FileSystemDirectoryHandle) ?? null);
-      req.onerror = () => rej(req.error ?? new Error('读取 IndexedDB 失败'));
+      req.onerror = () => rej(req.error ?? new Error(t('读取 IndexedDB 失败', 'Failed to read from IndexedDB')));
     });
     db.close();
     return handle;
@@ -706,9 +795,13 @@ async function autoReadPcsx2IfRemembered(): Promise<void> {
   }
   if (perm !== 'granted') return;
   try {
-    const n = await readFromDirectoryHandle(handle, '自动（记住的目录）');
+    const n = await readFromDirectoryHandle(handle, 'auto');
     if (n > 0) {
-      toast('info', `已自动读取记住的 PCSX2 目录（${handle.name}，${n} 个文件）`, '结论见页面最下面那块；想换目录就点「选择 PCSX2 目录」。');
+      toast(
+        'info',
+        t(`已自动读取记住的 PCSX2 目录（${handle.name}，${n} 个文件）`, `Automatically read the remembered PCSX2 folder (${handle.name}, ${n} files)`),
+        t('结论见页面最下面那块；想换目录就点「选择 PCSX2 目录」。', 'The result is in the panel at the bottom of the page; to change the folder, click "Choose PCSX2 folder".'),
+      );
     }
   } catch {
     /* 句柄失效（目录被删/改名）⇒ 静默放弃，用户点一次就好 */
@@ -719,35 +812,46 @@ async function autoReadPcsx2IfRemembered(): Promise<void> {
 async function pickPcsx2Dir(): Promise<void> {
   const w = pickerWindow();
   if (typeof w.showDirectoryPicker !== 'function') {
-    toast('info', '这个浏览器没有「目录选择框」，已切到兜底方式', '请在弹出的目录输入框里选 C:\\Users\\M\\Documents\\PCSX2。');
+    toast(
+      'info',
+      t('这个浏览器没有「目录选择框」，已切到兜底方式', 'This browser has no folder picker — switched to the fallback'),
+      t('请在弹出的目录输入框里选 C:\\Users\\M\\Documents\\PCSX2。', 'Pick C:\\Users\\M\\Documents\\PCSX2 in the folder input box that just opened.'),
+    );
     openPcsx2DirInput();
     return;
   }
-  await guard('读取 PCSX2 目录', async () => {
+  await guard(t('读取 PCSX2 目录', 'Read PCSX2 folder'), async () => {
     let dir: FileSystemDirectoryHandle;
     try {
       dir = await w.showDirectoryPicker!({ id: 'pcsx2', mode: 'read', startIn: 'documents' });
     } catch (e) {
       if (isAbort(e)) {
-        setStatus('已取消选择 PCSX2 目录。');
+        setStatus(t('已取消选择 PCSX2 目录。', 'Cancelled PCSX2 folder selection.'));
         return;
       }
       // ★ SecurityError / NotAllowedError 等 ⇒ **自动**切兜底，不报错卡住
       toast(
         'warn',
-        '「目录选择框」在这个环境里不可用，已自动切到兜底方式',
-        `${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}\n请在弹出的目录输入框里选 C:\\Users\\M\\Documents\\PCSX2。`,
+        t('「目录选择框」在这个环境里不可用，已自动切到兜底方式', 'The folder picker is not available in this environment — switched to the fallback automatically'),
+        t(
+          `${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}\n请在弹出的目录输入框里选 C:\\Users\\M\\Documents\\PCSX2。`,
+          `${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}\nPick C:\\Users\\M\\Documents\\PCSX2 in the folder input box that just opened.`,
+        ),
       );
       openPcsx2DirInput();
       return;
     }
-    const n = await readFromDirectoryHandle(dir, '目录选择框');
+    const n = await readFromDirectoryHandle(dir, 'picker');
     if (n === 0) {
-      toast('warn', '这个目录里没找到 PCSX2 的自检文件', '期望含 inis\\PCSX2.ini、gamesettings\\*.ini、logs\\emulog.txt。');
+      toast(
+        'warn',
+        t('这个目录里没找到 PCSX2 的自检文件', 'No PCSX2 check files found in this folder'),
+        t('期望含 inis\\PCSX2.ini、gamesettings\\*.ini、logs\\emulog.txt。', 'Expected inis\\PCSX2.ini, gamesettings\\*.ini, logs\\emulog.txt.'),
+      );
       return;
     }
     await rememberPcsx2Handle(dir);
-    toast('ok', `读了 ${n} 个文件（目录选择框）`, describeFoundFiles(pcsx2Files.map((f) => f.name)));
+    toast('ok', t(`读了 ${n} 个文件（目录选择框）`, `Read ${n} files (folder picker)`), describeFoundFiles(pcsx2Files.map((f) => f.name)));
   });
 }
 
@@ -773,17 +877,21 @@ async function handlePcsx2Drop(dt: DataTransfer): Promise<void> {
     const collected: File[] = [];
     for (const e of entries) await collectEntryFiles(e, collected);
     if (collected.length) {
-      await setPcsx2Files(collected, '拖入文件');
+      await setPcsx2Files(collected, 'drop');
       return;
     }
   }
   // ② 拿不到 entry（旧浏览器）⇒ 就用 dt.files（拖三个文件时是够的）
   const files = Array.from(dt.files ?? []);
   if (files.length) {
-    await setPcsx2Files(files, '拖入文件');
+    await setPcsx2Files(files, 'drop');
     return;
   }
-  toast('warn', '没收到任何文件', '请拖 inis\\PCSX2.ini、gamesettings\\*.ini、logs\\emulog.txt，或整个 PCSX2 目录。');
+  toast(
+    'warn',
+    t('没收到任何文件', 'No files received'),
+    t('请拖 inis\\PCSX2.ini、gamesettings\\*.ini、logs\\emulog.txt，或整个 PCSX2 目录。', 'Drop inis\\PCSX2.ini, gamesettings\\*.ini, logs\\emulog.txt, or the whole PCSX2 folder.'),
+  );
 }
 
 /** 递归把 entry 展开成文件（目录深度上限 4，只看我们关心的三个目录）。 */
@@ -835,13 +943,13 @@ function renderPcsx2(): void {
   clear(dirHint);
   dirHint.appendChild(
     el('span', null,
-      el('b', { text: 'PCSX2 默认目录：' }),
+      el('b', { text: t('PCSX2 默认目录：', 'Default PCSX2 folder:') }),
       el('code', { text: DEFAULT_PCSX2_DIR })),
   );
 
   const route = $('pcsx2-route');
   clear(route);
-  route.textContent = `本次来源：${pcsx2Route}`;
+  route.textContent = t('本次来源：', 'Source: ') + pcsx2RouteText(pcsx2Route);
 
   const report = analyzePcsx2({ files: pcsx2Files });
   // ★ 2026-10-05（0.10）：顶栏那行"PCSX2 自检：<摘要>"已按用户要求删除 ⇒ 这里不再写摘要。
@@ -850,35 +958,48 @@ function renderPcsx2(): void {
   if (report.recognized.length === 0) {
     host.appendChild(
       el('div', { class: 'pcsx2-help' },
-        el('div', { class: 'pcsx2-help-title', text: '这块面板是干什么的？' }),
+        el('div', { class: 'pcsx2-help-title', text: t('这块面板是干什么的？', 'What is this panel for?') }),
         el('div', {
           class: 'pcsx2-help-body',
-          text:
+          text: t(
             '你在 PCSX2「设置 → 记忆卡插槽」里选的那张卡，**不一定**是游戏真正读的那张 —— ' +
-            'PCSX2 还有一层「每游戏设置」（文件在 gamesettings\\<序列号>_<CRC>.ini），' +
-            '它会**盖掉**全局设置。我们就因为这个白排查过一轮：对话框里写着 A，游戏实际读的是 B。',
+              'PCSX2 还有一层「每游戏设置」（文件在 gamesettings\\<序列号>_<CRC>.ini），' +
+              '它会**盖掉**全局设置。我们就因为这个白排查过一轮：对话框里写着 A，游戏实际读的是 B。',
+            'The card you picked in PCSX2 "Settings → Memory card slots" is not necessarily the card the game actually reads — ' +
+              'PCSX2 has one more layer, the per-game settings (the file is gamesettings\\<serial>_<CRC>.ini), ' +
+              'which overrides the global settings. That is exactly what cost us a round of blind debugging: the dialog said A, but the game actually read B.',
+          ),
         }),
         el('div', { class: 'pcsx2-help-body' },
-          el('b', { text: '什么时候该看它：' }),
-          el('span', { text: '写卡前 / 进游戏前 —— 确认你要写的那张卡，就是游戏会读的那张。' }),
+          el('b', { text: t('什么时候该看它：', 'When to look at it:') }),
+          el('span', { text: t('写卡前 / 进游戏前 —— 确认你要写的那张卡，就是游戏会读的那张。', 'Before writing / before starting the game — confirm that the card you are about to write is the one the game will read.') }),
         ),
         el('div', { class: 'pcsx2-help-body' },
-          el('b', { text: '怎么用（三种，任选一种）：' }),
+          el('b', { text: t('怎么用（三种，任选一种）：', 'How to use it (three ways, pick any one):') }),
           el('span', {
-            text:
+            text: t(
               '① 点上面的「选择 PCSX2 目录」选一次 ' + DEFAULT_PCSX2_DIR + '（一次就够，之后 Chrome 会记住）；' +
-              '② 这个浏览器没有目录选择框时，用「用目录输入框选」；' +
-              '③ 或者把 inis\\PCSX2.ini、gamesettings\\*.ini、logs\\emulog.txt（也可以整个目录）拖到上面那条虚线上。' +
-              '**全程只读，不写任何文件。**',
+                '② 这个浏览器没有目录选择框时，用「用目录输入框选」；' +
+                '③ 或者把 inis\\PCSX2.ini、gamesettings\\*.ini、logs\\emulog.txt（也可以整个目录）拖到上面那条虚线上。' +
+                '**全程只读，不写任何文件。**',
+              '① Click "Choose PCSX2 folder" above and pick ' + DEFAULT_PCSX2_DIR + ' once (once is enough, Chrome remembers it); ' +
+                '② if this browser has no folder picker, use "Pick folder via input"; ' +
+                '③ or drag inis\\PCSX2.ini, gamesettings\\*.ini, logs\\emulog.txt (or the whole folder) onto the dashed line above. ' +
+                'Read-only throughout: no file is ever written.',
+            ),
           }),
         ),
         el('div', { class: 'pcsx2-help-body' },
-          el('b', { text: '结论怎么读：' }),
+          el('b', { text: t('结论怎么读：', 'How to read the result:') }),
           el('span', {
-            text:
+            text: t(
               '下面会列一张小表：Slot 1 / Slot 2 **实际会读哪张卡**，以及这个结论的**来源**' +
-              '（「全局设置」还是「★每游戏覆盖」）。' +
-              '如果对话框里的卡和实际会读的卡不一样，会用**红字**告诉你"游戏读到的是 X，不是你选的那张"。',
+                '（「全局设置」还是「★每游戏覆盖」）。' +
+                '如果对话框里的卡和实际会读的卡不一样，会用**红字**告诉你"游戏读到的是 X，不是你选的那张"。',
+              'The small table below lists which card Slot 1 / Slot 2 actually reads, and where that conclusion comes from ' +
+                '(the global settings, or the ★ per-game override). ' +
+                'If the card in the dialog differs from the card actually read, the line tells you in red: "the game reads X, not the card you picked".',
+            ),
           }),
         ),
       ),
@@ -886,18 +1007,18 @@ function renderPcsx2(): void {
     return;
   }
 
-  host.appendChild(el('div', { class: 'dim', text: '认出来的文件：' + report.recognized.join('　') }));
+  host.appendChild(el('div', { class: 'dim', text: t('认出来的文件：', 'Recognized files: ') + report.recognized.join('　') }));
   for (const w of report.warnings) host.appendChild(el('div', { class: 'bad', text: w }));
   for (const n of report.notes) host.appendChild(el('div', { class: 'dim', text: n }));
 
   const table = el('table', { class: 'pcsx2-table' });
   table.appendChild(
     el('tr', null,
-      el('th', { text: '界面槽' }),
-      el('th', { text: '日志里叫' }),
-      el('th', { text: '实际会读的卡' }),
-      el('th', { text: '结论来源' }),
-      el('th', { text: '上次实际挂载' })),
+      el('th', { text: t('界面槽', 'UI slot') }),
+      el('th', { text: t('日志里叫', 'Called in the log') }),
+      el('th', { text: t('实际会读的卡', 'Card actually read') }),
+      el('th', { text: t('结论来源', 'Where the conclusion comes from') }),
+      el('th', { text: t('上次实际挂载', 'Last actual mount') })),
   );
   for (const e of report.effective) {
     const slot = e.slot;
@@ -907,17 +1028,25 @@ function renderPcsx2(): void {
       el('tr', { class: e.source === 'game' ? 'row-warn' : '' },
         el('td', { text: `Slot ${slot}` }),
         el('td', { text: `McdSlot ${mcd}` }),
-        el('td', { text: e.fileName || '(空)' }),
-        el('td', { text: e.source === 'game' ? `★每游戏覆盖（${e.sourceFile} 盖掉了全局设置）` : e.source === 'global' ? '全局设置（inis\\PCSX2.ini）' : '未设置' }),
+        el('td', { text: e.fileName || t('(空)', '(empty)') }),
+        el('td', {
+          text: e.source === 'game'
+            ? t(`★每游戏覆盖（${e.sourceFile} 盖掉了全局设置）`, `★ per-game override (${e.sourceFile} overrides the global settings)`)
+            : e.source === 'global'
+              ? t('全局设置（inis\\PCSX2.ini）', 'Global settings (inis\\PCSX2.ini)')
+              : t('未设置', 'not set'),
+        }),
         el('td', {
           class: actual && actual.differs ? 'bad' : 'ok',
-          text: actual ? `${actual.fileName}${actual.differs ? '（与上面的推断不同）' : ''}` : '（日志里没有）',
+          text: actual
+            ? t(`${actual.fileName}${actual.differs ? '（与上面的推断不同）' : ''}`, `${actual.fileName}${actual.differs ? ' (differs from the inference above)' : ''}`)
+            : t('（日志里没有）', '(not in the log)'),
         })),
     );
   }
   host.appendChild(table);
   if (report.conflicts.length === 0) {
-    host.appendChild(el('div', { class: 'ok', text: '✅ 没有「每游戏覆盖 vs 全局」冲突 —— 对话框里选的那张就是游戏会读的那张。' }));
+    host.appendChild(el('div', { class: 'ok', text: t('✅ 没有「每游戏覆盖 vs 全局」冲突 —— 对话框里选的那张就是游戏会读的那张。', '✅ No per-game-vs-global conflict — the card picked in the dialog is the one the game reads.') }));
   }
   // ★ 0.18：原来这里还有一句"判读方法：拿「实际会读的卡」这一列去和你对话框里选的卡对一下…"，
   //   按用户要求删掉。
@@ -982,7 +1111,11 @@ async function handleDrop(zoneId: string, ev: DragEvent & { dataTransfer: DataTr
   const files = Array.from(dt.files).filter((f) => /^image\//.test(f.type) || IMG_EXT_RE.test(f.name));
   const rejected = Array.from(dt.files).filter((f) => !files.includes(f));
   for (const f of rejected) {
-    toast('warn', `不接受 ${f.name}`, 'PSD / TIFF / 多页 RAW 请先导出 PNG（SPEC.md §五：不做格式猜测）。');
+    toast(
+      'warn',
+      t(`不接受 ${f.name}`, `Rejected ${f.name}`),
+      t('PSD / TIFF / 多页 RAW 请先导出 PNG（SPEC.md §五：不做格式猜测）。', 'Export PSD / TIFF / multi-page RAW to PNG first (SPEC.md §5: no format guessing).'),
+    );
   }
   if (files.length) await loadImageFromBlob(files[0], files[0].name);
 }
@@ -994,7 +1127,7 @@ function installPaste(): void {
     const files = Array.from(dt.files ?? []);
     const img = files.find((f) => /^image\//.test(f.type));
     if (img) {
-      void loadImageFromBlob(img, `剪贴板 · ${img.name || 'image'}`);
+      void loadImageFromBlob(img, t(`剪贴板 · ${img.name || 'image'}`, `Clipboard · ${img.name || 'image'}`));
       ev.preventDefault();
       return;
     }
@@ -1003,7 +1136,7 @@ function installPaste(): void {
     if (it) {
       const f = it.getAsFile();
       if (f) {
-        void loadImageFromBlob(f, '剪贴板图片');
+        void loadImageFromBlob(f, t('剪贴板图片', 'Clipboard image'));
         ev.preventDefault();
       }
     }
@@ -1022,7 +1155,7 @@ function bindButtons(): void {
 
   ($('card-input') as HTMLInputElement).addEventListener('change', (ev) => {
     const f = (ev.target as HTMLInputElement).files?.[0];
-    if (f) void guard('读记忆卡', () => openCardViaInput(f));
+    if (f) void guard(t('读记忆卡', 'Read memory card'), () => openCardViaInput(f));
   });
 
   $('btn-image-open').addEventListener('click', () => void pickImageFile());
@@ -1034,17 +1167,17 @@ function bindButtons(): void {
   $('game-select').addEventListener('change', () => onGameChanged());
   ($('custom-serial') as HTMLInputElement).addEventListener('change', () => onGameChanged());
 
-  $('btn-write').addEventListener('click', () => void doWrite(state.selectedSlot, '写入选中槽'));
+  $('btn-write').addEventListener('click', () => void doWrite(state.selectedSlot, t('写入选中槽', 'Write to selected slot')));
 
   $('btn-export-png').addEventListener('click', () => {
-    void guard('导出 PNG', async () => {
+    void guard(t('导出 PNG', 'Export PNG'), async () => {
       const p = state.prepared;
       if (!p) {
-        toast('warn', '还没有可导出的图', '先导入一张图。');
+        toast('warn', t('还没有可导出的图', 'No image to export yet'), t('先导入一张图。', 'Import an image first.'));
         return;
       }
       await exportPng(p.rgba, p.width, p.height, `emblem_${Date.now()}.png`);
-      toast('ok', '已导出 PNG', '导出的是**游戏口径**（索引 0 = 透明）。');
+      toast('ok', t('已导出 PNG', 'PNG exported'), t('导出的是**游戏口径**（索引 0 = 透明）。', 'The export uses the game palette (index 0 = transparent).'));
     });
   });
 
@@ -1053,13 +1186,13 @@ function bindButtons(): void {
   //   用户的操作直觉是"删了就是删了"。现在一次做完：确认框（写明会立刻写回）→
   //   内存副本上删 → 走同一条落盘路径（含"写前查句柄有没有过期" + 覆盖后回读比对）。
   $('btn-delete').addEventListener('click', () => {
-    void guard('删除槽', async () => {
+    void guard(t('删除槽', 'Delete slot'), async () => {
       const s = state.model?.slots[state.selectedSlot];
       if (!s || !s.occupied || !s.fileName) {
-        toast('warn', `槽 ${state.selectedSlot + 1} 本来就是空的`, '没有可删的东西。');
+        toast('warn', t(`槽 ${state.selectedSlot + 1} 本来就是空的`, `Slot ${state.selectedSlot + 1} is already empty`), t('没有可删的东西。', 'There is nothing to delete.'));
         return;
       }
-      setBusy(true, '删除槽：在内存副本上删 → 立刻写回卡文件 …');
+      setBusy(true, t('删除槽：在内存副本上删 → 立刻写回卡文件 …', 'Delete slot: delete from the in-memory copy → write back to the card file right away …'));
       try {
         const out = await deleteSlotAndSave(s.dirName, s.fileName);
         renderLog(out.lines);
@@ -1068,15 +1201,20 @@ function bindButtons(): void {
         const g = currentGameContext();
         refreshCardViews(g.ok ? g.ctx : null);
         if (out.deleted && out.ok) {
-          setStatus(`已删除并写回：${out.persisted ?? ''}`);
-          toast('ok', '已删除，并已写回卡文件', out.persisted ?? '');
+          setStatus(t(`已删除并写回：${out.persisted ?? ''}`, `Deleted and written back: ${out.persisted ?? ''}`));
+          toast('ok', t('已删除，并已写回卡文件', 'Deleted, and written back to the card file'), out.persisted ?? '');
         } else if (out.deleted) {
-          setStatus('⚠ 内存里已删除，但**没有落盘**（磁盘上还是原样）—— 见右侧日志');
-          toast('error', '删除没落盘', '内存里已经删了；磁盘上的卡一个字节都没动。按日志里的步骤重做一次。', 20_000);
-        } else if (out.lines.some((l) => l.includes('取消'))) {
-          setStatus('已取消删除：磁盘与内存都没动。');
+          setStatus(t('⚠ 内存里已删除，但**没有落盘**（磁盘上还是原样）—— 见右侧日志', '⚠ Deleted in memory, but it was NOT written to disk (the file on disk is unchanged) — see the log on the right'));
+          toast(
+            'error',
+            t('删除没落盘', 'Delete did not reach the disk'),
+            t('内存里已经删了；磁盘上的卡一个字节都没动。按日志里的步骤重做一次。', 'It is deleted in memory; not a single byte of the card on disk changed. Redo it following the steps in the log.'),
+            20_000,
+          );
+        } else if (out.cancelled) {
+          setStatus(t('已取消删除：磁盘与内存都没动。', 'Delete cancelled: neither the disk nor memory was touched.'));
         } else {
-          setStatus('删除失败（见右侧日志）');
+          setStatus(t('删除失败（见右侧日志）', 'Delete failed (see the log on the right)'));
         }
       } finally {
         setBusy(false);
@@ -1085,20 +1223,20 @@ function bindButtons(): void {
     });
   });
 
-  // ★ 0.26：〔另存为…〕—— 把内存里这张卡另存成一份记忆卡文件（`showSaveFilePicker` 选位置/名字，
+  // ★ 0.26：〔另存为〕—— 把内存里这张卡另存成一份记忆卡文件（`showSaveFilePicker` 选位置/名字，
   //   拿不到那个对话框时退化成下载）。原名〔导出整卡〕。
   //   ⚠ 0.21 修过的坑：这里**只许挂一个**监听（当时重复挂过两段 ⇒ 点一次下载两次）。
-  $('btn-save-as').addEventListener('click', () => void guard('另存为', () => saveCardAs()));
+  $('btn-save-as').addEventListener('click', () => void guard(t('另存为', 'Save card as'), () => saveCardAs()));
 
   $('btn-debug').addEventListener('click', () => {
     const model = state.model;
     if (!model) {
-      toast('warn', '还没有打开记忆卡', '');
+      toast('warn', t('还没有打开记忆卡', 'No memory card loaded yet'), '');
       return;
     }
     const dir = model.dirNames[0];
-    const txt = dir ? direntDebug(dir) : '（卡上没有徽章目录）';
-    renderLog([`── ${dir ?? '(无)'} 的目录项 ──`, ...txt.split('\n')]);
+    const txt = dir ? direntDebug(dir) : t('（卡上没有徽章目录）', '(no emblem folder on the card)');
+    renderLog([t(`── ${dir ?? '(无)'} 的目录项 ──`, `── directory entries of ${dir ?? '(none)'} ──`), ...txt.split('\n')]);
   });
 
   $('btn-pcsx2-dir').addEventListener('click', () => void pickPcsx2Dir());
@@ -1106,11 +1244,11 @@ function bindButtons(): void {
   $('pcsx2-dir-input').addEventListener('change', (ev) => {
     const files = Array.from((ev.target as HTMLInputElement).files ?? []);
     if (!files.length) return;
-    void guard('读 PCSX2 目录', () => setPcsx2Files(files, '目录输入框'));
+    void guard(t('读 PCSX2 目录', 'Read PCSX2 folder'), () => setPcsx2Files(files, 'input'));
   });
   $('btn-pcsx2-clear').addEventListener('click', () => {
     pcsx2Files = [];
-    pcsx2Route = '未提供';
+    pcsx2Route = 'none';
     // ★ 0.23：清空 = 回到初始状态 ⇒ 连同折叠一起复位（默认就是折叠的）
     setPcsx2Open(false);
     renderPcsx2();
@@ -1135,6 +1273,17 @@ function boot(): void {
     if (badge) badge.textContent = APP_VERSION_LABEL;
   }
 
+  // ★ 0.28：**语言必须最先定** —— 它决定后面每一次渲染用哪套文案（静态外壳由
+  //   `applyStaticI18n()` 按 `[data-en]` 刷，JS 生成的那部分读 `t()`）。
+  //   `persist: false`：自动判定**不写** localStorage，只有用户手动切才记（见 logic/i18n.ts 文件头）。
+  setLang(detectLang(), { persist: false });
+  onLangChange(relayoutForLang);
+  fillLangSelect();
+  $('lang-select').addEventListener('change', () => {
+    const v = ($('lang-select') as HTMLSelectElement).value;
+    setLang(v === 'en' ? 'en' : 'zh');
+  });
+
   fillGameSelect(GAMES, DEFAULT_GAME_ID);
   bindParams();
   bindButtons();
@@ -1149,14 +1298,20 @@ function boot(): void {
   //   因为它正是"写了看不见"那类问题的最常见原因。
   //   ⚠ 必须点掉才能操作下面的界面（`.modal-host` 盖住整页）。
   showModal({
-    title: '⚠ 本项目未经过完整测试',
-    body:
+    title: t('⚠ 本项目未经过完整测试', '⚠ This project has not been fully tested'),
+    body: t(
       '这个徽章工具还在开发中：没有经过完整的实机验证，写卡 / 删除 / 新建槽这几条路都只验证过一部分，' +
-      '任何一次写入都有可能把你的记忆卡改坏。\n\n' +
-      '请先自己备份记忆卡：把 memcards\\ 里的 .ps2 复制一份到别处，再开始操作。\n\n' +
-      '另一条硬规矩：写卡前先完全退出 PCSX2。它手里有一份卡，退出时会把那份写回文件，' +
-      '你在工具里写进去的东西会被它覆盖掉。',
-    ok: '我已知晓，并会自行备份记忆卡',
+        '任何一次写入都有可能把你的记忆卡改坏。\n\n' +
+        '请先自己备份记忆卡：把 memcards\\ 里的 .ps2 复制一份到别处，再开始操作。\n\n' +
+        '另一条硬规矩：写卡前先完全退出 PCSX2。它手里有一份卡，退出时会把那份写回文件，' +
+        '你在工具里写进去的东西会被它覆盖掉。',
+      'This emblem tool is still in development. It has not been fully verified on real hardware: ' +
+        'writing, deleting and creating slots have only been partly tested, and any write can corrupt your memory card.\n\n' +
+        'Please back up your memory card first: copy the .ps2 in memcards\\ somewhere else before you start.\n\n' +
+        'One more hard rule: fully exit PCSX2 before writing. It keeps its own copy of the card and writes it back on exit, ' +
+        'which would overwrite whatever you wrote here.',
+    ),
+    ok: t('我已知晓，并会自行备份记忆卡', 'I understand, and will back up my memory card myself'),
   });
 
   // ★ 取景视图（按需）：入口在左格工具条上；这里注入两个回调（放在 commitParams 之前，避免注入前就被别处调用）
@@ -1187,7 +1342,7 @@ function boot(): void {
   // ★ 0.19（A20）：这里原来还跟着 `recompute(); refreshImage();` —— 而 `commitParams()` 内部
   //   做的正是这两件事 ⇒ 开机白跑一遍（管线 + 面板各两次）。
   commitParams();
-  setStatus('就绪：先选一张记忆卡（顶栏），或把 .ps2 卡拖进顶栏。');
+  setStatus(READY_TEXT());
   renderStatus();
 
   // ★ 上次记住的 PCSX2 目录若权限还在，就**静默自动读一遍**（不弹权限框；弹框必须由用户点击触发）
@@ -1204,6 +1359,8 @@ function boot(): void {
       state,
       version: APP_VERSION,
       buildTag: UI_BUILD_TAG,
+      // ★ 0.28：F12 里可以直接切语言核对（`EmblemToolCore.ui.lang.set('en')`）
+      lang: { current: currentLang, set: (l: Lang) => setLang(l) },
       cropView: {
         setCropView,
         openCropView,

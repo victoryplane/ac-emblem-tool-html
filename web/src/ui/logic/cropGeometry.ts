@@ -53,6 +53,7 @@
  */
 
 import { effectiveManualScale, fillScaleFor, type UiParams } from './defaults.ts';
+import { t } from './i18n.ts';
 
 export interface StageBox {
   /** 舞台（`.crop-stage`）内部可用宽。 */
@@ -310,19 +311,37 @@ export function checkBakeResult(input: BakeCheckInput): BakeCheck {
   const errors: string[] = [];
   const warnings: string[] = [];
   if (input.pixelCount !== target * target) {
-    errors.push(`烘焙结果 ${input.pixelCount} 像素 ≠ ${target}×${target}（${target * target}）`);
+    errors.push(
+      t(
+        `烘焙结果 ${input.pixelCount} 像素 ≠ ${target}×${target}（${target * target}）`,
+        `Baked result is ${input.pixelCount} pixels, not ${target}×${target} (${target * target})`,
+      ),
+    );
   }
   if (input.opaquePixels === 0) {
     if (input.sourceRegionHasOpaque) {
       errors.push(
-        '白框里一个不透明像素都没有，可是白框盖住的源图是有内容的 —— 取景映射坏了（这是 bug，不是你的操作问题）。',
+        t(
+          '白框里一个不透明像素都没有，可是白框盖住的源图是有内容的 —— 取景映射坏了（这是 bug，不是你的操作问题）。',
+          'The box has no opaque pixels, yet the source image it covers does have content - the crop mapping is broken (this is a bug, not something you did).',
+        ),
       );
     } else {
-      warnings.push('白框里没有不透明像素（选到空白处了）：现在导出会是一张全透明的徽章。');
+      warnings.push(
+        t(
+          '白框里没有不透明像素（选到空白处了）：现在导出会是一张全透明的徽章。',
+          'The box has no opaque pixels (you picked an empty area): exporting now would give a fully transparent emblem.',
+        ),
+      );
     }
   }
   if (input.semiTransparent > 0) {
-    errors.push(`还有 ${input.semiTransparent} 个半透明像素（存档里 alpha 只有 0x00/0x80）`);
+    errors.push(
+      t(
+        `还有 ${input.semiTransparent} 个半透明像素（存档里 alpha 只有 0x00/0x80）`,
+        `${input.semiTransparent} semi-transparent pixels left (the save only has alpha 0x00/0x80)`,
+      ),
+    );
   }
   return { ok: errors.length === 0, errors, warnings };
 }

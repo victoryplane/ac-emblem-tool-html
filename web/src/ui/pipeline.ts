@@ -19,6 +19,7 @@
 
 import { checkCompliance, prepareEmblem, type PrepareResult } from '../core/image.ts';
 import { state, setPrepared } from './state.ts';
+import { t } from './logic/i18n.ts';
 import { fillOffsetFor, fillScaleFor, toPrepareOptions } from './logic/defaults.ts';
 import { $, el, clear } from './dom.ts';
 
@@ -52,9 +53,14 @@ export async function decodeImageFile(file: Blob, name: string): Promise<{ data:
   } catch (e) {
     // 明确不支持的类型给明确的提示（SPEC.md §五：不吃 PSD/TIFF/多页 RAW，且**不做格式猜测**）
     throw new Error(
-      `解不开这张图（${name}）：${e instanceof Error ? e.message : String(e)}\n` +
-        '支持的：PNG / JPEG / WebP / GIF（首帧）/ BMP / ICO / AVIF / SVG。' +
-        'PSD / TIFF / 多页 RAW 请先导出 PNG。',
+      t(
+        `解不开这张图（${name}）：${e instanceof Error ? e.message : String(e)}\n` +
+          '支持的：PNG / JPEG / WebP / GIF（首帧）/ BMP / ICO / AVIF / SVG。' +
+          'PSD / TIFF / 多页 RAW 请先导出 PNG。',
+        `Cannot decode this image (${name}): ${e instanceof Error ? e.message : String(e)}\n` +
+          'Supported: PNG / JPEG / WebP / GIF (first frame) / BMP / ICO / AVIF / SVG. ' +
+          'For PSD / TIFF / multi-page RAW, export a PNG first.',
+      ),
     );
   }
   const w = bmp.width;
@@ -115,7 +121,7 @@ export function recompute(): { ok: boolean; error: string | null } {
   setPrepared(result, null);
 
   if (!result.report.compliance.ok) {
-    return { ok: false, error: result.report.compliance.issues.join('；') };
+    return { ok: false, error: result.report.compliance.issues.join(t('；', '; ')) };
   }
   return { ok: true, error: null };
 }
@@ -142,7 +148,7 @@ export function recompute(): { ok: boolean; error: string | null } {
  */
 export function recheckFinal(): { ok: boolean; issues: string[] } {
   const p = state.prepared;
-  if (!p) return { ok: false, issues: ['还没有可写入的图像'] };
+  if (!p) return { ok: false, issues: [t('还没有可写入的图像', 'There is no image ready to write yet')] };
   const c = checkCompliance({ data: p.rgba, width: p.width, height: p.height }, { indices: p.indices });
   return { ok: c.ok, issues: c.issues };
 }
@@ -217,7 +223,10 @@ function updateZoomNote(id: string, requested: number, actualPx: number, shrunk:
   host.appendChild(
     el('span', {
       class: 'zoom-note',
-      text: `已按容器缩放显示：期望 ${requested}×（${requested * 128}px）→ 实际约 ${actual}×（${actualPx}px）`,
+      text: t(
+      `已按容器缩放显示：期望 ${requested}×（${requested * 128}px）→ 实际约 ${actual}×（${actualPx}px）`,
+      `Scaled to fit the container: wanted ${requested}×（${requested * 128}px）→ actually about ${actual}×（${actualPx}px）`,
+    ),
     }),
   );
 }
@@ -270,10 +279,13 @@ function renderOriginalBadge(): void {
   const host = $('original-badge');
   clear(host);
   const src = state.source;
-  if (!src) {
-    host.appendChild(el('span', { class: 'dim', text: '支持拖入 / 点击选择 / Ctrl+V 粘贴（PNG / JPEG / WebP / GIF / BMP / ICO / AVIF / SVG）' }));
-    return;
-  }
+  // ★ 0.29（用户）：原来这里没图时会写一句"可以拖入 / 点击选择 / Ctrl+V 粘贴、支持哪些格式"的说明，
+  //   **按用户要求整句删掉**。
+  //   ⚠ 删的是**这一句说明**：三条入口一个都没少（拖放见 `main.ts::installDropZones`、
+  //     粘贴见 `installPaste`、点击见工具条上那个〔选择 / 粘贴图片〕按钮）。
+  //   这条也符合 SPEC.md §二「界面上不放说明性长句」—— 按钮本身就写着能干什么。
+  //   ⚠ 本注释**故意不逐字写出那句 UI 文案**：注释会进产物，而分节 (q) 的判据正是"产物里不该再有它"。
+  if (!src) return;
   // ★ 2026-10-05（0.9）：用户要求删掉后面的"实色 N · 半透明 N"（"没用"）。
   //   这里只留"文件名 · 尺寸"。（0.17 起连"实时统计"那块也删了 ⇒ 原图色数/半透明像素数
   //   在界面上不再显示；要看就 F12：`EmblemToolCore.ui.state.prepared.report`。）
@@ -285,7 +297,7 @@ function renderOriginalBadge(): void {
 // --------------------------------------------------------------------------
 //
 // ★ 2026-10-05：**拖拽/滚轮那套交互搬到了 `cropView.ts`**（用户要"取景按需"：
-//   点工具条上的〔取景…〕才在**同一格**里切成取景视图）。
+//   点工具条上的〔取景〕才在**同一格**里切成取景视图）。
 //   这里只剩下一件不依赖视图的事：`fillManualToTarget()` —— 导入图片时按"**填满** 128×128 框"算初值。
 //
 // ★ 2026-10-05（0.9）：用户删掉了〔↺ 恢复到适应〕/〔↺ 复位 / 适应〕两个按钮

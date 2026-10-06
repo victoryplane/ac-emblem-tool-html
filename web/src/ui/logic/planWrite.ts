@@ -2,7 +2,7 @@
  * ★ 写入目标规划（纯函数，零依赖 DOM）—— 决定"这一槽要写进哪个目录的哪个文件"。
  *
  * 抽出来的理由：这段逻辑曾经在 `cardOps.ts` 里、并且**隐式依赖一张真卡**
- * （`scanCard()` + `state.card`），于是"过滤之后写入结论对不对"这件事**没法自动测**。
+ * （整卡目录名 + `state.card`），于是"过滤之后写入结论对不对"这件事**没法自动测**。
  * 2026-10-04 修的那个 bug（切作品时 8 槽不变）的另一面正好落在这里：
  * 模型变成"按当前作品过滤"之后，"目录不存在"就有两种含义 ——
  *   ① 卡上真没有这个目录；
@@ -17,6 +17,7 @@
  */
 
 import { dirNameFor, type GameContext } from './games.ts';
+import { t } from './i18n.ts';
 import type { SlotModel } from './slots.ts';
 
 export interface WriteTarget {
@@ -69,10 +70,10 @@ function rejected(error: string): WritePlan {
  */
 export function planWriteTargetIn(input: PlanInput): WritePlan {
   const { model, ctx, slotIndex } = input;
-  if (!model) return rejected('还没有打开记忆卡');
+  if (!model) return rejected(t('还没有打开记忆卡', 'No memory card loaded yet'));
 
   const slot = model.slots[slotIndex];
-  if (!slot) return rejected(`槽位 ${slotIndex + 1} 不存在`);
+  if (!slot) return rejected(t(`槽位 ${slotIndex + 1} 不存在`, `Slot ${slotIndex + 1} does not exist`));
 
   // ① 槽里已经有东西 ⇒ 覆盖它（原地覆盖就是"写进它那条簇链"）
   if (slot.occupied && slot.fileName) {
@@ -95,13 +96,22 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
     const onCardButOtherGame = input.cardDirNames.map((n) => n.toUpperCase()).includes(dirName.toUpperCase());
     const isLr = ctx.entry.form === 'lr-archive';
     return rejected(
-      `槽位 ${slotIndex + 1}：卡上没有目录 ${dirName}，而卡层**只会在已有目录里新建文件**、不会新建目录。\n` +
-        (onCardButOtherGame
-          ? '  ⇒ 卡上**有**这个目录名，但它不属于当前作品（或不是当前作品的序列号）—— 请确认下拉框选的作品对不对。'
-          : isLr
-            ? '  ⇒ 请先在游戏里为这个作品**存一个徽章**（进一次徽章画面，让 LR 自己把 EMB 目录建出来），再回来写。'
-            : '  ⇒ 非 LR 的每个槽是一个**完整存档目录**（除徽章还有 icon.sys 与图标文件），' +
-              '只建目录会写出游戏不认的半成品。请先在游戏里为这个作品**存一个徽章**。'),
+      t(
+        `槽位 ${slotIndex + 1}：卡上没有目录 ${dirName}，而卡层**只会在已有目录里新建文件**、不会新建目录。\n` +
+          (onCardButOtherGame
+            ? '  ⇒ 卡上**有**这个目录名，但它不属于当前作品（或不是当前作品的序列号）—— 请确认下拉框选的作品对不对。'
+            : isLr
+              ? '  ⇒ 请先在游戏里为这个作品**存一个徽章**（进一次徽章画面，让 LR 自己把 EMB 目录建出来），再回来写。'
+              : '  ⇒ 非 LR 的每个槽是一个**完整存档目录**（除徽章还有 icon.sys 与图标文件），' +
+                '只建目录会写出游戏不认的半成品。请先在游戏里为这个作品**存一个徽章**。'),
+        `Slot ${slotIndex + 1}: the card has no folder ${dirName}, and the card layer only creates files inside existing folders - it does not create folders.\n` +
+          (onCardButOtherGame
+            ? '  => The card does have a folder with this name, but it does not belong to the selected game (or the serial does not match) - please check the game dropdown.'
+            : isLr
+              ? '  => Save one emblem in that game first (open the emblem screen once so LR creates the EMB folder itself), then come back.'
+              : '  => Each non-LR slot is a complete save folder (it also holds icon.sys and icon files), ' +
+                'so creating only the folder would produce something the game will not accept. Save one emblem in that game first.'),
+      ),
     );
   }
 
@@ -118,16 +128,22 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
   if (existing) {
     return {
       target: { slotIndex, dirName, fileName: existing, isNew: false, cluster: 0, length: 0 },
-      warning: `槽位 ${slotIndex + 1}：目录 ${dirName} 里已有 ${existing}，但模型判定该槽为空 —— 将以**覆盖**方式写它。`,
+      warning: t(
+        `槽位 ${slotIndex + 1}：目录 ${dirName} 里已有 ${existing}，但模型判定该槽为空 —— 将以**覆盖**方式写它。`,
+        `Slot ${slotIndex + 1}: folder ${dirName} already contains ${existing}, but the model says this slot is empty - it will be overwritten.`,
+      ),
       error: null,
     };
   }
   const fileName = `${ctx.prefix}${ctx.serial}${dirName.slice(-3)}`;
   return {
     target: { slotIndex, dirName, fileName, isNew: true, cluster: 0, length: 0 },
-    warning:
+    warning: t(
       `槽位 ${slotIndex + 1}：目录 ${dirName} 里没有"与目录同名"的徽章文件，将新建 ${fileName}。` +
-      '游戏可能还需要同目录里的 icon.sys / 图标文件才会显示这个槽。',
+        '游戏可能还需要同目录里的 icon.sys / 图标文件才会显示这个槽。',
+      `Slot ${slotIndex + 1}: folder ${dirName} has no emblem file named after the folder; ${fileName} will be created. ` +
+        'The game may also need icon.sys / icon files in that folder before it shows the slot.',
+    ),
     error: null,
   };
 }

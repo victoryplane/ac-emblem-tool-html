@@ -14,14 +14,18 @@
  *   "本项目手上有真实存档样本 / 实机验证过"，不是"这个游戏存在"。
  */
 
+import { t } from './i18n.ts';
+
 /** 存档目录名的布局：LR 是单个 `…EMB` 目录包 8 个 `dataN`；其余是每槽一个 `…E##` 目录。 */
 export type WorksForm = 'per-slot' | 'lr-archive';
 
 export interface GameEntry {
   /** 稳定 id（UI 的 `<select>` 用它做 value；不要改，会被测试钉住）。 */
   id: string;
-  /** 界面显示名（中文）。 */
+  /** 界面显示名（中文）。★ 0.28：英文见 `en`，渲染时用 `t(label, en)`。 */
   label: string;
+  /** 界面显示名（英文，0.28）。 */
+  en: string;
   /** 本项目手上**有**盘序列号能填吗（自定义项 = false，它由用户手填）。 */
   hasSerial: boolean;
   /** 建议的盘序列号（无依据时是 `''`，不是猜的）。 */
@@ -35,6 +39,8 @@ export interface GameEntry {
   verified: boolean;
   /** 给用户的一句话说明（为什么是未验证 / 有什么限制）。 */
   note: string;
+  /** 那句话的英文（0.28）。 */
+  noteEn: string;
 }
 
 /** 允许出现在自定义序列号里的系列码（Redump / PCSX2 wiki 口径，见文档 §六）。 */
@@ -47,83 +53,101 @@ export const GAMES: readonly GameEntry[] = [
   {
     id: 'sl-us',
     label: 'Silent Line 美版',
+    en: 'Silent Line (US)',
     hasSerial: true,
     serial: 'SLUS-20644',
     form: 'per-slot',
     verified: true,
     note: '真实样本 BASLUS-20644E02（公开存档库）+ 实机验证；作品常量已在 KNOWN_HEADER_TAIL 里。',
+    noteEn: 'Real sample BASLUS-20644E02 (public save archive) + verified on hardware; the game constant is in KNOWN_HEADER_TAIL.',
   },
   {
     id: 'sl-jp',
     label: 'Silent Line 日版',
+    en: 'Silent Line (JP)',
     hasSerial: true,
     serial: 'SLPS-25169',
     form: 'per-slot',
     verified: true,
     note: 'BISLPS-25169E## 有实机验证样本；作品常量已在 KNOWN_HEADER_TAIL 里。',
+    noteEn: 'BISLPS-25169E## samples verified on hardware; the game constant is in KNOWN_HEADER_TAIL.',
   },
   {
     id: 'nx-jp',
     label: 'Nexus 日版',
+    en: 'Nexus (JP)',
     hasSerial: true,
     serial: 'SLPS-25338',
     form: 'per-slot',
     verified: true,
     note: 'BISLPS-25338E## 有实机验证样本（E00..E04）。',
+    noteEn: 'BISLPS-25338E## samples verified on hardware (E00..E04).',
   },
   {
     id: 'lr-jp',
     label: 'Last Raven 日版',
+    en: 'Last Raven (JP)',
     hasSerial: true,
     serial: 'SLPS-25462',
     form: 'lr-archive',
     verified: true,
     note: 'BISLPS-25462EMB\\data0..7，含"新建槽"实机验证。',
+    noteEn: 'BISLPS-25462EMB\\data0..7, including a hardware-verified "create new slot".',
   },
   {
     id: 'ac3',
     label: 'AC3',
+    en: 'AC3',
     hasSerial: true,
     serial: 'SLUS-20435',
     form: 'per-slot',
     verified: false,
     note: '⚠ 未验证：目录名规则相同，但本项目手上**没有** AC3 的 E## 真实样本。',
+    noteEn: '⚠ Unverified: same naming rules, but this project has no real AC3 E## sample.',
   },
   {
     id: 'ac2',
     label: 'AC2',
+    en: 'AC2',
     hasSerial: true,
     serial: 'SLUS-20014',
     form: 'per-slot',
     verified: false,
     note: '⚠ 未验证：没有真实徽章样本。',
+    noteEn: '⚠ Unverified: no real emblem sample.',
   },
   {
     id: 'ac2aa',
     label: 'AC2: Another Age',
+    en: 'AC2: Another Age',
     hasSerial: true,
     serial: 'SLUS-20249',
     form: 'per-slot',
     verified: false,
     note: '⚠ 未验证：没有真实徽章样本。',
+    noteEn: '⚠ Unverified: no real emblem sample.',
   },
   {
     id: 'nb',
     label: 'Nine Breaker',
+    en: 'Nine Breaker',
     hasSerial: true,
     serial: 'SLUS-21200',
     form: 'per-slot',
     verified: false,
     note: '⚠ 未验证：没有真实徽章样本。',
+    noteEn: '⚠ Unverified: no real emblem sample.',
   },
   {
     id: 'custom',
     label: '自定义（手填盘序列号）',
+    en: 'Custom (type disc serial)',
     hasSerial: false,
     serial: '',
     form: 'per-slot',
     verified: false,
     note: '给上面没有的作品兜底：手填盘序列号（如 SLES-51399）。⚠ 前缀与规则照抄不一定对，属未验证用法。',
+    noteEn: 'Fallback for titles not listed above: type the disc serial (e.g. SLES-51399). ⚠ The prefix and rules are copied, not verified.',
   },
 ];
 
@@ -157,7 +181,7 @@ export interface ParsedSerial {
  */
 export function parseSerial(input: string): ParsedSerial | { error: string } {
   let s = String(input == null ? '' : input).trim().toUpperCase();
-  if (!s) return { error: '盘序列号不能为空' };
+  if (!s) return { error: t('盘序列号不能为空', 'The disc serial cannot be empty') };
   s = s.replace(/\s+/g, '');
 
   let prefix = '';
@@ -172,12 +196,22 @@ export function parseSerial(input: string): ParsedSerial | { error: string } {
 
   const kind = s.slice(0, 4);
   if (!SERIAL_KINDS.includes(kind)) {
-    return { error: `系列码 "${kind || s}" 不认识（应为 ${SERIAL_KINDS.join(' / ')} 之一）` };
+    return {
+      error: t(
+        `系列码 "${kind || s}" 不认识（应为 ${SERIAL_KINDS.join(' / ')} 之一）`,
+        `Unknown publisher code "${kind || s}" (expected one of ${SERIAL_KINDS.join(' / ')})`,
+      ),
+    };
   }
   const rest = s.slice(4);
   const digits = rest.startsWith('-') ? rest.slice(1) : rest;
   if (!/^\d{3,5}$/.test(digits)) {
-    return { error: `序号部分 "${rest}" 不合法（应为 3~5 位数字，如 SLPS-25169）` };
+    return {
+      error: t(
+        `序号部分 "${rest}" 不合法（应为 3~5 位数字，如 SLPS-25169）`,
+        `Invalid number part "${rest}" (expected 3-5 digits, e.g. SLPS-25169)`,
+      ),
+    };
   }
   return { serial: `${kind}-${digits}`, prefix };
 }
@@ -202,14 +236,21 @@ export interface GameContext {
 
 export function resolveGame(id: string, customSerial = ''): GameContext | { error: string } {
   const entry = findGame(id);
-  if (!entry) return { error: `未知作品 id: ${id}` };
+  if (!entry) return { error: t(`未知作品 id: ${id}`, `Unknown game id: ${id}`) };
 
   if (entry.id === 'custom') {
     const p = parseSerial(customSerial);
     if ('error' in p) return { error: p.error };
     return { entry, serial: p.serial, prefix: p.prefix || prefixForSerial(p.serial), customSerial: true };
   }
-  if (!entry.serial) return { error: `作品 ${entry.label} 没有盘序列号依据，请改用「自定义」并手填` };
+  if (!entry.serial) {
+    return {
+      error: t(
+        `作品 ${entry.label} 没有盘序列号依据，请改用「自定义」并手填`,
+        `No disc serial is known for ${entry.en} - switch to "Custom" and type it in`,
+      ),
+    };
+  }
   return {
     entry,
     serial: entry.serial,
@@ -225,7 +266,7 @@ export function resolveGame(id: string, customSerial = ''): GameContext | { erro
 /** `E00`..`E07`（每槽一个独立存档目录的形态）。 */
 export function slotDirSuffix(slotIndex: number): string {
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 99) {
-    throw new Error(`槽位下标非法：${slotIndex}（应为 0..99）`);
+    throw new Error(t(`槽位下标非法：${slotIndex}（应为 0..99）`, `Invalid slot index: ${slotIndex} (expected 0..99)`));
   }
   return `E${String(slotIndex).padStart(2, '0')}`;
 }
@@ -292,8 +333,13 @@ export function resolveHeaderTail(
   return {
     error:
       `作品常量（非 LR 块头 0x14..0x1C 那 9 字节）没有依据：` +
-      `盘序列号 ${serial} 不在已知表里，卡上也没有同作品的真实存档可以照抄。\n` +
-      '★ 这 9 字节是**作品级常量**，猜错会让写出来的块与游戏产物逐字节不同 —— 所以这里拒绝写入。\n' +
-      '解决办法：先往这个作品里存一个徽章（让卡上出现一个同作品的真实存档），再回来写。',
+        `盘序列号 ${serial} 不在已知表里，卡上也没有同作品的真实存档可以照抄。\n` +
+        '★ 这 9 字节是**作品级常量**，猜错会让写出来的块与游戏产物逐字节不同 —— 所以这里拒绝写入。\n' +
+        '解决办法：先往这个作品里存一个徽章（让卡上出现一个同作品的真实存档），再回来写。' +
+        '\n---\n' +
+        `No basis for the game constant (those 9 bytes at 0x14..0x1C in non-LR blocks): ` +
+        `disc serial ${serial} is not in the known table, and there is no real save of this game on the card to copy from.\n` +
+        '★ Those 9 bytes are a per-game constant; guessing wrong makes the written block differ byte-for-byte from what the game writes - so this refuses to write.\n' +
+        'Workaround: save one emblem in that game first (so a real save of this game appears on the card), then come back.',
   };
 }

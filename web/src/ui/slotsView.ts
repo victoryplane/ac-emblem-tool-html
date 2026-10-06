@@ -11,6 +11,7 @@
  *   事实没变：见 `logic/slots.ts` 注释与 `docs\01-项目理解\04-记忆卡与存档处理.md` §六。
  */
 
+import { t } from './logic/i18n.ts';
 import { slotSummaryText, type SlotModel } from './logic/slots.ts';
 import { dirNameFor, type GameContext, type GameEntry } from './logic/games.ts';
 import { state, type SlotThumb } from './state.ts';
@@ -29,7 +30,7 @@ export interface SlotCallbacks {
  *   与两个失效标记（`dataset.rendered === '1'` 在"每次都新建 canvas"的前提下永远不成立）。
  */
 function thumbNode(thumb: SlotThumb | null, size = 96): HTMLCanvasElement | HTMLDivElement {
-  if (!thumb) return el('div', { class: 'thumb-empty', text: '＋' });
+  if (!thumb) return el('div', { class: 'thumb-empty', text: t('＋', '+') });
   const cv = el('canvas', { class: 'thumb-cv', width: 128, height: 128 });
   cv.style.width = `${size}px`;
   cv.style.height = `${size}px`;
@@ -57,11 +58,13 @@ function plannedDirName(ctx: GameContext | null, index: number): string | null {
  *   而要写清"先在游戏里存一个徽章"。
  */
 function emptySlotHint(ctx: GameContext | null, index: number, dirExists: boolean): string {
-  if (!ctx) return '＋新建（先选作品）';
-  const dir = plannedDirName(ctx, index) ?? '（目录名算不出来）';
-  if (!dirExists) return `＋新建（卡上还没有 ${dir}）`;
-  if (ctx.entry.form === 'lr-archive') return `＋新建 ${dir}\\data${index}`;
-  return `＋新建 ${dir}`;
+  if (!ctx) return t('＋新建（先选作品）', '+ New (pick a game first)');
+  const dir = plannedDirName(ctx, index) ?? t('（目录名算不出来）', "(can't work out the folder name)");
+  if (!dirExists) {
+    return t(`＋新建（卡上还没有 ${dir}）`, `+ New (the card has no ${dir} yet)`);
+  }
+  if (ctx.entry.form === 'lr-archive') return t(`＋新建 ${dir}\\data${index}`, `+ New ${dir}\\data${index}`);
+  return t(`＋新建 ${dir}`, `+ New ${dir}`);
 }
 
 export function renderSlots(model: SlotModel | null, ctx: GameContext | null, cb: SlotCallbacks): void {
@@ -72,13 +75,16 @@ export function renderSlots(model: SlotModel | null, ctx: GameContext | null, cb
   const host2 = document.getElementById('slot-summary');
   if (host2) {
     clear(host2);
-    const text = model ? slotSummaryText(model) : '还没有打开记忆卡';
+    const text = model ? slotSummaryText(model) : t('还没有打开记忆卡', 'No memory card loaded yet');
     host2.appendChild(el('span', { text }));
     if (model && model.dirNames.length === 0 && model.excludedDirNames.length > 0) {
       host2.appendChild(
         el('span', {
           class: 'warn',
-          text: `　⚠ 这个作品在卡上还没有目录；被隐藏的目录见上面那行（切作品查看）`,
+          text: t(
+            `　⚠ 这个作品在卡上还没有目录；被隐藏的目录见上面那行（切作品查看）`,
+            '  ⚠ This game has no folder on the card yet; the hidden folders are on the line above (switch game to see them)',
+          ),
         }),
       );
     }
@@ -102,10 +108,12 @@ export function renderSlots(model: SlotModel | null, ctx: GameContext | null, cb
           text: emptySlotHint(ctx, i, dirExists || !ctx),
         });
       }
-      if (!thumb) return el('div', { class: 'slot-check bad', text: '读不出缩略图' });
+      if (!thumb) return el('div', { class: 'slot-check bad', text: t('读不出缩略图', 'Cannot read thumbnail') });
       return el('div', {
         class: `slot-check ${thumb.checksumsOk18 ? 'ok' : 'bad'}`,
-        text: thumb.checksumsOk18 ? '18 段校验 18/18 ✅' : `校验不过：${thumb.checksumDetail}`,
+        text: thumb.checksumsOk18
+          ? t('18 段校验 18/18 ✅', '18/18 checksums OK ✅')
+          : t(`校验不过：${thumb.checksumDetail}`, `Checksum failed: ${thumb.checksumDetail}`),
       });
     })();
 
@@ -126,18 +134,21 @@ export function renderSlots(model: SlotModel | null, ctx: GameContext | null, cb
           }
         },
       },
-      el('span', { class: 'slot-no', text: `槽 ${i + 1}` }),
+      el('span', { class: 'slot-no', text: t(`槽 ${i + 1}`, `Slot ${i + 1}`) }),
       thumbNode(thumb),
       el('div', {
         class: 'slot-name',
         text: occupied && slot?.fileName
           ? `${slot.dirName}\\${slot.fileName}`
           : dirExists || !ctx
-            ? '空 · 可新建'
-            : '空 · 卡上还没有这个目录',
+            ? t('空 · 可新建', 'Empty · can create')
+            : t('空 · 卡上还没有这个目录', 'Empty · this folder is not on the card yet'),
       }),
       occupied && slot
-        ? el('div', { class: 'slot-meta dim', text: `${slot.length} B · 首簇 ${slot.cluster}` })
+        ? el('div', {
+            class: 'slot-meta dim',
+            text: t(`${slot.length} B · 首簇 ${slot.cluster}`, `${slot.length} B · first cluster ${slot.cluster}`),
+          })
         : null,
       checkLine,
     );
@@ -151,7 +162,7 @@ export function fillGameSelect(games: readonly GameEntry[], currentId: string): 
   if (!sel) return;
   clear(sel);
   for (const g of games) {
-    const label = g.verified ? `${g.label} ✅` : `${g.label} ⚠ 未验证`;
+    const label = t(g.label, g.en) + (g.verified ? ' ✅' : t(' ⚠ 未验证', ' ⚠ unverified'));
     // ★ 0.19（B9）：只写 `.value` —— 原来还额外给 option 加 `selected:` 属性（同一件事写两遍，
     //   而 option 不存在时 `.value =` 是**静默无效**的，两处不一致反而更难查）。
     sel.appendChild(el('option', { value: g.id }, label));
@@ -169,7 +180,7 @@ export function renderGameNote(entry: GameEntry | null): void {
     //   （SPEC §七：AC2 / AC2AA / AC3 / NB / 自定义 都要标"未验证"）。
     //   未验证作品的 note 文案本身就以"⚠ 未验证"开头（见 `logic/games.ts`），直接原样显示。
     if (entry && !entry.verified) {
-      note.appendChild(el('span', { class: 'warn', text: entry.note }));
+      note.appendChild(el('span', { class: 'warn', text: t(entry.note, entry.noteEn) }));
     }
   }
   const customRow = document.getElementById('custom-serial-row');

@@ -13,6 +13,8 @@
  *   · 句柄再存进 IndexedDB，下次打开若权限还在就**自动读一遍**，用户一次都不用点。
  */
 
+import { t } from './i18n.ts';
+
 /** 默认的 PCSX2 用户目录（用户机器上就是这个；只作为**提示文案**，不是能读的路径）。 */
 export const DEFAULT_PCSX2_DIR = 'C:\\Users\\M\\Documents\\PCSX2';
 
@@ -97,14 +99,21 @@ export function describeFoundFiles(paths: readonly string[]): string {
   if (hasGame) got.push('gamesettings\\*.ini');
   if (hasLog) got.push('logs\\emulog.txt');
   const miss: string[] = [];
-  if (!hasGlobal) miss.push('inis\\PCSX2.ini（全局设置）');
-  if (!hasGame) miss.push('gamesettings\\*.ini（每游戏设置）');
-  if (!hasLog) miss.push('logs\\emulog.txt（运行日志）');
+  if (!hasGlobal) miss.push(t('inis\\PCSX2.ini（全局设置）', 'inis\\PCSX2.ini (global settings)'));
+  if (!hasGame) miss.push(t('gamesettings\\*.ini（每游戏设置）', 'gamesettings\\*.ini (per-game settings)'));
+  if (!hasLog) miss.push(t('logs\\emulog.txt（运行日志）', 'logs\\emulog.txt (run log)'));
   if (got.length === 0) {
-    return `这个目录里没有找到 PCSX2 的自检文件（少了 ${miss.join('、')}）—— 请确认选的是 PCSX2 的**用户目录**（含 inis\\、gamesettings\\、logs\\ 这一层）。`;
+    return t(
+      `这个目录里没有找到 PCSX2 的自检文件（少了 ${miss.join('、')}）—— 请确认选的是 PCSX2 的**用户目录**（含 inis\\、gamesettings\\、logs\\ 这一层）。`,
+      `No PCSX2 files to check were found in this folder (missing ${miss.join(', ')}) - please make sure you picked the PCSX2 user folder (the one that contains inis\\, gamesettings\\ and logs\\).`,
+    );
   }
-  return (
+  return t(
     `读到：${got.join('、')}` +
-    (miss.length ? `；没找到：${miss.join('、')}（少哪一项就少一路信息，结论还是会给）` : '（三项齐全）')
+      (miss.length ? `；没找到：${miss.join('、')}（少哪一项就少一路信息，结论还是会给）` : '（三项齐全）'),
+    `Found: ${got.join(', ')}` +
+      (miss.length
+        ? `; not found: ${miss.join(', ')} (each missing item just means less information; the verdict is still produced)`
+        : ' (all three present)'),
   );
 }

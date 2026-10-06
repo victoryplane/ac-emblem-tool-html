@@ -33,7 +33,8 @@ import { resolveHeaderTail, serialFromDirName } from './logic/games.ts';
 import type { SlotDirLike, SlotModel } from './logic/slots.ts';
 import { buildGameSlotModel } from './logic/slots.ts';
 import { planWriteTargetIn, type WritePlan, type WriteTarget } from './logic/planWrite.ts';
-import { STALE_HANDLE_HINT, staleFileRefusal, stampChanged } from './logic/staleness.ts';
+import { staleFileRefusal, staleHandleHint, stampChanged } from './logic/staleness.ts';
+import { t } from './logic/i18n.ts';
 import { confirmWriteMessage, verifyWrite } from './logic/writeGuard.ts';
 import { resetThumbs, state, type SlotThumb } from './state.ts';
 import { toast } from './dom.ts';
@@ -69,14 +70,19 @@ export async function openCardFromBytes(
     resetThumbs();
     toast(
       'ok',
-      handle ? '已打开记忆卡（保存时可直接覆盖原文件）' : '已打开记忆卡（只读：保存时只能下载）',
-      `${name} · ${humanBytes(bytes.length)} · ${card.npages} 页 · 簇 ${card.clusters}`,
+      handle
+        ? t('已打开记忆卡（保存时可直接覆盖原文件）', 'Memory card opened (saving can overwrite the original file)')
+        : t('已打开记忆卡（只读：保存时只能下载）', 'Memory card opened (read-only: saving offers download only)'),
+      t(
+        `${name} · ${humanBytes(bytes.length)} · ${card.npages} 页 · 簇 ${card.clusters}`,
+        `${name} · ${humanBytes(bytes.length)} · ${card.npages} pages · ${card.clusters} clusters`,
+      ),
     );
     return { ok: true };
   } catch (e) {
     state.card = null;
     const msg = e instanceof Error ? e.message : String(e);
-    toast('error', '这个文件不是 PS2 记忆卡', msg);
+    toast('error', t('这个文件不是 PS2 记忆卡', 'This file is not a PS2 memory card'), msg);
     return { ok: false, error: msg };
   }
 }
@@ -85,32 +91,24 @@ export async function openCardFromBytes(
 // 模型
 // --------------------------------------------------------------------------
 
-export interface CardDirInfo {
-  name: string;
-  count: number;
-  chain: number[];
-  isLrArchive: boolean;
-}
-
-/** 卡上徽章目录一览（给界面显示与"同作品存档"查找用）。 */
-export function scanCard(): { dirs: CardDirInfo[]; rootNames: string[] } | null {
+/**
+ * 卡上**所有**徽章目录名（`E##` / `EMB`，**不过滤作品**）。
+ *
+ * 唯一调用者 `planWriteTarget()` 拿它区分"卡上真没有这个目录"与"有、但不属于当前作品"。
+ * ★ 0.27（用户删了顶栏那段整卡目录清单）：原先叫 `scanCard()`，还返回 count / chain /
+ *   isLrArchive / rootNames；删掉显示之后只剩名字有人用 ⇒ 收成 `string[]`（顺带去掉
+ *   "对每个目录跟一遍 FAT 链"的开销）。
+ *   ⚠ 别把那句被删的 UI 文案写进注释：注释会进产物，分节 (o) 拿"产物里不该有它"当判据。
+ */
+export function cardEmblemDirNames(): string[] {
   const lc = state.card;
-  if (!lc) return null;
-  const card = lc.card;
-  const dirs: CardDirInfo[] = [];
-  const rootNames: string[] = [];
-  for (const e of card.listRoot()) {
-    if (e.isDot) continue;
-    rootNames.push(e.name + (e.isDir ? '/' : ''));
-    if (!e.isEmblemDir || !e.isDir) continue;
-    dirs.push({
-      name: e.name,
-      count: e.length,
-      chain: card.chain(e.cluster, 4096),
-      isLrArchive: e.name.toUpperCase().endsWith('EMB'),
-    });
+  if (!lc) return [];
+  const out: string[] = [];
+  for (const e of lc.card.listRoot()) {
+    if (e.isDot || !e.isDir || !e.isEmblemDir) continue;
+    out.push(e.name);
   }
-  return { dirs, rootNames };
+  return out;
 }
 
 /**
@@ -202,7 +200,12 @@ export function checkBlock(bytes: Uint8Array): BlockCheck {
   const kind = saveKind(bytes);
   const isLr = kind === 'emblem-lr';
   if (kind !== 'emblem-raw' && kind !== 'emblem-lr') {
-    return { ok: false, checksumsOk: false, detail: `saveKind=${kind}（不是徽章块）`, offset: -1 };
+    return {
+      ok: false,
+      checksumsOk: false,
+      detail: t(`saveKind=${kind}（不是徽章块）`, `saveKind=${kind} (not an emblem block)`),
+      offset: -1,
+    };
   }
   let offset = 0;
   try {
@@ -223,7 +226,7 @@ export function checkBlock(bytes: Uint8Array): BlockCheck {
         .slice(0, 3)
         .map((s) => `${s.name}@${hex(s.offset, 4)}`)
         .join(' ')
-        .concat(v.badSegments.length > 3 ? ` …共 ${v.badSegments.length} 段` : '');
+        .concat(v.badSegments.length > 3 ? t(` …共 ${v.badSegments.length} 段`, ` …${v.badSegments.length} segments in total`) : '');
   return { ok: v.ok, checksumsOk: v.ok, detail, offset };
 }
 
@@ -248,7 +251,10 @@ export function buildThumb(cluster: number, length: number): SlotThumb | null {
       width: 128,
       height: 128,
       checksumsOk18: false,
-      checksumDetail: `提取失败：${e instanceof Error ? e.message : String(e)}`,
+      checksumDetail: t(
+        `提取失败：${e instanceof Error ? e.message : String(e)}`,
+        `extract failed: ${e instanceof Error ? e.message : String(e)}`,
+      ),
     };
   }
   return {
@@ -299,14 +305,14 @@ export interface DeleteResult {
  */
 export function deleteSlotFile(dirName: string, fileName: string): DeleteResult {
   const lc = state.card;
-  if (!lc) return { ok: false, message: '还没有打开记忆卡' };
+  if (!lc) return { ok: false, message: t('还没有打开记忆卡', 'No memory card loaded yet') };
   const card = lc.card;
   const dirEnt = card.findInRoot(dirName);
-  if (!dirEnt) return { ok: false, message: `卡上没有目录 ${dirName}` };
+  if (!dirEnt) return { ok: false, message: t(`卡上没有目录 ${dirName}`, `The card has no folder ${dirName}`) };
   const dirCount = dirEnt.length > 0 ? dirEnt.length : card.dirCount(dirEnt.cluster);
   const entries = card.dirents(dirEnt.cluster, Math.max(dirCount, 1));
   const target = entries.find((e) => !e.isDot && e.name === fileName);
-  if (!target) return { ok: false, message: `${dirName} 里没有 ${fileName}` };
+  if (!target) return { ok: false, message: t(`${dirName} 里没有 ${fileName}`, `No ${fileName} in ${dirName}`) };
 
   const chain = target.cluster > 0 ? card.chain(target.cluster, 4096) : [];
 
@@ -315,7 +321,9 @@ export function deleteSlotFile(dirName: string, fileName: string): DeleteResult 
   const dirChain = card.chain(dirEnt.cluster, 4096);
   const ci = Math.floor(target.index / card.ppc);
   const k = target.index % card.ppc;
-  if (ci >= dirChain.length) return { ok: false, message: `槽 ${target.index} 超出目录链` };
+  if (ci >= dirChain.length) {
+    return { ok: false, message: t(`槽 ${target.index} 超出目录链`, `Slot ${target.index} is outside the folder chain`) };
+  }
 
   for (const cl of chain) card.writeFat(cl, FAT_FREE >>> 0);
 
@@ -328,11 +336,14 @@ export function deleteSlotFile(dirName: string, fileName: string): DeleteResult 
   if (target.index + 1 === dirCount && dirCount > maxOther + 1) {
     const newCount = maxOther + 1;
     card.setDirentLength(card.rootdir, dirEnt.index, newCount);
-    countNote = `，项数 ${dirCount} → ${newCount}`;
+    countNote = t(`，项数 ${dirCount} → ${newCount}`, `, entry count ${dirCount} -> ${newCount}`);
   }
   return {
     ok: true,
-    message: `已删除 ${dirName}\\${fileName}：释放簇 ${chain.length ? chain.join(',') : '（无）'}${countNote}`,
+    message: t(
+      `已删除 ${dirName}\\${fileName}：释放簇 ${chain.length ? chain.join(',') : '（无）'}${countNote}`,
+      `Deleted ${dirName}\\${fileName}: released clusters ${chain.length ? chain.join(',') : '(none)'}${countNote}`,
+    ),
   };
 }
 
@@ -366,7 +377,7 @@ async function preflightStale(lc: NonNullable<typeof state.card>): Promise<strin
   const now = await readStamp(lc.handle);
   if (!now || !stampChanged(lc.lastSeen, now)) return null;
   const text = staleFileRefusal({ fileName: lc.fileName, seen: lc.lastSeen, now });
-  toast('error', '这张卡在磁盘上又被改过了 ⇒ 拒绝操作', text, 30_000);
+  toast('error', t('这张卡在磁盘上又被改过了 ⇒ 拒绝操作', 'The card on disk was changed again - operation refused'), text, 30_000);
   return text;
 }
 
@@ -395,7 +406,7 @@ function emblemFileInDir(dirName: string): string | null {
  * ★ 0.21：`slotIndices: number[]` → `slotIndex: number`（〔批量写 8 槽〕已删）。
  */
 export function planWriteTarget(ctx: GameContext, slotIndex: number): WritePlan {
-  const cardDirNames = scanCard()?.dirs.map((d) => d.name) ?? [];
+  const cardDirNames = cardEmblemDirNames();
   const plan = planWriteTargetIn({
     model: state.model,
     cardDirNames,
@@ -404,12 +415,12 @@ export function planWriteTarget(ctx: GameContext, slotIndex: number): WritePlan 
     emblemFileInDir,
   });
   // 非 LR 的"已有文件"要补回真实簇/长度（模型里只有"占用的槽"，用户填的作品可能不同）
-  const t = plan.target;
-  if (t && !t.isNew && t.cluster === 0) {
-    const e = state.card?.card.listDir(t.dirName).find((d) => d.name === t.fileName);
+  const tgt = plan.target;
+  if (tgt && !tgt.isNew && tgt.cluster === 0) {
+    const e = state.card?.card.listDir(tgt.dirName).find((d) => d.name === tgt.fileName);
     if (e) {
-      t.cluster = e.cluster;
-      t.length = e.length;
+      tgt.cluster = e.cluster;
+      tgt.length = e.length;
     }
   }
   return plan;
@@ -420,7 +431,7 @@ function writeBlockToTarget(
   block: Uint8Array,
 ): { touched: number[]; cluster: number } {
   const lc = state.card;
-  if (!lc) throw new Error('还没有打开记忆卡');
+  if (!lc) throw new Error(t('还没有打开记忆卡', 'No memory card loaded yet'));
   const card = lc.card;
   if (!target.isNew && target.cluster > 0) {
     const chain = card.chain(target.cluster, 4096);
@@ -428,8 +439,12 @@ function writeBlockToTarget(
     const need = Math.ceil(block.length / pageBytes);
     if (chain.length < need) {
       throw new Error(
-        `目标文件 ${target.fileName} 的簇链只有 ${chain.length} 簇，装不下 ${block.length} 字节（需要 ${need} 簇）。` +
-          '本版本不做"原地扩链"：请先删掉这个槽（删除槽按钮）再重新写。',
+        t(
+          `目标文件 ${target.fileName} 的簇链只有 ${chain.length} 簇，装不下 ${block.length} 字节（需要 ${need} 簇）。` +
+            '本版本不做"原地扩链"：请先删掉这个槽（删除槽按钮）再重新写。',
+          `The cluster chain of ${target.fileName} has only ${chain.length} clusters and cannot hold ${block.length} bytes (${need} clusters needed). ` +
+            'This version does not extend a chain in place: delete this slot first (Delete slot), then write again.',
+        ),
       );
     }
     // 只写前 need 簇；多余的簇留在链上（保守：宁可有空闲簇，也不要写坏链）
@@ -496,14 +511,20 @@ export async function writeSlot(
   const prepared = state.prepared;
   const lines: string[] = [];
   const fail = (msg: string): WriteOutcome => {
-    toast('error', '拒绝写入', msg);
+    toast('error', t('拒绝写入', 'Write refused'), msg);
     lines.push('❌ ' + msg);
     return { ok: false, lines, persisted: null };
   };
 
-  if (!lc) return fail('还没有打开记忆卡');
-  if (!state.model) return fail('记忆卡模型还没建起来');
-  if (!prepared) return fail(state.prepareError ? `图像还不合规：${state.prepareError}` : '还没有可写入的图像');
+  if (!lc) return fail(t('还没有打开记忆卡', 'No memory card loaded yet'));
+  if (!state.model) return fail(t('记忆卡模型还没建起来', 'The memory card model has not been built yet'));
+  if (!prepared) {
+    return fail(
+      state.prepareError
+        ? t(`图像还不合规：${state.prepareError}`, `The image is not compliant yet: ${state.prepareError}`)
+        : t('还没有可写入的图像', 'No image ready to write'),
+    );
+  }
 
   // ①′ ★ 0.25：**动手前**先查"磁盘上的卡是不是被改过了" —— 必须在任何内存改动之前，
   //   这样"拒绝"就等于"什么都没发生"（重试时规划仍然是干净的"新建"，不会撞"已经有 dataN"）。
@@ -512,7 +533,14 @@ export async function writeSlot(
 
   // ① 合规复核（**再查一次**，不只信之前的 report）
   const rc = opts.finalCheck();
-  if (!rc.ok) return fail(`图像不合规，拒绝写入：\n· ${rc.issues.join('\n· ')}`);
+  if (!rc.ok) {
+    return fail(
+      t(
+        `图像不合规，拒绝写入：\n· ${rc.issues.join('\n· ')}`,
+        `Image not compliant, write refused:\n- ${rc.issues.join('\n- ')}`,
+      ),
+    );
+  }
 
   // ② 非 LR 的 9 字节作品常量
   let headerTail: Uint8Array | null = null;
@@ -522,11 +550,18 @@ export async function writeSlot(
     if ('error' in res) return fail(res.error);
     headerTail = res.tail;
     lines.push(
-      `作品常量（9 字节）= ${Array.from(headerTail)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')}　来源：${
-        res.source === 'card' ? '卡上同作品的真实存档' : '核心层登记表 KNOWN_HEADER_TAIL'
-      }`,
+      t(
+        `作品常量（9 字节）= ${Array.from(headerTail)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')}　来源：${
+          res.source === 'card' ? '卡上同作品的真实存档' : '核心层登记表 KNOWN_HEADER_TAIL'
+        }`,
+        `game constant (9 bytes) = ${Array.from(headerTail)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')}  source: ${
+          res.source === 'card' ? 'a real save of the same game on the card' : 'core-layer table KNOWN_HEADER_TAIL'
+        }`,
+      ),
     );
   }
 
@@ -543,24 +578,38 @@ export async function writeSlot(
     !model.dirNames.some((d) => d.toUpperCase() === target.dirName.toUpperCase())
   ) {
     return fail(
-      `内部自检不过：目标目录 ${target.dirName} 不属于当前作品（${ctx.serial}）—— ` +
-        '模型与作品选择不同步，拒绝写入。请重新选一次作品或重新打开卡。',
+      t(
+        `内部自检不过：目标目录 ${target.dirName} 不属于当前作品（${ctx.serial}）—— ` +
+          '模型与作品选择不同步，拒绝写入。请重新选一次作品或重新打开卡。',
+        `Internal check failed: target folder ${target.dirName} does not belong to the current game (${ctx.serial}) - ` +
+          'the model and the game selection are out of sync, so the write is refused. Pick the game again or reopen the card.',
+      ),
     );
   }
   if (plan.warning) lines.push('⚠ ' + plan.warning);
   if (plan.error) return fail(plan.error);
-  if (!target) return fail('没有任何可写的目标槽');
+  if (!target) return fail(t('没有任何可写的目标槽', 'There is no target slot to write to'));
 
   // ④ 写进内存副本 + 立刻回读自检
   let block: Uint8Array;
   try {
     block = encodeEmblem(prepared.rgba, { isLr: opts.isLr, headerTail });
   } catch (e) {
-    return fail(`生成徽章块失败：${e instanceof Error ? e.message : String(e)}`);
+    return fail(
+      t(
+        `生成徽章块失败：${e instanceof Error ? e.message : String(e)}`,
+        `Failed to build the emblem block: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
   const expectLen = opts.isLr ? LR_SAVE_SIZE : SAVE_SIZE;
   if (block.length !== expectLen) {
-    return fail(`生成出来的块长度 ${block.length} ≠ 期望 ${expectLen}（内部错误，拒绝写入）`);
+    return fail(
+      t(
+        `生成出来的块长度 ${block.length} ≠ 期望 ${expectLen}（内部错误，拒绝写入）`,
+        `The generated block is ${block.length} bytes, expected ${expectLen} (internal error, write refused)`,
+      ),
+    );
   }
 
   let written: { touched: number[]; cluster: number };
@@ -568,13 +617,23 @@ export async function writeSlot(
     written = writeBlockToTarget(target, block);
   } catch (e) {
     return fail(
-      `写内存副本失败（${target.dirName}\\${target.fileName}）：${e instanceof Error ? e.message : String(e)}`,
+      t(
+        `写内存副本失败（${target.dirName}\\${target.fileName}）：${e instanceof Error ? e.message : String(e)}`,
+        `Failed to write the in-memory copy (${target.dirName}\\${target.fileName}): ${e instanceof Error ? e.message : String(e)}`,
+      ),
     );
   }
 
   // ---- 回读自检 ----
   const back = lc.card.listDir(target.dirName).find((e) => !e.isDot && e.name === target.fileName);
-  if (!back) return fail(`回读失败：${target.dirName} 里找不到刚写的 ${target.fileName}`);
+  if (!back) {
+    return fail(
+      t(
+        `回读失败：${target.dirName} 里找不到刚写的 ${target.fileName}`,
+        `Read back failed: the ${target.fileName} just written is not in ${target.dirName}`,
+      ),
+    );
+  }
   const readback = new Uint8Array(lc.card.readFile(back.cluster, back.length));
   const chkBlock = readback.subarray(0, Math.min(readback.length, expectLen));
   const decision = verifyWrite({
@@ -585,18 +644,24 @@ export async function writeSlot(
     badEccPages: badEccPages(written.touched),
     compliance: prepared.report.compliance,
   });
-  const head = `${target.dirName}\\${target.fileName}（槽 ${target.slotIndex + 1}${target.isNew ? '，新建' : '，覆盖'}）`;
+  const head = t(
+    `${target.dirName}\\${target.fileName}（槽 ${target.slotIndex + 1}${target.isNew ? '，新建' : '，覆盖'}）`,
+    `${target.dirName}\\${target.fileName} (slot ${target.slotIndex + 1}${target.isNew ? ', new' : ', overwrite'})`,
+  );
   if (!decision.proceed) {
     lines.push(`❌ ${head}`);
     for (const r of decision.reasons) lines.push('   · ' + r);
-    lines.push('★ **已拒绝落盘**：改动只在内存里，磁盘上的文件一个字节都没动。');
+    lines.push(t('★ **已拒绝落盘**：改动只在内存里，磁盘上的文件一个字节都没动。', '★ **Not written to disk**: the change exists only in memory; the file on disk is untouched.'));
     const out: WriteOutcome = { ok: false, lines, persisted: null };
-    toast('error', `自检不过 ⇒ 拒绝写盘`, `${head}\n${decision.reasons.join('\n')}`);
+    toast('error', t('自检不过 ⇒ 拒绝写盘', 'Self-check failed - write refused'), `${head}\n${decision.reasons.join('\n')}`);
     return out;
   }
-  lines.push(`✅ ${head}：${humanBytes(block.length)} · ${decision.passed.join(' · ')}`);
+  lines.push(
+    t(`✅ ${head}：${humanBytes(block.length)} · ${decision.passed.join(' · ')}`, `✅ ${head}: ${humanBytes(block.length)} · ${decision.passed.join(' · ')}`),
+  );
 
   // ⑤⑥ 落盘（★ 0.25：抽成 `persistCardChange()` —— 删除槽也要走同一条路）
+  // ⚠ 这两个前缀是**标记**（不是给人读的句子）：中文与英文两种语言下都照旧用同一对符号
   const changeLines = lines.filter((l) => l.startsWith('✅') || l.startsWith('⚠'));
   const saved = await persistCardChange({ lc, changes: changeLines });
   lines.push(...saved.lines);
@@ -633,7 +698,7 @@ async function persistCardChange(opts: {
     const now = await readStamp(lc.handle);
     if (now && stampChanged(lc.lastSeen, now)) {
       const text = staleFileRefusal({ fileName: lc.fileName, seen: lc.lastSeen, now });
-      toast('error', '这张卡在磁盘上又被改过了 ⇒ 拒绝写入', text, 30_000);
+      toast('error', t('这张卡在磁盘上又被改过了 ⇒ 拒绝写入', 'The card on disk was changed again - write refused'), text, 30_000);
       lines.push('❌ ' + text);
       return { ok: false, persisted: null, lines };
     }
@@ -643,8 +708,12 @@ async function persistCardChange(opts: {
   if (!opts.confirmedAlready) {
     const go = window.confirm(confirmWriteMessage({ fileName: lc.fileName, overwrite, changes }));
     if (!go) {
-      toast('warn', '已取消落盘', '内存里的改动没有保存；磁盘上的文件没动。');
-      return { ok: false, persisted: null, lines: ['（用户在确认框里按了取消 ⇒ 未落盘）'] };
+      toast('warn', t('已取消落盘', 'Writing to disk cancelled'), t('内存里的改动没有保存；磁盘上的文件没动。', 'The in-memory change was not saved; the file on disk is untouched.'));
+      return {
+        ok: false,
+        persisted: null,
+        lines: [t('（用户在确认框里按了取消 ⇒ 未落盘）', '(the user cancelled in the confirmation box - nothing was written)')],
+      };
     }
   }
 
@@ -658,7 +727,10 @@ async function persistCardChange(opts: {
         downloadCard(lc.card.buf, lc.fileName);
         return {
           ok: true,
-          persisted: `没有拿到写权限 ⇒ 已改为下载 ${lc.fileName}（先完全退出 PCSX2，再拷回 memcards\\）`,
+          persisted: t(
+            `没有拿到写权限 ⇒ 已改为下载 ${lc.fileName}（先完全退出 PCSX2，再拷回 memcards\\）`,
+            `No write permission -> downloaded ${lc.fileName} instead (fully exit PCSX2 first, then copy it back to memcards\\)`,
+          ),
           lines,
         };
       }
@@ -674,23 +746,31 @@ async function persistCardChange(opts: {
       if (!same) {
         toast(
           'error',
-          '覆盖后回读不一致',
-          '文件内容与内存里的卡不同 —— 检查磁盘/杀毒软件，并把原卡备份找回来（源卡字节我们一直保有副本）。',
+          t('覆盖后回读不一致', 'Read back after overwrite does not match'),
+          t('文件内容与内存里的卡不同 —— 检查磁盘/杀毒软件，并把原卡备份找回来（源卡字节我们一直保有副本）。', 'The file content differs from the in-memory card - check the disk and your antivirus, and recover the original card backup (we always keep a copy of the source bytes).'),
         );
         return { ok: false, persisted: null, lines };
       }
-      toast('ok', `已覆盖 ${lc.fileName}`, `写入 ${humanBytes(lc.card.buf.length)}，覆盖后回读逐字节一致 ✅`);
-      return { ok: true, persisted: `已覆盖 ${lc.fileName}`, lines };
+      toast(
+        'ok',
+        t(`已覆盖 ${lc.fileName}`, `Overwrote ${lc.fileName}`),
+        t(`写入 ${humanBytes(lc.card.buf.length)}，覆盖后回读逐字节一致 ✅`, `Wrote ${humanBytes(lc.card.buf.length)}; read back byte-for-byte identical ✅`),
+      );
+      return { ok: true, persisted: t(`已覆盖 ${lc.fileName}`, `Overwrote ${lc.fileName}`), lines };
     } catch (e) {
       // ★ 0.25：`InvalidStateError` = 句柄过期（"检查"与"落盘"之间又被改了）⇒ 换成能照做的说明
       if (e instanceof Error && e.name === 'InvalidStateError') {
-        toast('error', '这张卡在磁盘上又被改过了 ⇒ 拒绝覆盖', STALE_HANDLE_HINT, 30_000);
-        lines.push('❌ 落盘失败：' + STALE_HANDLE_HINT);
+        toast('error', t('这张卡在磁盘上又被改过了 ⇒ 拒绝覆盖', 'The card on disk was changed again - overwrite refused'), staleHandleHint(), 30_000);
+        lines.push('❌ ' + t('落盘失败：', 'Failed to write to disk: ') + staleHandleHint());
         return { ok: false, persisted: null, lines };
       }
       const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-      toast('error', '覆盖保存失败', msg + '\n（内存里的改动还在，可以重试；也可以改用〔另存为〕存一份出来）');
-      lines.push('❌ 覆盖保存失败：' + msg);
+      toast(
+        'error',
+        t('覆盖保存失败', 'Overwrite failed'),
+        msg + '\n' + t('（内存里的改动还在，可以重试；也可以改用〔另存为〕存一份出来）', '(the in-memory change is still there, you can retry; or use Save card as to save a copy)'),
+      );
+      lines.push('❌ ' + t('覆盖保存失败：', 'Overwrite failed: ') + msg);
       return { ok: false, persisted: null, lines };
     }
   }
@@ -698,7 +778,10 @@ async function persistCardChange(opts: {
   downloadCard(lc.card.buf, lc.fileName);
   return {
     ok: true,
-    persisted: `已触发下载 ${lc.fileName}（这个浏览器没给写句柄 ⇒ 只能下载）。下载后请先完全退出 PCSX2，再拷回 memcards\\`,
+    persisted: t(
+      `已触发下载 ${lc.fileName}（这个浏览器没给写句柄 ⇒ 只能下载）。下载后请先完全退出 PCSX2，再拷回 memcards\\`,
+      `Download of ${lc.fileName} started (this browser gave no write handle, so download is the only option). Fully exit PCSX2 first, then copy it back to memcards\\`,
+    ),
     lines,
   };
 }
@@ -716,41 +799,62 @@ async function persistCardChange(opts: {
  *
  * ⚠ 落盘失败时**内存里已经是删掉的状态** —— 返回值的 `deleted` 与 `ok` 分开报，
  *   调用方必须如实告诉用户"内存里删了，但磁盘上没动"（别让人以为卡上已经删了）。
+ *
+ * ★ 0.28：返回值多了 `cancelled` —— 用户在确认框里按取消时是 `true`。
+ *   以前调用方靠"日志文本里有没有『取消』"来判断，那是**用界面文案驱动控制流**，
+ *   英文界面下必然失效（`main.ts` 已改用它）。
  */
 export async function deleteSlotAndSave(
   dirName: string,
   fileName: string,
-): Promise<{ ok: boolean; deleted: boolean; persisted: string | null; lines: string[] }> {
+): Promise<{ ok: boolean; deleted: boolean; cancelled: boolean; persisted: string | null; lines: string[] }> {
   const lc = state.card;
-  if (!lc) return { ok: false, deleted: false, persisted: null, lines: ['❌ 还没有打开记忆卡'] };
+  if (!lc) {
+    return {
+      ok: false,
+      deleted: false,
+      cancelled: false,
+      persisted: null,
+      lines: ['❌ ' + t('还没有打开记忆卡', 'No memory card loaded yet')],
+    };
+  }
 
   // ★ 0.25：**删之前**先查一次（同一个理由：拒绝 = 什么都没发生，别把内存副本改脏）
   const stale = await preflightStale(lc);
-  if (stale) return { ok: false, deleted: false, persisted: null, lines: ['❌ ' + stale] };
+  if (stale) return { ok: false, deleted: false, cancelled: false, persisted: null, lines: ['❌ ' + stale] };
 
   const go = window.confirm(
     confirmWriteMessage({
       fileName: lc.fileName,
       overwrite: !!lc.handle,
       changes: [
-        `🗑 删除 ${dirName}\\${fileName}（它占的簇会被释放）`,
-        '★ 删除后会**立刻写回卡文件**（不再只是内存里的改动）。',
+        t(`🗑 删除 ${dirName}\\${fileName}（它占的簇会被释放）`, `🗑 Delete ${dirName}\\${fileName} (the clusters it occupies will be released)`),
+        t('★ 删除后会**立刻写回卡文件**（不再只是内存里的改动）。', '★ The card file is **written back immediately** after the delete (it is no longer just an in-memory change).'),
       ],
     }),
   );
   if (!go) {
-    toast('warn', '已取消删除', '磁盘与内存都没动。');
-    return { ok: false, deleted: false, persisted: null, lines: ['（用户在确认框里按了取消 ⇒ 什么都没做）'] };
+    toast('warn', t('已取消删除', 'Delete cancelled'), t('磁盘与内存都没动。', 'Nothing on disk or in memory was changed.'));
+    return {
+      ok: false,
+      deleted: false,
+      // ★ 0.28：**结构化**地告诉调用方"用户按了取消"。
+      //   以前调用方是拿日志文本 `lines.some((l) => l.includes('取消'))` 去猜的 ——
+      //   那是"用界面文案驱动控制流"，双语化之后必然出错（英文界面里那行不含"取消"）。
+      cancelled: true,
+      persisted: null,
+      lines: [t('（用户在确认框里按了取消 ⇒ 什么都没做）', '(the user cancelled in the confirmation box - nothing was done)')],
+    };
   }
 
   const r = deleteSlotFile(dirName, fileName);
-  if (!r.ok) return { ok: false, deleted: false, persisted: null, lines: ['❌ ' + r.message] };
+  if (!r.ok) return { ok: false, deleted: false, cancelled: false, persisted: null, lines: ['❌ ' + r.message] };
 
   const lines = ['✅ ' + r.message];
   // 已经问过了（上面那个确认框把"会写回卡"一起问了）⇒ 这里不再弹第二次
   const saved = await persistCardChange({ lc, changes: [r.message], confirmedAlready: true });
   lines.push(...saved.lines);
-  return { ok: saved.ok, deleted: true, persisted: saved.persisted, lines };
+  return { ok: saved.ok, deleted: true, cancelled: false, persisted: saved.persisted, lines };
 }
 
 
@@ -779,7 +883,7 @@ export async function exportPng(bytes: Uint8ClampedArray, w: number, h: number, 
   const ctx = cv.getContext('2d') as CanvasRenderingContext2D;
   ctx.putImageData(new ImageData(bytes, w, h), 0, 0);
   const blob: Blob | null = await new Promise((res) => cv.toBlob((b) => res(b), 'image/png'));
-  if (!blob) throw new Error('canvas.toBlob() 返回 null（内存不足？）');
+  if (!blob) throw new Error(t('canvas.toBlob() 返回 null（内存不足？）', 'canvas.toBlob() returned null (out of memory?)'));
   downloadBlob(blob, name);
 }
 
@@ -799,7 +903,7 @@ export async function exportPng(bytes: Uint8ClampedArray, w: number, h: number, 
 export async function saveCardAs(): Promise<boolean> {
   const lc = state.card;
   if (!lc) {
-    toast('warn', '还没有打开记忆卡', '先在顶栏选一张 .ps2 卡。');
+    toast('warn', t('还没有打开记忆卡', 'No memory card loaded yet'), t('先在顶栏选一张 .ps2 卡。', 'Pick a .ps2 card in the top bar first.'));
     return false;
   }
   const suggested = lc.fileName.replace(/\.ps2$/i, '') + '_copy.ps2';
@@ -812,15 +916,19 @@ export async function saveCardAs(): Promise<boolean> {
     try {
       handle = await picker({
         suggestedName: suggested,
-        types: [{ description: 'PS2 记忆卡镜像', accept: { 'application/octet-stream': ['.ps2', '.mcr', '.mc2', '.bin'] } }],
+        types: [{ description: t('PS2 记忆卡镜像', 'PS2 memory card image'), accept: { 'application/octet-stream': ['.ps2', '.mcr', '.mc2', '.bin'] } }],
       });
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') {
-        toast('info', '已取消另存为', '没有写任何文件；内存里的改动还在。');
+        toast('info', t('已取消另存为', 'Save card as cancelled'), t('没有写任何文件；内存里的改动还在。', 'No file was written; the in-memory change is still there.'));
         return false;
       }
       // 其它情况（没有这个对话框 / 被策略拒）⇒ 退化成下载，不让用户卡住
-      toast('warn', '这个环境没有"另存为"对话框，改成下载', e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+      toast(
+        'warn',
+        t('这个环境没有"另存为"对话框，改成下载', 'This environment has no Save-as dialog, falling back to download'),
+        e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      );
       downloadCard(lc.card.buf, suggested);
       return true;
     }
@@ -831,20 +939,32 @@ export async function saveCardAs(): Promise<boolean> {
       const back = new Uint8Array(await (await handle.getFile()).arrayBuffer());
       const same = back.length === lc.card.buf.length && back.every((v, i) => v === lc.card.buf[i]);
       if (!same) {
-        toast('error', '另存出来的文件与内存里的卡不一致', '别拿它当备份 —— 检查磁盘后重试。');
+        toast('error', t('另存出来的文件与内存里的卡不一致', 'The saved file does not match the in-memory card'), t('别拿它当备份 —— 检查磁盘后重试。', 'Do not use it as a backup - check the disk and try again.'));
         return false;
       }
-      toast('ok', `已另存为 ${handle.name}`, `写入 ${humanBytes(lc.card.buf.length)}，回读逐字节一致 ✅`);
+      toast(
+        'ok',
+        t(`已另存为 ${handle.name}`, `Saved as ${handle.name}`),
+        t(`写入 ${humanBytes(lc.card.buf.length)}，回读逐字节一致 ✅`, `Wrote ${humanBytes(lc.card.buf.length)}; read back byte-for-byte identical ✅`),
+      );
       return true;
     } catch (e) {
       const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-      toast('error', '另存为失败', `${msg}\n（内存里的卡还在，可以重试。）`);
+      toast(
+        'error',
+        t('另存为失败', 'Save card as failed'),
+        `${msg}\n` + t('（内存里的卡还在，可以重试。）', '(the in-memory card is still there, you can retry.)'),
+      );
       return false;
     }
   }
 
   downloadCard(lc.card.buf, suggested);
-  toast('info', `已下载一份卡的副本（${suggested}）`, '这个环境没有"另存为"对话框，所以按下载处理。');
+  toast(
+    'info',
+    t(`已下载一份卡的副本（${suggested}）`, `Downloaded a copy of the card (${suggested})`),
+    t('这个环境没有"另存为"对话框，所以按下载处理。', 'This environment has no Save-as dialog, so it was handled as a download.'),
+  );
   return true;
 }
 
@@ -866,9 +986,9 @@ export * as cardCore from '../core/card.ts';
 /** 调试：把一个目录的 dirent 打成文本。 */
 export function direntDebug(dirName: string): string {
   const lc = state.card;
-  if (!lc) return '（未打开卡）';
+  if (!lc) return t('（未打开卡）', '(no card loaded)');
   const ent = lc.card.findInRoot(dirName);
-  if (!ent) return `（没有目录 ${dirName}）`;
+  if (!ent) return t(`（没有目录 ${dirName}）`, `(no folder ${dirName})`);
   const count = ent.length > 0 ? ent.length : lc.card.dirCount(ent.cluster);
   return lc.card
     .dirents(ent.cluster, Math.max(count, 1))

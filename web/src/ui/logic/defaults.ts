@@ -109,11 +109,16 @@ export function cloneDefaultParams(): UiParams {
 //   我感觉只需要一个就行了"）。核心 `core/image.ts` 的 `FitMode` 四档**一个都没动**：
 //   将来要放开自动档，加回一张四行的文案表 + 一个 `<select>` 就行。
 
-/** 缩放核的界面文案。 */
-export const KERNEL_LABELS: ReadonlyArray<{ value: ScaleKernelChoice; label: string }> = [
-  { value: 'auto', label: '自动判断' },
-  { value: 'nearest', label: '最近邻（像素画）' },
-  { value: 'smooth', label: '面积平均（照片）' },
+/**
+ * 缩放核的界面文案。
+ *
+ * ★ 0.28：加了 `en`（英文）—— 渲染时用 `t(o.label, o.en)`。`label` **保持中文**不动，
+ *   所以既有判据（`ui.test.ts` 断言 `label.includes('自动')`）一个字都不用改。
+ */
+export const KERNEL_LABELS: ReadonlyArray<{ value: ScaleKernelChoice; label: string; en: string }> = [
+  { value: 'auto', label: '自动判断', en: 'Auto' },
+  { value: 'nearest', label: '最近邻（像素画）', en: 'Nearest neighbour (pixel art)' },
+  { value: 'smooth', label: '面积平均（照片）', en: 'Area average (photos)' },
 ];
 
 /**

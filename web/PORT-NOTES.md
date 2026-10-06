@@ -1,18 +1,18 @@
-﻿# 移植笔记：Python 参考实现 → TypeScript 核心
+# 移植笔记：Python 参考实现 → TypeScript 核心
 
 > 记录 `web/src/core/` 与 `../tools/acet_format.py`、`AC3_CN\tools\30-存档\` 的对应关系、
 > **验证判据**、以及移植中发现的**语义歧义**。做 UI 之前先读这一份。
 >
-> ★ **逐版本变更史在 `CHANGELOG.md`**（唯一来源）；本文只写"当前契约"与移植纪律。
+> ★ **逐版本历史由 git 记录**（`git log`）；本文只写"当前契约"与移植纪律。
 > ★ **一条命令跑完全部判据**：`node web\check.mjs`（打包 + 四套 node 测试 + 三条 python 判据）。
 
-## 一、当前状态（2026-10-04 建立，2026-10-06 对齐 0.26）
+## 一、当前状态（2026-10-04 建立，2026-10-06 对齐 0.28）
 
 | 模块 | 文件 | 状态 | 判据（可复跑） |
 |---|---|---|---|
 | 格式核心 | `src/core/emblem.ts`（1,064 行） | ✅ | `node web\test\core.test.ts` → **通过 2821 / 2821** |
 | 记忆卡层 | `src/core/card.ts`（1,275 行） | ✅ | `node web\test\card.test.ts` → **通过 1619 / 1619** |
-| 图像管线 | `src/core/image.ts`（1,412 行） | ✅ | `node web\test\image.test.ts` → **通过 1028 / 1028** |
+| 图像管线 | `src/core/image.ts`（1,412 行） | ✅ | `node web\test\image.test.ts` → **通过 1039 / 1039** |
 
 夹具由 **Python 参考实现**生成（它是"真值"来源），TS 必须逐字节吻合：
 
@@ -22,7 +22,7 @@ python web\test\make_card_fixtures.py   # → web\test\fixtures\card-manifest.js
 python web\test\make_image_fixtures.py  # → web\test\fixtures\images\（8 张裸 RGBA 输入图）
 node   web\test\core.test.ts            # 2821/2821
 node   web\test\card.test.ts            # 1619/1619
-node   web\test\image.test.ts           # 1028/1028
+node   web\test\image.test.ts           # 1039/1039
 ```
 
 * 样本 = 10 份 `testdata/real/*.raw` + 33 个从 `out/evidence/*.ps2` 只读抽出的徽章块 + 1 个 PSV 容器。
@@ -115,8 +115,8 @@ const kind = saveKind(bytes);
 
 ```powershell
 node web\check.mjs          # ★ 一条命令跑完全部判据（打包 + 四套 node 测试 + 三条 python）
-node web\build.mjs           # → web\dist\emblem-tool.html（480.7 KiB / 492,228 字节，双击 file:// 即用）
-node web\test\ui.test.ts     # 854/854
+node web\build.mjs           # → web\dist\emblem-tool.html（526.4 KiB / 538,992 字节，双击 file:// 即用）
+node web\test\ui.test.ts     # 942/942
 ```
 
 ★ **布局顺序（用户定，`v0.5` 起；`v0.22` 更新）**：顶栏 → 上区（**左 2/3 = 「当前图片」一格**：细工具条 + `#image-drop.stage`；

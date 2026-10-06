@@ -1,7 +1,7 @@
 # 简化 / bug 审查 —— 第一步：只清单，不动代码
 
 > ★★ **本清单已经全部执行完毕**（用户 2026-10-05 勾选：A 全删 / B 全合并 / C9 / D 全修 / Python 清理）。
-> 逐条结果见 `CHANGELOG.md` 的 **0.19** 一节；本文保留为"当时的现状快照"——
+> 逐条结果见代码注释与 **git 历史**（0.19 那次提交）；本文保留为"当时的现状快照"——
 > 下面的体积/测试数/行数都是**改动前**的值，别再拿它当现状。
 >
 > 目的：把"能简化的地方"和"真 bug"列成**可以逐条勾选**的表，由用户决定做哪些。
@@ -114,7 +114,7 @@
 | B9 | `slotsView.ts:159-161` + `main.ts:380,416` | 下拉框选中项写两遍（`selected` 属性 + `.value=`），后者在选项缺失时**静默失败** |
 | B10 | 常量重复 | `PALETTE_ALPHA_OPAQUE`（`emblem.ts:160` 与 `image.ts:86`，**注释说明是刻意的**、测试钉了相等）；`SLOT_COUNT`/字面量 `8`（4 处）；`LR_FILE_NAMES` vs `` `data${i}` ``（2 处）；`ZOOM_STEP 1.15` 在 build.mjs 与 screenshot.mjs 里各写一遍；`/\/emulog\.(txt\|log)$/` 在 `pcsx2Paths.ts:75,144` 逐字重复 |
 | B11 | `UiParams` 12 字段 | 界面真正在改的只有 5 个（`kernel`/`alphaThreshold`/`previewZoom`/`manual*`）；`despeckle`/`despeckleMinNeighbors`/`maxColors`/`fitMode` 恒为常量。⚠ `SPEC §五` 写明这些留给 PS1 ⇒ **取舍点**：建议移进一个 `CORE_DEFAULTS` 常量，`UiParams` 只留界面在改的 |
-| B12 | 同一条变更历史写了 **4 遍** | `version.ts` 头部 0.1→0.18（147 行里 **140 行是注释，会进产物**）+ `README.md`（32 KB 逐版本）+ `SPEC.md`（36 处 `v0.x`）+ `PORT-NOTES.md`（25 处）⇒ 建议历史移到 `CHANGELOG.md`，两份设计文档只写"当前契约" |
+| B12 | 同一条变更历史写了 **4 遍** | `version.ts` 头部 0.1→0.18（147 行里 **140 行是注释，会进产物**）+ `README.md`（32 KB 逐版本）+ `SPEC.md`（36 处 `v0.x`）+ `PORT-NOTES.md`（25 处）⇒ 建议历史移到 `CHANGELOG.md`，两份设计文档只写"当前契约"（**后续**：0.19 移进了 `CHANGELOG.md`；0.27 起连那一份也删了 —— **历史统一由 git 记录**，`README` 也砍到只留"怎么构建/怎么测/怎么自查"） |
 | B13 | 文档事实已漂 | `PORT-NOTES.md`：`image.test.ts` 995/995（实 1059）、`emblem.ts` 837 行（实 1041）、`build.mjs` 1836 行（实 2175）、`<div id="editor">`（**早就不存在**，现在右栏是 `.pane-tools`）；`SPEC §二` 还写"用 esbuild/Vite 内联"（实际是自写 `build.mjs`）；`docs\03:127` 说 `tools\__pycache__/` "已清理"（实际有 39 KB 的 `.pyc`）；`image.test.ts:6` 说夹具"已随仓库提交"（**本树没有仓库**）|
 | B14 | `build.mjs` ↔ `index.html` 的**三条字符串契约** | `<!--BUNDLE-->`、`<link … styles.css>`、`data-app-version="v?"` + `<span class="brand-sub" id="app-version">v?</span>` 的形状 —— 改 HTML 格式就可能构建失败，且只有第三条有测试 |
 

@@ -17,7 +17,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PS2 装甲核心 · 徽章工具</title>
+<title data-en="PS2 Armored Core · Emblem Tool">PS2 装甲核心 · 徽章工具</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -25,7 +25,7 @@
 <!-- ══════════════════════ 顶栏 ══════════════════════ -->
 <header class="topbar">
   <div class="brand">
-    <span class="brand-title">PS2 装甲核心 · 徽章工具</span>
+    <span class="brand-title" data-en="PS2 Armored Core · Emblem Tool">PS2 装甲核心 · 徽章工具</span>
     <!--
       版本号：这里只放一个**占位符**，构建时由 build.mjs 从 src/ui/logic/version.ts
       的 APP_VERSION 替换成真值（main.ts 里还有一次 JS 兜底赋值，开发期直接开 shell 也对）。
@@ -34,10 +34,10 @@
     <span class="brand-sub" id="app-version" data-app-version="v?">v?</span>
   </div>
 
-  <div class="topbar-block" id="card-drop" title="把 .ps2 记忆卡拖到这里（Chrome 下能拿到写句柄 ⇒ 保存时可直接覆盖原文件）">
-    <span class="lbl">记忆卡</span>
+  <div class="topbar-block" id="card-drop" title="把 .ps2 记忆卡拖到这里（Chrome 下能拿到写句柄 ⇒ 保存时可直接覆盖原文件）" data-en-title="Drop a .ps2 memory card here (Chrome grants a write handle, so saving can overwrite the original file)">
+    <span class="lbl" data-en="Memory card">记忆卡</span>
     <span id="card-info" class="card-info"><span class="dim">未选择记忆卡</span></span>
-    <button id="btn-card-open" class="primary">选择记忆卡（可覆盖保存）</button>
+    <button id="btn-card-open" class="primary" data-en="Choose memory card (can overwrite)">选择记忆卡（可覆盖保存）</button>
     <!--
       ★ 2026-10-05（0.10）：〔拖入 / 只读选择〕那个按钮**已按用户要求删除**（"没用"）。
         路径没丢，只是不再占一个按钮：
@@ -50,10 +50,10 @@
   </div>
 
   <div class="topbar-block">
-    <span class="lbl">作品</span>
+    <span class="lbl" data-en="Game">作品</span>
     <select id="game-select"></select>
     <span id="custom-serial-row" style="display:none">
-      <input type="text" id="custom-serial" placeholder="盘序列号，如 SLUS-20435" size="18">
+      <input type="text" id="custom-serial" placeholder="盘序列号，如 SLUS-20435" data-en-placeholder="Disc serial, e.g. SLUS-20435" size="18">
     </span>
     <!-- ⚠ 只用来放"⚠ 未验证"这类提醒；已验证的作品在这里**什么都不显示**（0.10 用户要求删掉那行"✅ 有实机证据 …"） -->
     <span id="game-note" class="game-note"></span>
@@ -65,6 +65,17 @@
       ⚠ 删的只是**顶栏这一行摘要**：页面最下面那块常驻的 PCSX2 自检面板（选择目录 / 结论表 /
       "判读方法"）**还在**、功能一个都没少 —— 用户要的是别在顶栏重复一遍。
   -->
+  <!--
+    ★ 0.28（用户）：语言 —— "在最上面一栏的右侧，加入一个语言选项，默认中文，然后支持英文"。
+      · 选项文字**不翻译**（中文就叫"中文"，英文就叫"English"）；
+      · 默认中文；英文浏览器**首次**自动给 English；用户手动切过之后永远听用户的
+        （规则与理由见 src/ui/logic/i18n.ts 文件头）；
+      · `margin-left:auto` 把它顶到最右（与 #btn-pcsx2-toggle 同一手法）。
+  -->
+  <div class="topbar-block lang-pick">
+    <span class="lbl" data-en="Language">语言</span>
+    <select id="lang-select"></select>
+  </div>
 </header>
 
 <!-- ══════════════════════ 【上】图片处理：1 格当前图片 + 右侧参数 ══════════════════════ -->
@@ -82,10 +93,13 @@
 <main class="upper">
   <section class="card pane-image">
     <div class="image-toolbar">
-      <button id="btn-image-open" class="primary">选择 / 粘贴图片</button>
+      <button id="btn-image-open" class="primary" data-en="Choose / paste image">选择 / 粘贴图片</button>
       <input type="file" id="image-input" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.ico,.avif,.svg" hidden>
-      <button id="btn-crop">取景…</button>
-      <span class="lbl">预览倍率</span>
+      <!-- ★ 0.27（用户）：按钮文字里的省略号全部去掉（〔取景…〕→〔取景〕、〔另存为…〕→〔另存为〕）。
+           理由与出处：SPEC.md §四 —— 〔取景〕早就不开对话框了，`…` 是过期的惯例；
+           用户选的是"一个都不留"。⚠ 别加回来：`ui.test.ts` 分节 (o) 有闸门。 -->
+      <button id="btn-crop" data-en="Crop">取景</button>
+      <span class="lbl" data-en="Preview zoom">预览倍率</span>
       <select id="preview-zoom"></select>
       <span id="original-badge" class="orig-badge"></span>
     </div>
@@ -107,15 +121,15 @@
     </div>
     <div id="preview-zoom-note" class="zoom-note-host"></div>
     <div class="row crop-actions" id="crop-actions" hidden>
-      <span class="crop-hint">拖动图片，把要用的部分放进白框里（滚轮缩放）</span>
+      <span class="crop-hint" data-en="Drag the image so the part you want sits inside the white box (scroll to zoom)">拖动图片，把要用的部分放进白框里（滚轮缩放）</span>
       <!--
         ★ 0.12：随拖动/滚轮**实时更新**的读数（白框 = 源图哪一块、倍率、有没有到最小）。
         ⚠ 为什么要有它：原来这些只写在 `#status` 里，而状态行在**页面最下面**（8 槽那一块），
           取景时根本看不到（用户："ok了，然后状态行在哪"）。这条就在白框正下方。
       -->
       <span id="crop-readout" class="crop-readout"></span>
-      <button id="btn-crop-ok" class="primary">确定取景</button>
-      <button id="btn-crop-cancel">取消</button>
+      <button id="btn-crop-ok" class="primary" data-en="Apply crop">确定取景</button>
+      <button id="btn-crop-cancel" data-en="Cancel">取消</button>
     </div>
   </section>
 
@@ -131,7 +145,7 @@
   -->
   <aside class="card pane-params">
     <div class="pane-head">
-      <span class="pane-title">参数</span>
+      <span class="pane-title" data-en="Parameters">参数</span>
       <!-- ★ 0.23：原来这里还有一句副标题「两格：缩放核 / alpha 阈值」——
            参数栏收窄到 220px 之后它把标题挤成了竖排的"参 数"，而且下面两格的标签本来就写着
            "缩放核 / alpha 阈值"，属于重复的说明性文字 ⇒ 整句删掉（用户一贯要求：界面上不放说明性长句）。 -->
@@ -145,10 +159,10 @@
           而手动这一档已经能覆盖前两档（滚轮往里 = 铺满；往外滚到底 = 适应留边），
           「拉伸」（非等比）是唯一做不到的 —— 但徽章本来就不该被拉伸。
           核心 `image.ts` 的四个模式**一个都没动**（要加回来只差一个控件）。
-          取景视图的入口仍是左上的〔取景…〕；下面「取景数值」那段说明里也写着怎么调。
+          取景视图的入口仍是左上的〔取景〕；下面「取景数值」那段说明里也写着怎么调。
       -->
       <div class="field">
-        <label for="kernel">缩放核</label>
+        <label for="kernel" data-en="Scaling kernel">缩放核</label>
         <select id="kernel"></select>
         <!-- ★ 0.18：原来下面还有一句「默认「自动判断」：源=目标→原样；整数倍缩小→最近邻；…」，
              按用户要求删掉（"这几句话也删掉"）。规则本身没变 —— `core/image.ts::chooseKernel()`
@@ -156,10 +170,10 @@
       </div>
 
       <div class="field">
-        <label for="alpha-threshold">alpha 阈值</label>
+        <label for="alpha-threshold" data-en="Alpha threshold">alpha 阈值</label>
         <input type="range" id="alpha-threshold" min="1" max="254" step="1">
         <input type="number" id="alpha-threshold-num" min="1" max="254" step="1" class="num">
-        <div class="hint">默认 128。半透明像素在这一步被归成"全透明 / 全不透明"。</div>
+        <div class="hint" data-en="Default 128. Semi-transparent pixels are snapped to fully transparent / fully opaque here.">默认 128。半透明像素在这一步被归成"全透明 / 全不透明"。</div>
       </div>
 
       <!--
@@ -170,7 +184,7 @@
             · 收边：只有"照片来源、二值化后留孤立脏点"时才需要，重新裁一下通常就够了；
             · 减色上限：默认 255 就是格式上限（= 不动作），调小只会有损，而存档块固定 0x4000、不会变小；
             · 取景数值：**输入**没有独占价值（需要精确值的地方是边界，而拖到边界会被自动夹住 = 精确值）；
-              想看当前取景的几个数就点左上的〔取景…〕，白框下面那行实时读数一直在写。
+              想看当前取景的几个数就点左上的〔取景〕，白框下面那行实时读数一直在写。
           ⚠ 这三个 id（despeckle / max-colors / manual-scale / manual-x / manual-y）**不许长回来**，
             `ui.test.ts` 有闸门。
       -->
@@ -192,7 +206,7 @@
 <!-- ══════════════════════ 【下】8 个槽位 ══════════════════════ -->
 <section class="card lower">
   <div class="pane-head">
-    <span class="pane-title">8 个徽章槽</span>
+    <span class="pane-title" data-en="8 emblem slots">8 个徽章槽</span>
     <!-- ★ 0.18：原来这里还有一句「LR = data0..7；SL/NX/AC3/… = E00..E07；空的显示「＋新建」」，
          按用户要求删掉。文件名规则本身没变（每个槽卡片上照样写着实际目录\文件）。 -->
   </div>
@@ -201,14 +215,14 @@
 
   <div class="lower-bottom">
     <div class="actions">
-      <button id="btn-write" class="primary big">写入选中槽</button>
-      <button id="btn-export-png">导出 PNG</button>
-      <button id="btn-delete">删除槽</button>
-      <!-- ★ 0.26（用户）：〔导出整卡〕改名〔另存为〕，行为就是"另存一张记忆卡"：
-           走 showSaveFilePicker 让你选位置和文件名（拿不到那个对话框时退化成下载）。 -->
-      <button id="btn-save-as">另存为…</button>
-      <button id="btn-debug" class="quiet">看目录项（调试）</button>
-      <span id="busy" class="busy" style="display:none">⏳ 正在处理…</span>
+      <button id="btn-write" class="primary big" data-en="Write to selected slot">写入选中槽</button>
+      <button id="btn-export-png" data-en="Export PNG">导出 PNG</button>
+      <button id="btn-delete" data-en="Delete slot">删除槽</button>
+      <!-- ★ 0.26（用户）：〔导出整卡〕改名〔另存为〕= "另存一张记忆卡"（走 showSaveFilePicker，
+           拿不到对话框时退化成下载）。★ 0.27：文字里的省略号去掉（理由见工具条那段注释）。 -->
+      <button id="btn-save-as" data-en="Save card as">另存为</button>
+      <button id="btn-debug" class="quiet" data-en="Inspect directory (debug)">看目录项（调试）</button>
+      <span id="busy" class="busy" style="display:none" data-en="⏳ Working…">⏳ 正在处理…</span>
     </div>
     <div class="hintblock">
       <div id="write-hint" class="write-hint"></div>
@@ -236,8 +250,8 @@
 -->
 <section class="card pcsx2-bar">
   <div class="pane-head">
-    <span class="pane-title">PCSX2 自检</span>
-    <span class="dim">确认游戏实际会读哪张卡，避免全局设置与独立设置不同导致的记忆卡读取问题</span>
+    <span class="pane-title" data-en="PCSX2 check">PCSX2 自检</span>
+    <span class="dim" data-en="Confirm which card the game actually reads — global and per-game settings can differ">确认游戏实际会读哪张卡，避免全局设置与独立设置不同导致的记忆卡读取问题</span>
     <!-- ★ 0.24（用户）："展开按钮改成其他几个按钮也用的蓝色，不然不够显眼" ⇒ `quiet` → `primary`
          （`button.primary` = `#2f4a68` 蓝底，与〔选择记忆卡〕〔选择 PCSX2 目录〕〔写入选中槽〕同一个蓝）。
          ⚠ 它是**面板头一行里唯一的操作**，用低调的透明按钮确实找不到；判据在 `ui.test.ts` 分节 k2。 -->
@@ -246,12 +260,12 @@
 
   <div id="pcsx2-panel" hidden>
     <div class="row">
-      <button id="btn-pcsx2-dir" class="primary">选择 PCSX2 目录（一次点击，之后自动记住）</button>
-      <button id="btn-pcsx2-input">用目录输入框选（兜底方式）</button>
-      <button id="btn-pcsx2-clear">清空</button>
+      <button id="btn-pcsx2-dir" class="primary" data-en="Choose PCSX2 folder (one click, remembered)">选择 PCSX2 目录（一次点击，之后自动记住）</button>
+      <button id="btn-pcsx2-input" data-en="Pick folder via input (fallback)">用目录输入框选（兜底方式）</button>
+      <button id="btn-pcsx2-clear" data-en="Clear">清空</button>
       <!-- 兜底路径：没有 showDirectoryPicker（或它抛 SecurityError）时用这个；不依赖 File System Access API -->
       <input type="file" id="pcsx2-dir-input" webkitdirectory multiple hidden>
-      <span id="pcsx2-drop" class="dropzone-inline">也可以把 inis\PCSX2.ini、gamesettings\*.ini、logs\emulog.txt（或整个 PCSX2 目录）拖到这里</span>
+      <span id="pcsx2-drop" class="dropzone-inline" data-en="You can also drop inis\PCSX2.ini, gamesettings\*.ini, logs\emulog.txt (or the whole PCSX2 folder) here">也可以把 inis\PCSX2.ini、gamesettings\*.ini、logs\emulog.txt（或整个 PCSX2 目录）拖到这里</span>
     </div>
 
     <div id="pcsx2-default-dir" class="pcsx2-default"></div>
@@ -272,7 +286,7 @@
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-title" id="modal-title"></div>
     <div class="modal-body" id="modal-body"></div>
-    <div class="modal-actions"><button class="primary" id="modal-ok">知道了</button></div>
+    <div class="modal-actions"><button class="primary" id="modal-ok" data-en="Got it">知道了</button></div>
   </div>
 </div>
 

@@ -55,6 +55,19 @@ import {
   type SlotDirLike,
 } from '../src/ui/logic/slots.ts';
 import { planWriteTargetIn } from '../src/ui/logic/planWrite.ts';
+import { auditTree } from '../tools/i18n-audit.mjs';
+import {
+  DEFAULT_LANG,
+  LANGS,
+  LANG_STORAGE_KEY,
+  applyStaticI18n,
+  currentLang,
+  detectLang,
+  langFromNavigator,
+  langFromSaved,
+  setLang,
+  t,
+} from '../src/ui/logic/i18n.ts';
 import {
   DEFAULT_PARAMS,
   KERNEL_LABELS,
@@ -954,29 +967,29 @@ if (!existsSync(DIST)) {
 // (h) ★ 版本号（用户要求：顶栏显示版本号，规则钉死）
 // ==========================================================================
 
-section('(h) ★ 版本号：顶栏显示 v0.26，规则从 0.1 起每次交付 +0.1');
+section('(h) ★ 版本号：顶栏显示 v0.29，规则从 0.1 起每次交付 +0.1');
 
 // 规则（用户 2026-10-05 定）：从 0.1 起、每次交付 +0.1；只有用户明确说"可以发布了"才进 1.x
 ok(/^0\.\d+$/.test(APP_VERSION), `APP_VERSION 必须是 0.x 形式（实到 "${APP_VERSION}"）`);
-eq(APP_VERSION, '0.26', '当前交付版本 = 0.26（本轮：开机告知 + 取景拦截 +〔另存为〕⇒ +0.1）');
-eq(APP_VERSION_LABEL, 'v0.26', '带 v 前缀的显示形式 = v0.26');
+eq(APP_VERSION, '0.29', '当前交付版本 = 0.29（本轮：删掉图片工具条那句格式说明 ⇒ +0.01）');
+eq(APP_VERSION_LABEL, 'v0.29', '带 v 前缀的显示形式 = v0.29');
 ok(!/^1\./.test(APP_VERSION), '★ 还没到 1.x（只有用户明确说"可以发布了"才允许进 1.x）');
 ok(/^M4-UI-\d+$/.test(UI_BUILD_TAG), `开发标记形如 M4-UI-N（实到 "${UI_BUILD_TAG}"）`);
-eq(UI_BUILD_TAG, 'M4-UI-28', '本次界面改动 ⇒ 开发标记递增到 M4-UI-28');
+eq(UI_BUILD_TAG, 'M4-UI-31', '本次界面改动 ⇒ 开发标记递增到 M4-UI-31');
 eq(readAppVersion(), APP_VERSION, 'build.mjs::readAppVersion() 读出来的与源码常量一致（不写死两份）');
 
 {
   const dist = existsSync(DIST) ? readFileSync(DIST, 'utf8') : '';
-  ok(dist.includes('v0.26'), '★ 产物里印着 v0.26');
+  ok(dist.includes('v0.29'), '★ 产物里印着 v0.29');
   ok(!dist.includes('单文件离线版'), '★ 产物里**不再有**"单文件离线版"那句占位文字');
   ok(dist.includes('id="app-version"'), '顶栏有版本号挂载点 #app-version');
-  ok(dist.includes('data-app-version="v0.26"'), '产物 HTML 里 #app-version 的标记值已是 v0.26（构建时替换，不是 JS 填的）');
+  ok(dist.includes('data-app-version="v0.29"'), '产物 HTML 里 #app-version 的标记值已是 v0.29（构建时替换，不是 JS 填的）');
   // ⚠ 必须用 indexOf（纯字符串），不能写正则 `/>v?</span>/` —— 那里的 `?` 是正则量词，
   //   会匹配到 `>v</span>`（本测试第一版就因此误报过一次）。
   ok(!dist.includes('>v?</span>'), '产物里没有残留的 `>v?<` 占位文本（JS 没跑起来也不会显示 v?）');
   eq((dist.match(/id="app-version"/g) ?? []).length, 1, '顶栏只有 1 个版本号挂载点');
   eq((dist.match(/data-app-version/g) ?? []).length, 1, '版本号标记只出现 1 次（没有第二份写死的）');
-  ok(dist.includes('id="app-version"') && /id="app-version"[^>]*>v0\.26</.test(dist), '#app-version 的可见文本就是 v0.26');
+  ok(dist.includes('id="app-version"') && /id="app-version"[^>]*>v0\.29</.test(dist), '#app-version 的可见文本就是 v0.29');
   // 欢迎日志：产物里看到的是模板字面量本身（运行时才插值），所以断言它的两个组成部分都在
   // ★ 0.18：那 8 行"欢迎 + ①②③④ + ★ 说明"**整块按用户要求删除**（"这几句话也删掉"）⇒
   //   版本号不再从日志里看，改看**顶栏** `#app-version`（构建时替换 + JS 兜底）。
@@ -989,10 +1002,10 @@ eq(readAppVersion(), APP_VERSION, 'build.mjs::readAppVersion() 读出来的与�
     );
     ok(/buildTag: UI_BUILD_TAG/.test(mainSrc), '★ 开发标记仍然挂在 F12（`EmblemToolCore.ui.buildTag`），只是不再写在日志里');
   }
-  // 版本号只该有一个来源：产物里 `v0.26` 之外不该再出现别的 0.x 字面量
+  // 版本号只该有一个来源：产物里 `v0.29` 之外不该再出现别的 0.x 字面量
   //  ⚠ 注释里也别写出带 `v` 的旧版本号 —— 注释会被打进产物，这条断言就会被自己的注释弄红。
   const labels = new Set(dist.match(/v0\.\d+/g) ?? []);
-  eq([...labels].join(','), 'v0.26', '产物里只出现一个 0.x 版本号（没有第二份写死的）');
+  eq([...labels].join(','), 'v0.29', '产物里只出现一个 0.x 版本号（没有第二份写死的）');
 }
 
 // ==========================================================================
@@ -1155,7 +1168,7 @@ section('(j) ★ 上区布局：1 格当前图片 + 右侧参数侧栏 + 无滚�
   ok(/id="stage-crop"/.test(idx) && /hidden/.test(idx), '★ 取景层 #stage-crop 默认隐藏');
   ok(/id="crop-stage"/.test(idx) && /id="crop-frame"/.test(idx) && /id="view-source"/.test(idx),
     '★ 取景视图有：舞台 + 取景框 + 源图画布');
-  ok(/id="btn-crop"/.test(idx), '★ 有〔取景…〕按钮（进/出取景视图）');
+  ok(/id="btn-crop"/.test(idx), '★ 有〔取景〕按钮（进/出取景视图）');
   ok(/id="btn-crop-ok"/.test(idx) && /id="btn-crop-cancel"/.test(idx), '★ 有〔确定取景〕〔取消〕');
   // ★ 2026-10-05（v0.9）：用户删掉了这两个"复位/适应"按钮（"我认为这个按钮没用，删了吧"）
   ok(!/btn-crop-fit/.test(idx), '★★ 取景动作行里**没有**〔↺ 复位 / 适应〕按钮了（用户要求删掉）');
@@ -1549,14 +1562,14 @@ section('(j) ★ 上区布局：1 格当前图片 + 右侧参数侧栏 + 无滚�
       '★ 写入主流程叫 `writeSlot()`（单数，逐槽循环整段消失）',
     );
 
-    // ★★ 〔另存为…〕（0.26 从〔导出整卡〕改名）依然只许挂**一个**监听
+    // ★★ 〔另存为〕（0.26 从〔导出整卡〕改名）依然只许挂**一个**监听
     //    （0.21 实测过：重复挂两段 ⇒ 点一次下载两次）。
     eq(
       (main.match(/btn-save-as'\)\.addEventListener/g) ?? []).length,
       1,
-      '★★ 〔另存为…〕只挂**一个** click 监听',
+      '★★ 〔另存为〕只挂**一个** click 监听',
     );
-    ok(/saveCardAs\(\)/.test(main), '★〔另存为…〕调 `saveCardAs()`');
+    ok(/saveCardAs\(\)/.test(main), '★〔另存为〕调 `saveCardAs()`');
     // ⚠ 这两条拿**原文**比：`maskSource()` 会把字符串字面量抹掉（`$('btn-export-card')` 会变成空串），
     //   用掩码版查 old id 等于"永远通过"。我们的注释里只写中文〔导出整卡〕，不写这两个 ASCII 名字。
     ok(!/btn-export-card/.test(main) && !/btn-export-card/.test(idx), '★★ 老的 id `btn-export-card` 不许长回来');
@@ -1576,11 +1589,13 @@ section('(j) ★ 上区布局：1 格当前图片 + 右侧参数侧栏 + 无滚�
     '★★ loadImageFromBlob 把"解码后的图"交给 applyImportedImage()（真路只有一条）',
   );
   ok(
-    /function applyImportedImage[\s\S]{0,1800}?openCropView\(\)/.test(main),
+    // ★ 0.28：窗口从 1800 放宽到 3200 —— 双语化之后这段里多了英文文案，
+    //   0.28 时实测距离已 1431（离 1800 只剩 ~370 余量）⇒ 再往里加字就会**假失败**。
+    /function applyImportedImage[\s\S]{0,3200}?openCropView\(\)/.test(main),
     '★★ applyImportedImage() 最后会 openCropView() —— 导入图片 = 直接进取景模式',
   );
   ok(
-    /function applyImportedImage[\s\S]{0,600}?fillManualToTarget\(\)/.test(main),
+    /function applyImportedImage[\s\S]{0,1200}?fillManualToTarget\(\)/.test(main),
     '★ 进取景之前先按"填满白框"算好初值（不然白框里是上一张图的取景）',
   );
   ok(/imageImport:\s*\{\s*applyImportedImage\s*\}/.test(main), '★ 真路挂到 F12 / 冒烟上（`ui.imageImport.applyImportedImage`）');
@@ -1720,7 +1735,14 @@ eq(normalizeRelPath('a//b\\c'), 'a/b/c', 'normalizeRelPath 压掉重复分隔符
   ok(/queryPermission\s*\(\s*\{\s*mode:\s*'read'\s*\}\s*\)/.test(main), '启动时用 queryPermission 判断"记住的目录"权限还在不在');
   ok(/indexedDB\.open/.test(main), '句柄存进 IndexedDB（try/catch 包住的锦上添花）');
   ok(/recallPcsx2Handle|rememberPcsx2Handle/.test(main), '有"记住 / 取回句柄"两个函数');
-  ok(/SecurityError|isAbort\(e\)[\s\S]{0,400}openPcsx2DirInput\(\)/.test(main), '★ 目录选择框失败/取消时能自动切到兜底（不报错卡住）');
+  ok(
+    // ★ 0.28：这条原来是 `/SecurityError|isAbort\(e\)[\s\S]{0,400}openPcsx2DirInput\(\)/` ——
+    //   而那个 400 窗口实际上是被**注释里**的裸词 `SecurityError` 命中的（`isAbort(e)` 那条早就 >400 了）
+    //   ⇒ 判据看着过、其实没在查该查的东西。现在改成"pickPcsx2Dir() 的 catch 之后 1500 字符内出现兜底调用"，
+    //   意图一致，且不靠巧合。
+    /function pickPcsx2Dir[\s\S]*?catch[\s\S]{0,1500}?openPcsx2DirInput\(\)/.test(main),
+    '★ 目录选择框失败/取消时能自动切到兜底（不报错卡住）',
+  );
   ok(/webkitGetAsEntry/.test(main), '拖入目录时走 FileSystemEntry 递归（拖目录拿到子文件）');
   ok(/readTextFilesFromHandle/.test(main), '用句柄时是递归读（inis / gamesettings / logs）');
   ok(/'目录选择框'/.test(main), "三条路都会记下来源：'目录选择框'");
@@ -2251,7 +2273,9 @@ section('(m) ★ 0.25：写前时间戳拦截 +〔删除槽〕立刻写回卡文
   ok(
     // ⚠ 这两句要拿**原文**比：`maskSource()` 会把字符串字面量的内容抹成空格
     //   （`'InvalidStateError'` 只剩一对引号）⇒ 用掩码版会永远匹配不上。
-    /e\.name === 'InvalidStateError'/.test(cardOpsSrc) && /STALE_HANDLE_HINT/.test(cardOpsSrc),
+    // ★ 0.28：原来断言的是常量 `STALE_HANDLE_HINT`；双语化之后界面必须走**按语言取文案**的
+    //   `staleHandleHint()`（常量只留中文原文，给下面 (m2) 那三条断言用）⇒ 这里改成断言函数调用。
+    /e\.name === 'InvalidStateError'/.test(cardOpsSrc) && /staleHandleHint\(\)/.test(cardOpsSrc),
     '★ `InvalidStateError`（检查与落盘之间又被改了）单独处理，换成能照做的说明',
   );
   ok(
@@ -2282,7 +2306,7 @@ section('(m) ★ 0.25：写前时间戳拦截 +〔删除槽〕立刻写回卡文
 }
 
 // ==========================================================================
-// (n) ★ 0.26：开机告知弹窗 + 取景模式不许写入 +〔另存为…〕
+// (n) ★ 0.26：开机告知弹窗 + 取景模式不许写入 +〔另存为〕
 // ==========================================================================
 section('(n) ★ 0.26：开机告知（自行备份）/ 取景模式拦截 /〔另存为〕');
 
@@ -2311,7 +2335,7 @@ section('(n) ★ 0.26：开机告知（自行备份）/ 取景模式拦截 /〔�
   ok(/完全退出 PCSX2/.test(mainSrc), '★ 开机告知里顺带把那条硬规矩也说清（PCSX2 会把手里的卡写回文件）');
   // ★ 0.14 的教训：可见文案里**不许**出现 markdown 的 `**`（HTML 不认，会原样显示两个星号）。
   {
-    const modalTexts = [...mainSrc.matchAll(/showModal\(\{([\s\S]{0,800}?)\n\s*\}\)/g)].map((m) => m[1]);
+    const modalTexts = [...mainSrc.matchAll(/showModal\(\{([\s\S]{0,3000}?)\n\s*\}\)/g)].map((m) => m[1]);
     eq(modalTexts.length, 2, '源码里正好两处 showModal（开机告知 + 取景拦截）');
     ok(
       modalTexts.every((t) => !/\*\*/.test(t)),
@@ -2322,7 +2346,10 @@ section('(n) ★ 0.26：开机告知（自行备份）/ 取景模式拦截 /〔�
   // ── ② 写入前拦"还在取景模式" ──
   ok(/isCropActive\(\)/.test(mainCode), '★★ doWrite() 里先查 `isCropActive()`');
   {
-    const at = mainSrc.indexOf('if (isCropActive())');
+    // ★ 0.28：`if (isCropActive())` 现在有两处（`relayoutForLang()` 里也有一处）⇒ 必须**从 doWrite() 往后找**，
+    //   否则量到的是语言切换那一行，下面两条断言会假失败（本轮就踩了）。
+    const doWriteAt = mainSrc.indexOf('async function doWrite');
+    const at = mainSrc.indexOf('if (isCropActive())', doWriteAt);
     const writeAt = mainSrc.indexOf('await writeSlot(');
     ok(at > 0 && writeAt > at, '★★ 这个检查排在 `writeSlot()`（真正写入）**之前**');
     const seg = mainSrc.slice(at, at + 700);
@@ -2330,8 +2357,8 @@ section('(n) ★ 0.26：开机告知（自行备份）/ 取景模式拦截 /〔�
     ok(!/confirmCrop\(\)/.test(seg), '★★ 不替用户自动确定取景 —— 必须他手动点（用户原话："需要弹窗告诉用户手动确认取景才能继续"）');
   }
 
-  // ── ③〔导出整卡〕→〔另存为…〕──
-  ok(/id="btn-save-as"/.test(idx) && /另存为/.test(idx), '★★ 按钮是〔另存为…〕（id `btn-save-as`）');
+  // ── ③〔导出整卡〕→〔另存为〕──
+  ok(/id="btn-save-as"/.test(idx) && /另存为/.test(idx), '★★ 按钮是〔另存为〕（id `btn-save-as`）');
   ok(/export async function saveCardAs/.test(opsCode), '★ cardOps 导出 `saveCardAs()`');
   ok(/showSaveFilePicker/.test(opsCode), '★★ 走 `showSaveFilePicker()`：位置与文件名由用户选（真正的"另存为"）');
   ok(/suggestedName/.test(opsCode) && /_copy\.ps2/.test(opsSrc), '★ 建议文件名 `<原名>_copy.ps2`');
@@ -2344,7 +2371,273 @@ section('(n) ★ 0.26：开机告知（自行备份）/ 取景模式拦截 /〔�
   // 老名字与老提示文案都不许留
   // ⚠ 判据在**去注释**的 markup 上做：注释里保留"以前叫〔导出整卡〕"这类历史说明是允许的（项目惯例），
   //   而"id / 函数名不许长回来"那两条在分节 ⑯ 里用 ASCII 名字钉住了（注释里不写 ASCII 名）。
-  ok(!/导出整卡/.test(idx.replace(/<!--[\s\S]*?-->/g, '')), '★★ 界面上不再出现"导出整卡"这个旧叫法（按钮已改名〔另存为…〕）');
+  ok(!/导出整卡/.test(idx.replace(/<!--[\s\S]*?-->/g, '')), '★★ 界面上不再出现"导出整卡"这个旧叫法（按钮已改名〔另存为〕）');
+}
+
+// ==========================================================================
+// (o) ★ 0.27：顶栏不再列"整卡徽章目录"；按钮文字里的省略号全部去掉
+// ==========================================================================
+
+section('(o) ★ 0.27：删掉顶栏整卡目录清单 / 按钮文字不带省略号');
+
+{
+  const read = (p: string): string => (existsSync(join(WEB, p)) ? readFileSync(join(WEB, p), 'utf8') : '');
+  const idx = read('index.html');
+  // ⚠ 判据在**去注释**的 markup 上做：注释里保留"以前这里有什么"这类历史说明是本项目惯例。
+  const idxMarkup = idx.replace(/<!--[\s\S]*?-->/g, '');
+  const mainSrc = read('src/ui/main.ts');
+  const opsSrc = read('src/ui/cardOps.ts');
+  const mainCode = maskSource(mainSrc); // 注释/字符串抹掉：只查真代码
+  const opsCode = maskSource(opsSrc);
+  const dist = existsSync(DIST) ? readFileSync(DIST, 'utf8') : '';
+
+  /**
+   * 取一个顶层函数的函数体。
+   * ⚠ 工作区是 **CRLF**（`.gitattributes` 只是声明"提交时用 LF"）⇒ 边界必须用 `\r?\n`，
+   *   否则 `indexOf('\n}\n')` 永远找不到、函数体变成"从这里到文件末尾"（本节第一版就踩了：
+   *   数出来 15 处 `host.appendChild(` 而不是 3 处）。
+   */
+  const fnBody = (src: string, name: string): string => {
+    const at = src.indexOf(`function ${name}(`);
+    if (at < 0) return '';
+    const m = /\r?\n\}\r?\n/.exec(src.slice(at));
+    return m ? src.slice(at, at + m.index + m[0].length) : src.slice(at);
+  };
+
+  // ── ① 顶栏那一段"整卡徽章目录清单"删掉（用户："我认为这一段内容没有显示价值的，删了吧"）──
+  ok(!/describeCardDirs/.test(mainCode), '★★ main.ts 里那个清单函数已删（不再有 describeCardDirs）');
+  // ⚠ 这条能在**产物**上做，是因为那段文案在源码注释里也**故意没有逐字写出**（否则注释进产物 = 判据自红）
+  ok(!dist.includes('卡上一共有'), '★★ 产物里不再出现那句 UI 文案（是删掉，不是藏起来）');
+  {
+    const body = fnBody(mainCode, 'renderCardInfo');
+    ok(body.length > 0, '★ 找得到 renderCardInfo() 的函数体');
+    eq(
+      (body.match(/host\.appendChild\(/g) ?? []).length,
+      3,
+      '★ renderCardInfo() 只剩 3 处 appendChild（空态 1 + 有卡 2：锁状态 / 文件大小）',
+    );
+    ok(/humanBytes\(lc\.sourceBytes\.length\)/.test(body), '★ 卡文件大小那段还在（删的是第三段，不是整行）');
+  }
+  ok(/lc\.handle \? 'ok' : 'warn'/.test(mainSrc), '★ 锁状态那段的判据还在（🔓 可覆盖保存 / 🔒 只读）');
+  // 只服务它的扫描函数**不是简单删掉**：`planWriteTarget()` 还要用它区分两种"目录不存在"
+  ok(/export function cardEmblemDirNames\(\): string\[\]/.test(opsCode), '★ cardOps 改成导出 `cardEmblemDirNames(): string[]`');
+  ok(
+    !/scanCard/.test(opsCode) && !/CardDirInfo/.test(opsCode) && !/rootNames/.test(opsCode),
+    '★★ `scanCard()` / `CardDirInfo` / `rootNames` 一并删掉（只剩名字，不再对每个目录跟一遍 FAT 链）',
+  );
+  ok(/const cardDirNames = cardEmblemDirNames\(\);/.test(opsCode), '★ `planWriteTarget()` 改用新函数（写入规划的判据没变）');
+  ok(/cardDirNames,/.test(opsCode), '★ 规划器照旧拿到整卡目录名（"卡上没有"与"不属于本作品"仍分得开）');
+
+  // ── ② 按钮文字里不许再有省略号（用户选的是"省略号一个都不留"）──
+  // ⚠ 两条纪律，否则这个判据会自己骗自己：
+  //   ① 先把 HTML 注释整段去掉 —— 注释里会写"以前叫〔取景…〕"，那是历史说明，不是按钮文字；
+  //   ② 标签必须写成 `<button` **后面跟空白**（真按钮都带属性）——
+  //      注释里若出现光秃秃的尖括号写法，`[^>]*>` 会把它当成标签开始、一路吃到真按钮的 `</button>`。
+  const buttonTexts = (html: string): string[] =>
+    [
+      ...html
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .matchAll(/<button\s[^>]*>([\s\S]*?)<\/button>/g),
+    ].map((m) => m[1].trim());
+  {
+    const labels = buttonTexts(idxMarkup);
+    ok(labels.length >= 10, `★ 认得清所有按钮（实到 ${labels.length} 个）`);
+    eq(labels.filter((t) => t.includes('…')).join(','), '', '★★ 界面按钮文字里一个省略号都没有');
+    ok(labels.includes('取景'), '★★ 〔取景〕不带省略号了（原来是"取景…"）');
+    ok(labels.includes('另存为'), '★★ 〔另存为〕不带省略号了（0.26 刚改名，0.27 去掉 `…`）');
+  }
+  {
+    const labels = buttonTexts(dist); // 产物里是同一份 HTML 内联进去的，再查一遍
+    eq(labels.filter((t) => t.includes('…')).join(','), '', '★★ 产物里的按钮文字同样没有省略号');
+    ok(labels.includes('取景') && labels.includes('另存为'), '★ 产物里就是〔取景〕〔另存为〕');
+  }
+  // ⚠ 只查**按钮文字**：`⏳ 正在处理…` 的 `…` 是"进行中"的意思，不是"还要再开一层"，保留
+  ok(/正在处理…/.test(idxMarkup), '★ 〔⏳ 正在处理…〕的省略号没被误删（进度语义，与按钮命令无关）');
+  // 〔选择记忆卡〕〔选择 / 粘贴图片〕按界面惯例本可以带 `…`，用户选了"一个都不留" ⇒ 同样不带
+  ok(
+    buttonTexts(idxMarkup).includes('选择记忆卡（可覆盖保存）') && buttonTexts(idxMarkup).includes('选择 / 粘贴图片'),
+    '★ 真正会弹系统对话框的那两个按钮也没有 `…`（"一个都不留"是**统一**的，不是只改了两个）',
+  );
+}
+
+// ==========================================================================
+// (p) ★ 0.28：中英双语（顶栏语言选择器 + t() 原文配对 + 静态 [data-en]）
+// ==========================================================================
+
+section('(p) ★ 0.28：中英双语（默认中文 / 英文浏览器自动 English / 手动切过听用户的）');
+
+{
+  const read = (p: string): string => (existsSync(join(WEB, p)) ? readFileSync(join(WEB, p), 'utf8') : '');
+  const idx = read('index.html');
+  const idxMarkup = idx.replace(/<!--[\s\S]*?-->/g, '');
+  const css = read('styles.css');
+  const mainSrc = read('src/ui/main.ts');
+  const i18nSrc = read('src/ui/logic/i18n.ts');
+  const dist = existsSync(DIST) ? readFileSync(DIST, 'utf8') : '';
+
+  // ── ① 默认语言与选项（用户："默认中文，然后支持英文"）──
+  eq(DEFAULT_LANG, 'zh', '★ 默认语言 = 中文');
+  eq(LANGS.map((l) => l.value).join(','), 'zh,en', '★ 选项顺序：中文在前、English 在后');
+  eq(LANGS.map((l) => l.label).join(','), '中文,English', '★ 语言名各自用自己的语言写（不翻译）');
+  eq(LANG_STORAGE_KEY, 'ac-emblem-tool:lang', '★ localStorage 的键固定（改它 = 老用户的选择会丢）');
+
+  // ── ② 首次打开怎么定语言（用户选的是"英文浏览器自动给英文"）──
+  eq(langFromNavigator('zh-CN'), 'zh', '浏览器 zh-CN ⇒ 中文');
+  eq(langFromNavigator('zh-Hant'), 'zh', '浏览器 zh-Hant ⇒ 中文');
+  eq(langFromNavigator('en-US'), 'en', '★ 浏览器 en-US ⇒ English');
+  eq(langFromNavigator('en'), 'en', '★ 浏览器 en ⇒ English');
+  eq(langFromNavigator('ja-JP'), 'zh', '★ 其它语言（ja）⇒ **默认中文**，不瞎给英文');
+  eq(langFromNavigator(''), 'zh', '拿不到 navigator.language ⇒ 默认中文');
+  eq(langFromSaved('en'), 'en', '存过 en ⇒ en（手动优先）');
+  eq(langFromSaved('zh'), 'zh', '存过 zh ⇒ zh');
+  eq(langFromSaved(null), null, '没存过 ⇒ null');
+  eq(langFromSaved('de'), null, '存了个垃圾值 ⇒ 当作没存过（不崩、不瞎认）');
+  ok(/detectLang\(\)/.test(maskSource(i18nSrc)), '★ detectLang() 仍然存在（启动时唯一的判定入口）');
+
+  // ── ③ t()：两种语言必须都给，且支持 {name} 占位 ──
+  setLang('zh', { persist: false });
+  eq(t('槽位 {n}', 'Slot {n}', { n: 3 }), '槽位 3', 't() 中文 + 占位替换');
+  setLang('en', { persist: false });
+  eq(currentLang(), 'en', 'setLang(en) 之后 currentLang() = en');
+  eq(t('槽位 {n}', 'Slot {n}', { n: 3 }), 'Slot 3', '★ t() 英文 + 占位替换');
+  eq(t('只有中文', 'English only'), 'English only', '英文分支生效');
+  eq(t('没有占位', 'no placeholder'), 'no placeholder', '没有 vars 时原样返回（不做替换）');
+  eq(t('{a}-{b}', '{a}-{b}', { a: 'x' }), 'x-{b}', '缺的占位保持原样（不变成 undefined）');
+  setLang('zh', { persist: false });
+  eq(t('槽位 {n}', 'Slot {n}', { n: 3 }), '槽位 3', '切回中文之后又变回中文');
+  // ⚠ 单参数的 t() 是**用错**了（英文那句会缺）⇒ 用掩码源码查"t( 后面直接跟一个字符串再收尾"
+  {
+    const files = ['src/ui/main.ts', 'src/ui/cardOps.ts', 'src/ui/cropView.ts', 'src/ui/pipeline.ts', 'src/ui/slotsView.ts', 'src/ui/dom.ts'];
+    const bad = [];
+    for (const f of files) {
+      const src = read(f);
+      for (const m of src.matchAll(/\bt\(\s*(['"`])(?:\\.|(?!\1)[\s\S])*?\1\s*\)/g)) bad.push(`${f}: ${m[0].slice(0, 60)}`);
+    }
+    eq(bad.join(' | '), '', '★★ 没有"只给中文一句"的 t() 调用（英文会缺 ⇒ 必须成对给）');
+  }
+
+  // ── ④ 静态外壳：`[data-en]` 覆盖 + 不许空 / 不许抄中文 ──
+  {
+    const withEn = [...idxMarkup.matchAll(/<([a-zA-Z][\w-]*)\b[^>]*\sdata-en="([^"]*)"[^>]*>([\s\S]*?)<\/\1>/g)];
+    ok(withEn.length >= 25, `★ 静态外壳里带 data-en 的元素 ≥ 25（实到 ${withEn.length}）`);
+    eq(withEn.filter((m) => !m[2].trim()).length, 0, '★ 没有空的 data-en');
+    // 中文原文里含中日韩字符的元素，其 data-en **不许**也是中文（防"复制粘贴忘翻译"）
+    const cjk = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/;
+    const copyPaste = withEn.filter((m) => cjk.test(m[3]) && cjk.test(m[2]));
+    eq(copyPaste.map((m) => m[2]).join(' | '), '', '★★ 没有"data-en 直接抄了中文"的元素');
+    // 还没被 JS 覆盖的静态文字也必须覆盖到（几个关键的）
+    for (const key of ['Memory card', 'Game', 'Crop', 'Parameters', 'Write to selected slot', 'Delete slot', 'PCSX2 check']) {
+      ok(idxMarkup.includes(`data-en="${key}"`), `★ 静态外壳覆盖到了「${key}」`);
+    }
+  }
+  {
+    const attrPairs = [
+      ['data-en-title', 'title'],
+      ['data-en-placeholder', 'placeholder'],
+    ];
+    for (const [d, a] of attrPairs) {
+      const ms = [...idxMarkup.matchAll(new RegExp(`${d}="([^"]*)"`, 'g'))];
+      ok(ms.length >= 1, `★ 用到了 ${d}（对应属性 ${a}）`);
+      eq(ms.filter((m) => !m[1].trim()).length, 0, `★ 没有空的 ${d}`);
+    }
+  }
+
+  // ── ⑤ 语言下拉的位置与样式（用户："在最上面一栏的右侧"）──
+  ok(/id="lang-select"/.test(idxMarkup), '★★ 顶栏有 #lang-select');
+  ok(idxMarkup.indexOf('id="lang-select"') > idxMarkup.indexOf('id="game-select"'), '★ 它在作品下拉**之后**（= 顶栏右侧）');
+  ok(!/<\/header>[\s\S]*id="lang-select"/.test(idxMarkup), '★ 它在 <header> 内部（不是掉到下面去了）');
+  ok(/\.lang-pick\s*\{[^}]*margin-left:\s*auto/.test(css), '★★ `.lang-pick { margin-left: auto }` —— 把它顶到最右（窄屏靠 topbar 的 wrap 折行）');
+  ok(/fillLangSelect/.test(maskSource(mainSrc)), '★ main.ts 里有 fillLangSelect()（选项由 JS 填，语言名不翻译）');
+  ok(/setLang\(detectLang\(\), \{ persist: false \}\)/.test(maskSource(mainSrc)), '★★ 启动时按 detectLang() 定语言，且**不写** localStorage（自动判定不算"用户选择"）');
+  ok(/onLangChange\(relayoutForLang\)/.test(maskSource(mainSrc)), '★★ 注册了 relayoutForLang（切语言要把 JS 生成的那部分文字重画）');
+  // ⚠ 这条要拿**原文**比：`maskSource()` 会把字符串字面量抹掉（`setLang(v ===    ?     :    )`）
+  ok(/setLang\(v === 'en' \? 'en' : 'zh'\)/.test(mainSrc), '★★ 下拉的 change 走 setLang（⇒ 手动切会被记住）');
+
+  // ── ⑥ applyStaticI18n 的快照/回滚：用假 DOM 跑真函数 ──
+  {
+    const mk = (zh: string, en: string | null) => {
+      const attrs = new Map<string, string>();
+      if (en !== null) attrs.set('data-en', en);
+      return {
+        textContent: zh,
+        getAttribute: (k: string) => attrs.get(k) ?? null,
+        setAttribute: (k: string, v: string) => void attrs.set(k, v),
+      };
+    };
+    const a = mk('取景', 'Crop');
+    const b = mk('记忆卡', 'Memory card');
+    const root = { querySelectorAll: (sel: string) => (sel === '[data-en]' ? [a, b] : []) };
+    setLang('en', { persist: false });
+    applyStaticI18n(root as unknown as ParentNode);
+    eq(`${a.textContent}/${b.textContent}`, 'Crop/Memory card', '★★ data-en 生效（英文写进去）');
+    setLang('zh', { persist: false });
+    applyStaticI18n(root as unknown as ParentNode);
+    eq(`${a.textContent}/${b.textContent}`, '取景/记忆卡', '★★ 切回中文能**还原原文**（靠第一次调用时的快照）');
+    setLang('en', { persist: false });
+    applyStaticI18n(root as unknown as ParentNode);
+    eq(`${a.textContent}/${b.textContent}`, 'Crop/Memory card', '★ 来回切多次结果一致（快照不会被英文覆盖）');
+    setLang('zh', { persist: false });
+  }
+
+  // ── ⑦ 产物里两种语言都在（不然英文版是"看起来支持"）──
+  eq(currentLang(), 'zh', '测试结束时语言复原成中文（默认）');
+  for (const s of ['Write to selected slot', 'Memory card', 'PCSX2 check', 'Got it']) {
+    ok(dist.includes(s), `★ 产物里有英文「${s}」`);
+  }
+  for (const s of ['写入选中槽', 'PCSX2 自检', '知道了']) {
+    ok(dist.includes(s), `★ 产物里中文原文也还在（「${s}」）—— 中文是 DOM 原文，没有被词表取代`);
+  }
+  ok(/data-en="Crop"/.test(dist), '★ 产物里带着 data-en 属性（切语言不需要重新打包）');
+  ok(/id="lang-select"/.test(dist), '★ 产物里有语言下拉');
+  ok(/i18n|LANG_STORAGE_KEY/.test(i18nSrc) && /ac-emblem-tool:lang/.test(dist), '★ 键名进了产物（切完能在 localStorage 里查到）');
+
+  // ── ⑧ ★★★ 漏翻审计：本任务的**主判据**，也是长期闸门 ──
+  //   规则：`src/ui/**` 里凡是含中日韩字符的**字符串字面量**，都必须落在某个 `t(...)` 的参数里。
+  //   扫描器在 `web/tools/i18n-audit.mjs`（懂注释 / 三种引号 / 模板插值 / 括号配对；白名单带理由）。
+  //   ⚠ 有它才敢说"英文界面里不会突然冒出一句中文"—— 300+ 处靠眼看是查不干净的。
+  {
+    const { total, hits, skipped } = auditTree();
+    eq(
+      hits.map((h) => `${h.file}:${h.bad.length}`).join(' | '),
+      '',
+      '★★★ src/ui/** 里没有"漏翻"的中文字面量（每一句都必须包在 t() 里）',
+    );
+    eq(total, 0, '★★★ 漏翻计数 = 0');
+    ok(skipped.length >= 3, `★ 白名单里那几处"数据字段 / 语言名"仍被显式放过（实到 ${skipped.length} 个文件）`);
+  }
+}
+
+// ==========================================================================
+// (q) ★ 0.29：删掉图片工具条那句格式说明
+// ==========================================================================
+
+section('(q) ★ 0.29：删掉图片区那句"支持拖入 / 点击选择 / Ctrl+V 粘贴（…）"');
+
+{
+  const read = (p: string): string => (existsSync(join(WEB, p)) ? readFileSync(join(WEB, p), 'utf8') : '');
+  const pipe = read('src/ui/pipeline.ts');
+  const main = read('src/ui/main.ts');
+  const idx = read('index.html');
+  const dist = existsSync(DIST) ? readFileSync(DIST, 'utf8') : '';
+  const pipeCode = maskSource(pipe);
+
+  // ── ① 那句说明删干净（产物里也不许有；注释里也**故意没有**逐字抄它，同 0.27 的做法）──
+  ok(!dist.includes('支持拖入'), '★★ 产物里不再有那句"支持拖入 / 点击选择 / Ctrl+V 粘贴（…）"');
+  ok(!dist.includes('Drop / click to choose'), '★★ 英文那句也一起删了（不是只删中文）');
+  ok(
+    /function renderOriginalBadge[\s\S]{0,900}?if \(!src\) return;/.test(pipeCode),
+    '★ 没图时**直接 return**（不再写那句说明）',
+  );
+  ok(/\$\{src\.name\} · \$\{src\.width\}×\$\{src\.height\}/.test(pipe), '★★ "文件名 · 尺寸"那段**没**被一起删掉（它还要用）');
+
+  // ── ② 三条入口一个都没少（删的是说明，不是功能）──
+  ok(
+    /installDropZones/.test(maskSource(main)) && /installPaste/.test(maskSource(main)),
+    '★★ 拖入 / Ctrl+V 两条路仍在（`installDropZones` / `installPaste`）',
+  );
+  ok(/id="btn-image-open"/.test(idx), '★ 工具条上的〔选择 / 粘贴图片〕按钮仍在');
+  ok(/id="image-drop"/.test(idx), '★ 拖放目标 #image-drop 仍在');
+  ok(/id="original-badge"/.test(idx), '★ #original-badge 这个挂载点保留（它还要显示"文件名 · 尺寸"）');
 }
 
 // ==========================================================================

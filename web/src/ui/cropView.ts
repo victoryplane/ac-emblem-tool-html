@@ -85,6 +85,7 @@ import {
   type CropWindow,
   type WindowBounds,
 } from './logic/cropGeometry.ts';
+import { t } from './logic/i18n.ts';
 import { state, setStatus } from './state.ts';
 import type { SourceImage } from './state.ts';
 import { $, toast } from './dom.ts';
@@ -100,7 +101,7 @@ interface CropRefs {
   finalLayer: HTMLElement;
   /** `#crop-actions`：取景动作行（提示 + 两个按钮）。 */
   actions: HTMLElement;
-  /** 工具条上的〔取景…〕（进出取景视图）。 */
+  /** 工具条上的〔取景〕（进出取景视图）。 */
   cropBtn: HTMLButtonElement;
   /** `#preview-zoom-note`：取景时**藏起来**（那是"当前图片"的说明，取景时没有意义）。 */
   zoomNote: HTMLElement | null;
@@ -284,15 +285,28 @@ function describeWindow(): void {
   const atMin = !!b && win.size <= b.min + 1e-6;
   // ① 白框下面那行（取景时唯一看得见的地方）
   setReadout(
-    `白框 ${fmt(win.size)}×${fmt(win.size)} 源像素 · 左上角 (${fmt(win.x)}, ${fmt(win.y)}) · 倍率 ${scale.toFixed(3)}` +
-      (atMin ? ' · ★ 已到最小（1:1，不能再放大）' : ''),
+    t(
+      `白框 ${fmt(win.size)}×${fmt(win.size)} 源像素 · 左上角 (${fmt(win.x)}, ${fmt(win.y)}) · 倍率 ${scale.toFixed(3)}`,
+      `Box ${fmt(win.size)}×${fmt(win.size)} source px · top-left (${fmt(win.x)}, ${fmt(win.y)}) · zoom ${scale.toFixed(3)}`,
+    ) + (atMin ? t(' · ★ 已到最小（1:1，不能再放大）', ' · ★ At minimum (1:1, cannot zoom in further)') : ''),
     atMin,
   );
   // ② 页面最下面的状态行（也在写入日志旁边，留着方便回溯）
   setStatusText(
-    `取景：白框 = 源图 ${fmt(win.size)}×${fmt(win.size)}，左上角 (${fmt(win.x)}, ${fmt(win.y)})，倍率 ${scale.toFixed(3)}` +
-      (atMin ? `　——　★ 已经到最小（1:1，再往里滚不会更小：不允许把源图放大）` : '') +
-      `　——　拖图片移动 · 滚轮缩放（缩小可看到整张图）；参数面板等〔确定取景〕时一次更新。`,
+    t(
+      `取景：白框 = 源图 ${fmt(win.size)}×${fmt(win.size)}，左上角 (${fmt(win.x)}, ${fmt(win.y)})，倍率 ${scale.toFixed(3)}`,
+      `Crop: box = ${fmt(win.size)}×${fmt(win.size)} of the source image, top-left (${fmt(win.x)}, ${fmt(win.y)}), zoom ${scale.toFixed(3)}`,
+    ) +
+      (atMin
+        ? t(
+            `　——　★ 已经到最小（1:1，再往里滚不会更小：不允许把源图放大）`,
+            '  —  ★ Already at minimum (1:1; scrolling further will not shrink it: upscaling the source is not allowed)',
+          )
+        : '') +
+      t(
+        `　——　拖图片移动 · 滚轮缩放（缩小可看到整张图）；参数面板等〔确定取景〕时一次更新。`,
+        '  —  Drag to move · scroll to zoom (zoom out to see the whole image); the parameter panel updates once you press Apply crop.',
+      ),
   );
 }
 
@@ -511,7 +525,12 @@ export function setCropView(on: boolean): void {
   if (on) {
     const s = state.source;
     if (!s) {
-      setStatusText('还没有导入图片 —— 先「选择 / 粘贴图片」。（取景是"按需"的：点这里才进取景视图）');
+      setStatusText(
+        t(
+          '还没有导入图片 —— 先「选择 / 粘贴图片」。（取景是"按需"的：点这里才进取景视图）',
+          'No image imported yet - press "Choose / paste image" first. (Cropping is on demand: this button switches into the crop view.)',
+        ),
+      );
       return;
     }
     snapshot = {
@@ -536,8 +555,12 @@ export function setCropView(on: boolean): void {
     layoutCropView();
     describeWindow();
     setStatusText(
-      '取景中：拖动图片，把要用的部分放进白框里（滚轮缩放）。' +
-        '参数面板要等〔确定取景〕才更新一次（这样拖动才不卡）；〔取消〕原样返回。',
+      t(
+        '取景中：拖动图片，把要用的部分放进白框里（滚轮缩放）。' +
+          '参数面板要等〔确定取景〕才更新一次（这样拖动才不卡）；〔取消〕原样返回。',
+        'Cropping: drag the image so the part you want sits inside the white box (scroll to zoom). ' +
+          'The parameter panel updates only when you press Apply crop (that is what keeps dragging smooth); Cancel returns unchanged.',
+      ),
     );
   } else {
     teardown();
@@ -565,7 +588,7 @@ function hasUncommittedWindow(): boolean {
 }
 
 /**
- * 工具条上那个〔取景…〕按钮：进/出取景视图。
+ * 工具条上那个〔取景〕按钮：进/出取景视图。
  *
  * ★ 出去时**不能静默丢掉**用户刚拖好的取景（这一版的参数只在这一刻才写回去）：
  *   有未提交的调整 ⇒ 走〔确定取景〕那条路（写参数 + 跑一次管线 + 过烘焙自检 + 弹提示）；
@@ -618,9 +641,14 @@ export function confirmCrop(): void {
   commitWindow();
   const p = state.prepared;
   if (!p) {
-    const why = state.prepareError ?? 'prepareEmblem 没有产出结果。';
-    setStatusText(`〔确定取景〕没通过：${why}（视图先不关，你可以继续拖/缩放，或按〔取消〕）`);
-    toast('error', '取景没法确定：这一步没算出 128×128', why);
+    const why = state.prepareError ?? t('prepareEmblem 没有产出结果。', 'prepareEmblem produced no result.');
+    setStatusText(
+      t(
+        `〔确定取景〕没通过：${why}（视图先不关，你可以继续拖/缩放，或按〔取消〕）`,
+        `Apply crop failed: ${why} (the view stays open - keep dragging/zooming, or press Cancel)`,
+      ),
+    );
+    toast('error', t('取景没法确定：这一步没算出 128×128', 'Cannot apply the crop: this step did not produce a 128×128 image'), why);
     return;
   }
   const st = imageStats({ data: p.rgba, width: p.width, height: p.height });
@@ -634,21 +662,34 @@ export function confirmCrop(): void {
   if (!check.ok) {
     // ★ 0.19（D13）：这句话原来写死"白框里看不到任何内容"，可失败也可能是"还有半透明像素"
     //   或尺寸不符 ⇒ 文案与真实原因打架。现在开头只陈述事实，原因交给 `check.errors`。
-    const how = '〔确定取景〕没通过自检，所以先不关这个视图（你可以继续拖 / 缩放，或按〔取消〕）。';
+    const how = t(
+      '〔确定取景〕没通过自检，所以先不关这个视图（你可以继续拖 / 缩放，或按〔取消〕）。',
+      'Apply crop did not pass the self-check, so this view stays open (keep dragging/zooming, or press Cancel).',
+    );
     setStatusText(`${how} ${check.errors[0]}`);
     toast('error', how, check.errors.join('\n'));
     return;
   }
   // ★ 这里**不再**调 onChanged：commitWindow() 已经刷过一次了（一次确定 = 一次管线）
   teardown();
-  const okText =
+  const okText = t(
     `取景已确定：白框 = 源图 ${fmt(w.size)}×${fmt(w.size)} @(${fmt(w.x)}, ${fmt(w.y)})，倍率 ${state.params.manualScale.toFixed(3)}。` +
-    `想改就再点〔取景…〕。`;
+      `想改就再点〔取景〕。`,
+    `Crop applied: box = ${fmt(w.size)}×${fmt(w.size)} of the source image @(${fmt(w.x)}, ${fmt(w.y)}), zoom ${state.params.manualScale.toFixed(3)}. ` +
+      `Press Crop again to change it.`,
+  );
   setStatusText(okText);
   if (check.warnings.length > 0) {
-    toast('warn', '取景已确定，但有一点要注意', check.warnings.join('\n'));
+    toast('warn', t('取景已确定，但有一点要注意', 'Crop applied, but note this'), check.warnings.join('\n'));
   } else {
-    toast('ok', '取景已确定', `${p.width}×${p.height} · 实色 ${p.report.colorsAfter} · 不透明像素 ${st.opaquePixels}`);
+    toast(
+      'ok',
+      t('取景已确定', 'Crop applied'),
+      t(
+        `${p.width}×${p.height} · 实色 ${p.report.colorsAfter} · 不透明像素 ${st.opaquePixels}`,
+        `${p.width}×${p.height} · ${p.report.colorsAfter} colors · ${st.opaquePixels} opaque pixels`,
+      ),
+    );
   }
 }
 
@@ -673,7 +714,7 @@ export function cancelCrop(): void {
     snapshot = null;
   }
   teardown();
-  setStatusText('已取消取景（参数回到进入前的状态）。');
+  setStatusText(t('已取消取景（参数回到进入前的状态）。', 'Crop cancelled (the parameters are back to what they were).'));
 }
 
 /** 由 `main.ts` 在启动时调用一次：注入回调（提交 / 轻量重排）+ 绑按钮。 */

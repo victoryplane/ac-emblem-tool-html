@@ -133,6 +133,14 @@ input[type=range] { width: 130px; vertical-align: middle; }
 /* ⚠ 只用来放"⚠ 未验证"这类提醒；已验证的作品这里是空的（0.10 起顶栏不再重复作品说明） */
 .game-note { color: var(--dim); font-size: 11.5px; max-width: 460px; }
 .game-error { color: var(--bad); font-size: 12px; }
+
+/*
+ * ★ 0.28：语言选择（用户："在最上面一栏的右侧，加入一个语言选项"）。
+ *   `margin-left: auto` 把它顶到**最右**（与 #btn-pcsx2-toggle 同一个手法）；
+ *   窄屏时 `.topbar` 是 `flex-wrap: wrap`，它会自然折到下一行 —— 不用额外断点。
+ */
+.lang-pick { margin-left: auto; }
+.lang-pick select { min-width: 96px; }
 /* （0.10 删掉了 `.pcsx2-summary`：顶栏那行 PCSX2 摘要按用户要求整块删除，面板本身仍在最下面） */
 
 #card-drop.drop-hot { outline: 2px dashed var(--accent); outline-offset: 2px; }
@@ -227,7 +235,7 @@ input[type=range] { width: 130px; vertical-align: middle; }
  *     · 「原图」面板**整个删掉**（DOM + CSS 都不留），
  *       选图/粘贴/拖入搬到左格上方的**细工具条**（`.image-toolbar`）；
  *     · 左格中间是**一块** `.stage`：平时显示"当前图片"（`#stage-final`，索引 0 口径），
- *       点〔取景…〕后**在同一格里**切成取景视图（`#stage-crop`：**固定的白色方框** + 可拖动的源图）；
+ *       点〔取景〕后**在同一格里**切成取景视图（`#stage-crop`：**固定的白色方框** + 可拖动的源图）；
  *       第五版（0.6）：白框固定 + 拖图片 + 滚轮绕框心缩放 + 复位/适应（见 `.crop-stage` 那段注释）；
  *       第六版（0.7）：取景拖动改成"只动视觉"（rAF 合帧，样式只写 transform，不再每帧刷面板）；
  *       第七版（0.8）：`.stage` 这块工作区改成**正方形**（`aspect-ratio: 1 / 1` + 最大边长上限 560px + 居中）。

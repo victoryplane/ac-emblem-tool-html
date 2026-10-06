@@ -27,6 +27,7 @@
  */
 
 import { serialFromDirName } from './games.ts';
+import { t } from './i18n.ts';
 
 /** 一个目录项的最小信息（`card.ts::Dirent` 的子集，避免逻辑层 import 核心层）。 */
 export interface DirEntryLike {
@@ -320,21 +321,35 @@ export function slotSummary(model: SlotModel): { occupied: number; empty: number
  *   否则他会以为卡里没东西（这正是这次修的那个问题的另一半）。
  */
 export function slotSummaryText(model: SlotModel | null): string {
-  if (!model) return '还没有打开记忆卡';
+  if (!model) return t('还没有打开记忆卡', 'No memory card loaded yet');
   const s = slotSummary(model);
-  const mine = model.dirNames.length ? model.dirNames.join('、') : '（卡上没有这个作品的目录 ⇒ 8 个槽都是空的）';
-  let text = `占用 ${s.occupied} / ${s.total}　空 ${s.empty}　（本作品目录：${mine}）`;
+  const mine = model.dirNames.length
+    ? model.dirNames.join('、')
+    : t('（卡上没有这个作品的目录 ⇒ 8 个槽都是空的）', '(the card has no folder for this game - all 8 slots are empty)');
+  let text = t(
+    `占用 ${s.occupied} / ${s.total}　空 ${s.empty}　（本作品目录：${mine}）`,
+    `Used ${s.occupied} / ${s.total}   Empty ${s.empty}   (this game's folders: ${mine})`,
+  );
   if (model.excludedDirNames.length) {
-    text += `　卡上还有其它作品：${compressDirNames(model.excludedDirNames)}（切作品查看）`;
+    text += t(
+      `　卡上还有其它作品：${compressDirNames(model.excludedDirNames)}（切作品查看）`,
+      `   Other games on this card: ${compressDirNames(model.excludedDirNames)} (switch game to view)`,
+    );
   }
   return text;
 }
 
 /** 过滤后"本作品一个目录都没有"时给用户的那句话（打开卡与切作品都要说）。 */
 export function noDirForGameText(serial: string | null, excludedCount: number): string {
-  const what = serial ? `这个作品（${serial}）` : '当前作品';
+  const what = serial ? t(`这个作品（${serial}）`, `this game (${serial})`) : t('当前作品', 'the selected game');
   const tail = excludedCount
-    ? `卡上有 ${excludedCount} 个**别的作品**的徽章目录（见 8 槽摘要行，切作品就能看到）。`
-    : '这张卡上没有任何徽章目录（E## / EMB）。';
-  return `卡上没有${what}的徽章目录 —— ${tail}想往这个作品里存，请先在游戏里存一个徽章（让游戏把目录建出来）。`;
+    ? t(
+        `卡上有 ${excludedCount} 个**别的作品**的徽章目录（见 8 槽摘要行，切作品就能看到）。`,
+        `The card has emblem folders for ${excludedCount} other games (see the slot summary line - switch game to see them).`,
+      )
+    : t('这张卡上没有任何徽章目录（E## / EMB）。', 'This card has no emblem folders at all (E## / EMB).');
+  return t(
+    `卡上没有${what}的徽章目录 —— ${tail}想往这个作品里存，请先在游戏里存一个徽章（让游戏把目录建出来）。`,
+    `The card has no emblem folder for ${what} - ${tail} To put an emblem in this game, first save one emblem in the game itself (so the game creates the folder).`,
+  );
 }
