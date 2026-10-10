@@ -1,47 +1,68 @@
 # PS2《装甲核心》徽章工具 · 网页版（单文件 HTML）
 
-把任意一张图变成 PS2《装甲核心》认的**徽章存档**并写进记忆卡；也能反过来把卡上的徽章导出成 PNG。
-**零安装**：从 [Releases](https://github.com/victoryplane/ac-emblem-tool-html/releases/latest) 下载 `emblem-tool.html`
-（或直接用仓库里的 `web/dist/emblem-tool.html`），双击打开就行。
+> English: **[README.en.md](README.en.md)**
 
-> **English** — A zero-install, single-file web tool for PS2 *Armored Core* emblems: turn almost any image into an
-> emblem the game accepts and write it into a memory card, or pull emblems off a card and export them as PNG.
-> Grab `emblem-tool.html` from [Releases](https://github.com/victoryplane/ac-emblem-tool-html/releases/latest) and
-> double-click it (Chrome/Edge). The interface is Chinese/English — switch it at the top right; English browsers get
-> English automatically. **Back up your memory card first, and fully exit PCSX2 before writing.**
-> Verified so far: reading (10 real samples), writing and creating slots (non-LR and LR, tested in-game), round-trip
-> fidelity. Not verified yet: creating a new `E##` save folder, real samples for AC3 / AC2 / AC2AA / NB, and whether
-> the game validates the 9-byte per-game constant.
+把任意一张图变成 PS2《装甲核心》认的**徽章存档**并写进记忆卡；也能反过来把卡上的徽章导出成 PNG。
+**零安装**：从 [Releases](https://github.com/victoryplane/ac-emblem-tool-html/releases/latest) 下载那个
+`emblem-tool-<版本>.html`（或直接用仓库里的 `web/dist/emblem-tool.html`），双击打开就行。
+单个 HTML 文件、不联网、不上传任何数据；界面有**中文 / English / 日本語 / 한국어**，顶栏最右切换
+（不手动选就按浏览器语言走，选过就记住）。
 
 > **已验证**：读取（10 份真实样本 + 与官方 exe 交叉验证）· 非 LR / LR 写入与新建槽（实机通过）· 往返保真。
-> **还没验证**：`E##` 那一级**新建目录** · AC3 / AC2 / AC2AA / NB 的真实样本 · 9 字节作品常量是否被游戏校验 · PS1。
-> ⇒ 所以打开页面时会先提醒你：**先自己备份记忆卡**，并且**改卡前完全退出 PCSX2**。
+> **还没验证**：`E##` 那一级**新建目录** · AC3 / AC2 / AC2AA / NB 的真实样本 · 9 字节作品常量是否被游戏校验 · PS1（本工具不做 PS1）。
+> ⇒ 所以打开页面时会**先弹一个提示**（必须点掉才能操作）：**先自己备份记忆卡**，并且**改卡前完全退出 PCSX2**。
 
 ## 怎么用
 
 1. 退出 PCSX2，并备份 `memcards\*.ps2`。
-2. 双击 `emblem-tool.html` → 顶栏〔选择记忆卡〕。选择框会开在**「文档」**（`C:\Users\M\Documents`）；
-   若你先点过〔选择 PCSX2 目录〕，则**直接开在 `PCSX2\memcards`**。
-3. 把图拖进左上那一格（或点〔选择 / 粘贴图片〕、Ctrl+V）→ **拖动 / 滚轮取景** →〔确定取景〕。
-4. 选作品 → 点要写的槽 →〔写入选中槽〕。工具会先回读比对 + 18 段校验 + ECC 自检，全过才落盘。
+2. 双击 `emblem-tool.html` → 顶栏〔选择记忆卡〕。选择框会开在**「文档」**；若你先点过〔选择 PCSX2 目录〕，
+   则**直接开在 `PCSX2\memcards`**。
+   * Chrome / Edge 能拿到写句柄 ⇒ 保存时**直接覆盖原卡**；
+   * 其它浏览器退化成**下载**一份改好的卡，按提示先退出 PCSX2 再拷回 `memcards\`。
+3. 把图拖进左上那一格（或点〔选择 / 粘贴图片〕、Ctrl+V）⇒ **自动进入取景**：拖动 / 滚轮把要用的部分放白框里，
+   白框边长还能用滑条 / 输入框**精确到 1 源像素**，满意就〔确定取景〕。
+4. 选作品 → 点要写的槽（8 格 = **当前所选作品**的槽，格子上是槽号 + 缩略图）→〔写入选中槽〕。
+   ★ **第一次往某张卡里写时会弹浏览器的文件权限框，点〔允许〕** —— 这类权限浏览器只允许在"你点击的那一刻"申请，
+   所以它出现在这里。不想给权限也行：工具会退化成**下载**一份改好的卡。
+5. 工具先在内存副本上写 → **回读逐字节比对 + 18 段校验 + ECC 自检** → 全过才弹确认框（里面写明"要覆盖哪个文件"）→ 覆盖。
 
-## 怎么验证
+另有三颗按钮：〔导出 PNG〕把选中槽的徽章存成 PNG · 〔删除槽〕清空一个槽（同样先确认、再覆盖、再回读）·
+〔另存为〕把当前这张卡另存一份。
 
-```powershell
-node web\check.mjs        # Node 24+：打包 + 四套 node 测试 + 三条 python 判据，最后一张总表
-```
+> ⚠ **"卡上没有这个作品的目录"会被拒绝写入**：非 LR 的每个槽是一个完整存档目录（除徽章还有 `icon.sys`
+> 与图标文件），只建目录会写出游戏不认的半成品。办法：**先在游戏里往那个槽存一次徽章**，再回来写。
+> 被拒的完整理由只写在〔写入选中槽〕**上方那一行**（鼠标停在那行上有机制说明）—— 它没写进卡，一个字节都没动。
 
-仓库里没有的两样东西（真记忆卡镜像 `out/evidence/`、上游二进制 `dist/`）对应的判据会**明确跳过并说明**。
+## 支持的作品
+
+| 作品 | 卡上的目录 | 状态 |
+|---|---|---|
+| Silent Line（美 / 日） | `BASLUS-20644E02` / `BISLPS-25169E##` | ✅ 有真实样本 + 实机验证 |
+| Nexus | `BISLPS-25338E##` | ✅ 同上 |
+| Last Raven | `BISLPS-25462EMB\data0..7` | ✅ 同上（含"新建槽"实机验证） |
+| AC3 · AC2 · AC2AA · Nine Breaker | `<盘序列号>E##` | ⚠ 规则相同，但**没有真实样本** ⇒ 界面标"未验证" |
+| 自定义 | 手填盘序列号（如 `BASLUS-20435`） | 给上面没有的作品兜底 |
+
+## 安全须知
+
+* **工具不替你备份**（上游那个 C++ 工具从 v1.0.1 起会顺手写一份 `.backup`，这个网页版没有）：请自己先把 `memcards\*.ps2`
+  复制到别处，再开始操作。
+* 写卡前**完全退出 PCSX2** —— 它手里有一份卡，退出时会写回文件，把你在工具里写进去的东西覆盖掉。
+* 原卡**全程只读**（只在内存副本上改）；每次落盘前都会弹确认框，写明"要覆盖哪个文件"。
+* 这张卡在工具读过之后被别的进程改过（最常见就是 PCSX2）⇒ 工具**拒绝写入/删除**，磁盘一个字节都没动；
+  按提示退出 PCSX2、重新选一次这张卡即可。
 
 ## 仓库里有什么
 
 | 目录 | 是什么 |
 |---|---|
-| `web/` | ★ 工具本体：`dist/emblem-tool.html`（交付物）· `src/core/` 格式与图像核心 · `src/ui/` 界面 · `test/` 四套判据 · `check.mjs` 一键判据 · `SPEC.md` / `PORT-NOTES.md` |
+| `web/` | ★ 工具本体：`dist/emblem-tool.html`（交付物，双击就用）· `src/core/` 格式与图像核心 · `src/ui/` 界面 · `test/` 四套判据 · `check.mjs` 一键跑判据 · `SPEC.md` / `PORT-NOTES.md`（技术契约与实现笔记） |
 | `docs/` | 逆向出来的项目理解：格式规范、图片管线、记忆卡与存档处理、限制与已解决的问题、来源与校验和 |
 | `tools/` | python 交叉验证判据层（`acet_format.py` / `prepare_image.py` / `selftest.py`） |
 | `testdata/` | 测试样本：合成的 + 10 份真实徽章存档 |
 | `_selftest/` | 自检报告 + 真实存档回归判据 |
+
+想自己构建、自己跑判据、或看界面为什么这么设计 ⇒ 见 `web/README.md`（开发笔记）。
 
 ## 许可与来源
 

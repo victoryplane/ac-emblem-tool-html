@@ -32,7 +32,7 @@
 |---|---|---|
 | `acet_format.py` | **零依赖**（只要标准库） | ★ 格式核心：常量、`offset_index`、`unscramble_palette`、`find_offset`、`extract_image`、`inject_image`、`apply_checksums`、**`verify_checksums`（独立判据）**、`verify_checksums_upstream`（上游写法对照）、`encode_emblem`（★ 从零造徽章的推荐入口）、`fill_unused_palette`、`used_palette_slots` |
 | ★ `prepare_image.py` | Pillow | **图像前置加工**：任意图 → 合规的 128×128、≤255 色、1 bit 透明 PNG；另有 `--check-only` 检查合规性。★ 网页版的图像夹具生成器直接 import 它取**独立参考结论** |
-| `selftest.py` | Pillow | ★ 与**官方 exe** 的交叉验证（三种载体 × 四个方向 × 25 项断言）。★ **全项目唯一**驱动上游二进制的代码 |
+| `selftest.py` | Pillow | ★ 与**官方 exe** 的交叉验证（三种载体 × 四个方向 = **24 项**断言）。★ **全项目唯一**驱动上游二进制的代码。⚠ 这里原来还有第 25 项 =「顺手跑一遍 `acet_format.py` 自检」，已改成 `web\check.mjs` 里的**独立一步**「③ python：格式核心自检」（覆盖没丢，只是不再算进本脚本的项数） |
 | `make_testdata.py` | Pillow | 重建 `../testdata/` 里的合成样品（`synth_*`）；网页版测试**不用**它们（用的是 `testdata/real/*` + `out/evidence/*`） |
 
 **核心与图像 I/O 是分开的**：`acet_format.py` 只处理"128×128×4 字节 RGBA"这个中间表示，
@@ -76,7 +76,7 @@ python tools\prepare_image.py 任意图.jpg -o ready.png
 
 ```powershell
 python tools\acet_format.py            # 格式核心自检（0 项失败）
-python tools\selftest.py               # 与本机官方二进制交叉验证（25/25）
+python tools\selftest.py               # 与本机官方二进制交叉验证（24/24）
 python ..\_selftest\validate_writer.py # 真实存档逐字节复原（10/10）
 ```
 
@@ -125,7 +125,7 @@ python ..\_selftest\validate_writer.py # 真实存档逐字节复原（10/10）
 | 单下标越界写 | Python `bytearray` 会 **IndexError** | 同样抛（不"静默扩容"） | 0.19 定案：只有**切片赋值**才扩容 |
 
 **字节级兼容性已由 `selftest.py` 证明**：本实现写出的存档官方能逐像素读对，
-官方写出的存档本实现也能逐像素读对（**25/25 通过**，末段修正后仍然成立 ——
+官方写出的存档本实现也能逐像素读对（**24/24 通过**，末段修正后仍然成立 ——
 因为当尾部形如 `X 01 00*9` 时两套写法恒等）。
 
 ---
