@@ -32,7 +32,8 @@
  *   1. `prepare_image.py` 只支持"缩放一步到位 + 只缩 >128 的"上游路线；
  *      本实现把**取景**独立出来（contain / cover / stretch / manual），
  *      因为 UI 默认直接进"手动"（SPEC.md §五 表 ②）。
- *   2. 缩放核不复刻 Pillow 的 LANCZOS（文档明说不可复刻）。本实现自己写两个核：
+ *   2. 缩放核不复刻 Pillow 的 LANCZOS —— 各库实现差几 LSB、不保证逐像素一致
+ *      （Pillow 文档只写 "a high-quality downsampling filter"）。本实现自己写两个核：
  *      `nearest` 与 `smooth`（面积平均，见 smoothFit 注释）。
  *   3. 中位切分不复刻 Pillow 的 MEDIANCUT 细节（同文档结论），但**算法族相同**
  *      （最长轴 + 中位切分），且保留了"只对不透明像素减色、透明像素不占槽位"
@@ -96,8 +97,15 @@ export type RgbaImage = {
 export type Rgba = { r: number; g: number; b: number; a: number };
 
 export type FitMode = 'contain' | 'cover' | 'stretch' | 'manual';
+/**
+ * 缩放核（SPEC.md §五 ③）—— **只有两档**，两档各有明确适用面：
+ *
+ *   · `'nearest'` 最近邻 —— 逐像素复制，输出色全部来自源图（像素画保真）。
+ *   · `'smooth'`  面积平均（box）—— 支撑区内按覆盖面积加权平均；权重非负、和为 1
+ *                 ⇒ 输出色落在源色凸包内、不造色、大比例缩小不混叠（照片）。
+ */
 export type ScaleKernel = 'nearest' | 'smooth';
-/** 用户可选的核；`'auto'` 由 `chooseKernel()` 决定（判据见该函数）。 */
+/** 用户可选的核；`'auto'` 由 `selectScaleKernel()` 按**实际缩放倍率**决定（判据见该函数）。 */
 export type ScaleKernelChoice = ScaleKernel | 'auto';
 
 export type FitOptions = {
@@ -120,8 +128,6 @@ export type FitOptions = {
   offsetY?: number;
   /** 背景色，默认全透明 `{0,0,0,0}`。 */
   background?: Rgba;
-  /** `'auto'` 判据里的阈值：源图不透明色数 ≤ 它就用最近邻。 */
-  autoNearestColorLimit?: number;
 };
 
 /** `fitToTarget` 的返回值。 */
@@ -134,7 +140,15 @@ export type FitResult = {
   mode: FitMode;
   /** 源像素 → 目标像素的仿射变换（`tx = sx * scale + offset`），测试与 UI 都用得上。 */
   transform: { scale: number; offsetX: number; offsetY: number };
-  /** 目标图里完全等于背景色（逐通道）的像素数 —— "补了多少背景"。 */
+  /**
+   * 目标图里**逐通道完全等于背景色**的像素数（`countBgPixels()` 的口径）。
+   *
+   * ⚠ 它**不是**"补了多少背景"这种因果计数，因为两者在数学上分不开：像素值与背景色
+   *   相同的**源像素**被原样搬进输出后，也会被数进来（实测：4×4 全洋红 +
+   *   `background=(255,0,255,255)` ⇒ 报 4，而实际一个背景像素都没补）。
+   *   另外 `'stretch'` **整支都不补背景**（源图铺满目标），所以它的计数只反映
+   *   "输出里有多少像素长得像背景色"（见 `fitToTarget` 的 `'stretch'` 分支）。
+   */
   backgroundPixels: number;
 };
 
@@ -159,8 +173,6 @@ export type QuantizeResult = {
   palette: Uint8Array;
   /** 16384 = 128×128 的**索引**（不是 RGBA）；透明像素 = 0。 */
   indices: Uint8Array;
-  /** 用掉几个实色槽位（不含索引 0），≤ maxColors。 */
-  usedColors: number;
   /** true ⇒ 输出与输入的每个不透明像素颜色**完全相同**（颜色数本来就没超限）。 */
   exact: boolean;
   /** 源图不透明像素用到几种不同 RGB（= prepare_image.py 的 count_opaque_colors）。 */
@@ -187,8 +199,6 @@ export type PrepareOptions = FitOptions & {
   maxColors?: number;
   /** alpha 二值化阈值，默认 128。 */
   alphaThreshold?: number;
-  /** 缩放后是否**再**二值化一次（默认 true；关掉只在"已是目标尺寸"时安全）。 */
-  reBinarizeAfterFit?: boolean;
   /**
    * 二值化阶段是否去杂边（默认 false，理由见 BinarizeOptions.despeckle）。
    * 打开后不透明像素会变少 ⇒ 与源图不再逐像素等价（`report.lossless` 会随之变 false）。
@@ -206,9 +216,15 @@ export type PrepareReport = {
   kernel: ScaleKernel;
   /** `'auto'` 的参考输入：**源图（未二值化）**不透明像素的不同 RGB 数。
    *  ⚠ 判核实际用的是**二值化之后**的色数（见 `fitToTarget`/`distinctOpaqueColors`）——
-   *   这个字段只是"原图有多少实色"的参考值（0.19 修正了原来那句与代码不符的文档）。 */
+   *   这个字段只是"原图有多少实色"的参考值（0.19 修正了原来那句与代码不符的文档）。
+   *  ⚠ 它与 `colorsBefore` **不是同一件事**：后者是"二值化 + 缩放之后"喂给量化器的色数；
+   *   半透明像素被二值化掉时两者就会不同。
+   *  ★ 0.45：界面不显示它（0.17 删了统计面板），留着是因为 `report` 是**有意的调试面**
+   *   （见 `pipeline.ts` 那段注释）—— 唯一读者是 F12。
+   */
   sourceOpaqueColors: number;
-  /** 取景后补了多少个背景像素（= "图没铺满"的量）。 */
+  /** 输出图里**逐通道等于背景色**的像素数（口径 = `FitResult.backgroundPixels`，
+   *  **不是**"补了多少背景"：与背景同色的源像素也会被数进来；`'stretch'` 根本不补背景）。 */
   backgroundPixels: number;
 
   /** ① 二值化（缩放前）改动了多少个像素的 alpha。 */
@@ -274,7 +290,13 @@ function sameRgba(data: ArrayLike<number>, i: number, c: Rgba): boolean {
 
 /**
  * 统计"逐通道等于背景色"的像素数 —— `backgroundPixels` 的**唯一**实现（0.19 抽出）。
- * 原先 `stretch` 的两条分支直接写死 0，与字段文档（"补了多少背景"）不符。
+ *
+ * ★ 口径就是"**输出**里有几个像素长得与背景色一模一样"，不是"补了几个背景"：
+ *   · 与背景同色的源像素被原样搬进输出后同样会被数进来（分不开，除非按分支另算）；
+ *   · `'stretch'` 两支**都不补背景**（源图铺满目标），但同一口径照样成立
+ *     ⇒ 直接对输出逐像素数即可，不需要"哪条分支"的特例。
+ *   （0.19 曾把这里写成"与字段文档（补了多少背景）不符"，实际是**字段文档**说错了，
+ *     0.20 已把两处文档改成这个口径 —— 别再把计数按分支改用别的定义。）
  */
 function countBgPixels(data: Uint8ClampedArray, w: number, h: number, bg: Rgba): number {
   let n = 0;
@@ -499,8 +521,10 @@ function despeckleOpaque(
  *   · 300×300 → 128×128：两轴都是 0.4267 倍 ⇒ 非整数倍 ⇒ `smooth`；
  *   · `stretch` 是两轴独立倍率，直接分别代入。
  *
- *   所以唯一真值来源是 `fitToTarget` 算出来的 `scaleX` / `scaleY`，
- *   `fitToTarget` 与下面这个 `chooseKernel()` 共用同一个 `selectScaleKernel()`。
+ *   所以唯一真值来源是 `fitToTarget` 算出来的 `scaleX` / `scaleY`：
+ *   `fitToTarget`（`kernel` 为 `'auto'` 时）与 `prepareEmblem` 都直接调它，
+ *   不存在"另一个只看源/目标尺寸的便利版"（那个 `chooseKernel()` 0.20 已删 —— 没有生产调用点，
+ *   且它只适用于等比取景，容易被误用去模拟 `cover` / `stretch`）。
  *
  * 为什么是这个顺序（每一条都是踩出来的）：
  *
@@ -529,7 +553,7 @@ function despeckleOpaque(
  *
  * ★ 与"手动开关"的关系：本函数**只在** `kernel: 'auto'`（默认值）时被调用。
  *   调用方显式传 `'nearest'` / `'smooth'` 时永远不会走到这里 —— 手动指定的
- *   优先级**永远高于** `'auto'`（SPEC.md §五 ③ "两种都留手动开关"）。
+ *   优先级**永远高于** `'auto'`（SPEC.md §五 ③）。
  *
  * ★ 已知边界（记录在案，不是 bug）：
  *   · 一张 1024×1024 的 40 色像素画缩到 128×128 是 **1/8 整数倍** ⇒ 走 `'nearest'`，
@@ -544,6 +568,9 @@ export function selectScaleKernel(
   colorCount: number,
   colorLimit = 256,
 ): ScaleKernel {
+  // ★ 0.45：`colorLimit` 就是"不透明色数 ≤ 它 ⇒ 最近邻"这条判据的**唯一**真值（SPEC.md §五 ③）。
+  //   它曾经还能从 `FitOptions.autoNearestColorLimit` 传进来，但**没有任何调用方传过**
+  //   （UI 的 `toPrepareOptions()` 里根本没有这个字段）⇒ 那个选项已删，改这条判据只改这里的默认值。
   const same = Math.abs(scaleX - 1) < 1e-9 && Math.abs(scaleY - 1) < 1e-9;
   if (same) return 'nearest'; // ① 尺寸相同 ⇒ 复制
   const shrinking = scaleX < 1 - 1e-9 || scaleY < 1 - 1e-9;
@@ -566,26 +593,33 @@ function isIntegerReciprocal(scale: number): boolean {
   return r >= 1 && Math.abs(inv - r) < 1e-9;
 }
 
-/**
- * 便捷版：只给"源尺寸 + 目标尺寸"时，按 **`contain` 等比取景**的倍率判核
- * （= `fitToTarget` 默认模式所算出来的那个 scale）。
- *
- * ⚠ 这个便利函数**只适用于等比取景**。`'stretch'` 是两轴独立倍率，必须直接调
- *   `selectScaleKernel(scaleX, scaleY, …)`；`fitToTarget` 内部就是这么做的。
- *   别拿这个函数去模拟 `cover`（`cover` 的倍率是 `max` 而不是 `min`）。
- *   （本函数曾经是"只看源/目标尺寸是否整除"的错误版本：`100×256 → 128×128`
- *     会被误判成 `smooth`，正确结果是 `nearest` —— 因为横向其实是 1.28× 放大。）
+/*
+ * ★ 0.20 删除：`chooseKernel(rgba, targetW, targetH, colorLimit)` ——
+ *   "只给源尺寸 + 目标尺寸、按 `contain` 倍率判核"的便利版。
+ *   删它的理由：**生产路径一个调用点都没有**（`fitToTarget` 直接调 `selectScaleKernel`），
+ *   而它只适用于**等比**取景 —— 拿它去模拟 `cover`（倍率是 `max`）或 `stretch`
+ *   （两轴独立）都会判错核，留着就是等人踩。测试里对它的引用已改调
+ *   `selectScaleKernel(min(w/源宽, h/源高), 同一值, 色数)`（等价式，见 `image.test.ts`）。
+ *   （它曾经是"只看源/目标尺寸是否整除"的错误版本：`100×256 → 128×128` 会被误判成
+ *     `smooth`，正确结果是 `nearest` —— 因为横向其实是 1.28× 放大。）
  */
-export function chooseKernel(
-  rgba: RgbaImage,
-  targetWidth = TARGET_SIZE,
-  targetHeight = targetWidth,
-  colorLimit = 256,
-): ScaleKernel {
-  assertImage(rgba);
-  // contain：等比缩到放得下 ⇒ scale = min(...)，与 fitToTarget 的 'contain' 分支同一式
-  const scale = Math.min(targetWidth / rgba.width, targetHeight / rgba.height);
-  return selectScaleKernel(scale, scale, distinctOpaqueColors(rgba), colorLimit);
+
+/**
+ * 目标像素的**支撑区**（footprint）覆盖了源图的哪几个像素。
+ *
+ * 支撑区 = `[c - half, c + half]`（源像素单位，`c` = 目标像素中心映回源坐标）；
+ * 与它有**正面积**交集的源像素 = `floor(c - half) … ceil(c + half) - 1`。
+ *
+ * ⚠ 下限必须是 `floor(a)`，**不能**是 `ceil(a)`：`ceil` 会把"被**部分**覆盖的那个像素"
+ *   整块丢掉，而放大时（支撑区 ≤ 1 个源像素）那个像素就是唯一的一个 ⇒ 支撑区算成空
+ *   ⇒ 整片走"补背景"。上界用 `ceil(b) - 1` 是为了排掉零面积擦边（`b` 正好落在整数上）。
+ *
+ * 返回 `s1 < s0` 表示支撑区**完全**落在源图之外（`contain` 的补背景区 / 手动拖出界）。
+ */
+function supportRange(c: number, half: number, n: number): { s0: number; s1: number } {
+  const s0 = Math.max(0, Math.floor(c - half));
+  const s1 = Math.min(n - 1, Math.ceil(c + half) - 1);
+  return { s0, s1 };
 }
 
 /**
@@ -620,7 +654,7 @@ function smoothFit(
   bg: Rgba,
 ): { data: Uint8ClampedArray; backgroundPixels: number } {
   const out = new Uint8ClampedArray(dstW * dstH * 4);
-  const inv = 1 / scale; // 支撑区半宽（源像素单位）
+  const inv = 1 / scale; // 支撑区**宽度**（源像素单位）；半宽 = 0.5 * inv
   const halfW = 0.5 * inv;
 
   // X 方向权重表：所有行共用（源图是行优先的，这样能少算一半）
@@ -629,10 +663,7 @@ function smoothFit(
   const xWeights: Float64Array[] = new Array(dstW);
   for (let tx = 0; tx < dstW; tx++) {
     const center = (tx + 0.5 - offsetX) * inv;
-    let s0 = Math.ceil(center - halfW);
-    let s1 = Math.floor(center + halfW);
-    if (s0 < 0) s0 = 0;
-    if (s1 > srcW - 1) s1 = srcW - 1;
+    const { s0, s1 } = supportRange(center, halfW, srcW);
     const w = new Float64Array(Math.max(0, s1 - s0 + 1));
     for (let s = s0; s <= s1; s++) {
       let ww = Math.min(center + halfW, s + 1) - Math.max(center - halfW, s);
@@ -646,10 +677,7 @@ function smoothFit(
 
   for (let ty = 0; ty < dstH; ty++) {
     const centerY = (ty + 0.5 - offsetY) * inv;
-    let s0 = Math.ceil(centerY - halfW);
-    let s1 = Math.floor(centerY + halfW);
-    if (s0 < 0) s0 = 0;
-    if (s1 > srcH - 1) s1 = srcH - 1;
+    const { s0, s1 } = supportRange(centerY, halfW, srcH);
     if (s1 < s0) {
       // 目标像素完全落在源图外 ⇒ 整行背景
       for (let tx = 0; tx < dstW; tx++) {
@@ -724,6 +752,12 @@ function smoothFit(
  *   `0.49999999999999645`，`floor` 会把它变成 **-1**（越界 ⇒ 内容最左一列
  *   凭空少一像素），四舍五入则稳稳落在 0。夹具里就有 3×3 / 1×1 这两种
  *   "刚好卡在边界"的图，这条是它们逼出来的。
+ *
+ * ⚠ "两者数学等价"有个**前提**，别当成恒等式：等价只在"源坐标中心不是恰好
+ *   `k + 0.5`"时成立。中心恰好是半整数时（4×4 → 8×8 就会遇到），`floor(中心)` 与
+ *   `round(中心 - 0.5)` 取到**不同**的源像素（前者向下取整、后者按"半值向上"）。
+ *   本模块统一取**后者**（`mapTargetToSource` 的自述、`nearestFit`、`nearestStretch`
+ *   三处必须是同一条公式；`nearestStretch` 的注释里记着这次统一）。
  */
 function nearestFit(
   src: ArrayLike<number>,
@@ -849,7 +883,7 @@ export function fitToTarget(src: RgbaImage, opts: FitOptions = {}): FitResult {
   //   手动的 'nearest' / 'smooth' 在这里直接胜出，优先级永远高于 'auto'。
   const kernelChoice = opts.kernel ?? 'auto';
   const kernel: ScaleKernel = kernelChoice === 'auto'
-    ? selectScaleKernel(scaleX, scaleY, distinctOpaqueColors(src), opts.autoNearestColorLimit ?? 256)
+    ? selectScaleKernel(scaleX, scaleY, distinctOpaqueColors(src))
     : kernelChoice;
 
   let data: Uint8ClampedArray;
@@ -870,10 +904,14 @@ export function fitToTarget(src: RgbaImage, opts: FitOptions = {}): FitResult {
     backgroundPixels = countBgPixels(data, dstW, dstH, bg);
   } else if (mode === 'stretch' && kernel === 'smooth') {
     data = smoothStretch(src.data, sw, sh, dstW, dstH, bg);
-    // ★ 0.19（D23）：原先这里写死 0，与字段文档（"补了多少背景"）不符。
+    // ★ `'stretch'` **整支都不补背景**（源图铺满目标，没有越界像素）⇒ 这里的值只是
+    //   "输出里有多少像素与背景色逐通道相同"，与"补了几个背景"无关（口径见
+    //   `FitResult.backgroundPixels` / `countBgPixels`）。0.19 的 D23 把这条口径统一到了
+    //   所有分支上（原先这里写死 0，反而与另两条分支不一致）。
     backgroundPixels = countBgPixels(data, dstW, dstH, bg);
   } else if (mode === 'stretch') {
     data = nearestStretch(src.data, sw, sh, dstW, dstH);
+    // ★ 同上：`nearestStretch` 也不补背景（函数注释里明确写了），这里的计数只是"像背景色的输出像素数"。
     backgroundPixels = countBgPixels(data, dstW, dstH, bg);
   } else if (kernel === 'smooth') {
     const r = smoothFit(src.data, sw, sh, dstW, dstH, uniform, offsetX, offsetY, bg);
@@ -912,26 +950,32 @@ function smoothStretch(
   const halfY = 0.5 / syScale;
   for (let ty = 0; ty < dstH; ty++) {
     const cy = (ty + 0.5) / syScale;
-    const ys0 = Math.max(0, Math.ceil(cy - halfY));
-    const ys1 = Math.min(srcH - 1, Math.floor(cy + halfY));
+    const { s0: ys0, s1: ys1 } = supportRange(cy, halfY, srcH);
     for (let tx = 0; tx < dstW; tx++) {
       const o = (ty * dstW + tx) * 4;
       const cx = (tx + 0.5) / sxScale;
-      const xs0 = Math.max(0, Math.ceil(cx - halfX));
-      const xs1 = Math.min(srcW - 1, Math.floor(cx + halfX));
+      const { s0: xs0, s1: xs1 } = supportRange(cx, halfX, srcW);
       if (ys1 < ys0 || xs1 < xs0) {
         out[o] = bg.r; out[o + 1] = bg.g; out[o + 2] = bg.b; out[o + 3] = bg.a;
         continue;
       }
+      // ★ X 方向权重与 `sy` 无关（`wy` 也一样与 `sx` 无关）⇒ 两者都提到内层之外预计算。
+      //   数值上与原写法**逐位相同**（同样的两个 min/max、同样的相减顺序、同样的跳过判据）。
+      const nwx = xs1 - xs0 + 1;
+      const wx = new Float64Array(nwx);
+      for (let k = 0; k < nwx; k++) {
+        const sx = xs0 + k;
+        const v = Math.min(cx + halfX, sx + 1) - Math.max(cx - halfX, sx);
+        wx[k] = v > 0 ? v : 0; // 非正权重 ⇒ 0（与原来的 `continue` 等价：0 权重不贡献）
+      }
       let r = 0; let g = 0; let b = 0; let a = 0; let wsum = 0;
       for (let sy = ys0; sy <= ys1; sy++) {
-        const wy = Math.min(cy + halfY, sy + 1) - Math.max(cy - halfY, sy);
-        if (!(wy > 0)) continue;
-        for (let sx = xs0; sx <= xs1; sx++) {
-          const wx = Math.min(cx + halfX, sx + 1) - Math.max(cx - halfX, sx);
-          if (!(wx > 0)) continue;
-          const w = wx * wy;
-          const so = (sy * srcW + sx) * 4;
+        const wyv = Math.min(cy + halfY, sy + 1) - Math.max(cy - halfY, sy);
+        if (!(wyv > 0)) continue;
+        for (let k = 0; k < nwx; k++) {
+          const w = wx[k] * wyv;
+          if (!(w > 0)) continue;
+          const so = (sy * srcW + xs0 + k) * 4;
           r += src[so] * w; g += src[so + 1] * w; b += src[so + 2] * w; a += src[so + 3] * w;
           wsum += w;
         }
@@ -947,7 +991,20 @@ function smoothStretch(
   return out;
 }
 
-/** 非等比最近邻（stretch 专用）：铺满、无背景。 */
+/**
+ * 非等比最近邻（stretch 专用）：**源图铺满目标、不补背景**（因此也不需要 `bg` 参数）。
+ *
+ * ★ 取样式与 `nearestFit` / `mapTargetToSource` **必须是同一条**：
+ *     源坐标中心 = (t + 0.5) * s / d，取 `round(中心 - 0.5)` 再夹到 `[0, s - 1]`。
+ *   为什么不能写 `min(s-1, floor((t+0.5)*s/d))`（0.20 之前的写法）：两者在"中心恰好落在
+ *   源像素边界上"时会取到**不同**的源像素（4×4 → 8×8：`floor` 给 0,0,1,1,2,2,3,3，
+ *   而 `mapTargetToSource` 自述的 `round` 给 0,0,0,1,1,2,2,3）⇒ 同一张图走 `stretch`
+ *   与走 `fitToTarget`+`mapTargetToSource` 反查会得到互相矛盾的像素。
+ *   上游 Python（`prepare_image.py` / `make_image_fixtures.py`）**没有** stretch 这条
+ *   路径（Pillow 只在 `宽>128||高>128` 时 `Resize(128,128)` 等比），所以没有"以 Python
+ *   为准"的对拍可依 —— 那就以本模块**自己的**最近邻口径（`mapTargetToSource` 的注释）
+ *   为准，测试里另有一份**独立写的**参考实现对拍（`image.test.ts` 的 stretch 用例）。
+ */
 function nearestStretch(
   src: ArrayLike<number>,
   srcW: number,
@@ -956,10 +1013,19 @@ function nearestStretch(
   dstH: number,
 ): Uint8ClampedArray {
   const out = new Uint8ClampedArray(dstW * dstH * 4);
+  // 每个目标像素中心的源坐标（行/列各算一次，别在双层循环里重复算）
+  const sxOf = new Int32Array(dstW);
+  for (let tx = 0; tx < dstW; tx++) {
+    sxOf[tx] = clampIndex(Math.round(((tx + 0.5) * srcW) / dstW - 0.5), srcW);
+  }
+  const syOf = new Int32Array(dstH);
   for (let ty = 0; ty < dstH; ty++) {
-    const sy = Math.min(srcH - 1, Math.floor(((ty + 0.5) * srcH) / dstH));
+    syOf[ty] = clampIndex(Math.round(((ty + 0.5) * srcH) / dstH - 0.5), srcH);
+  }
+  for (let ty = 0; ty < dstH; ty++) {
+    const sy = syOf[ty];
     for (let tx = 0; tx < dstW; tx++) {
-      const sx = Math.min(srcW - 1, Math.floor(((tx + 0.5) * srcW) / dstW));
+      const sx = sxOf[tx];
       const so = (sy * srcW + sx) * 4;
       const o = (ty * dstW + tx) * 4;
       out[o] = src[so]; out[o + 1] = src[so + 1];
@@ -967,6 +1033,13 @@ function nearestStretch(
     }
   }
   return out;
+}
+
+/** 最近邻取样的下标夹取：`[0, n - 1]`（浮点误差可能让中心落到 -0.0 或 n 上）。 */
+function clampIndex(i: number, n: number): number {
+  if (i < 0) return 0;
+  if (i > n - 1) return n - 1;
+  return i;
 }
 
 /**
@@ -1020,7 +1093,8 @@ type Bucket = { colors: Uint32Array; counts: Uint32Array };
  *   ⇒ 每个桶只有一种颜色 ⇒ 加权平均 == 那个颜色本身 ⇒ 输出逐像素等于输入，
  *   `exact = true`。这是**算法结构**保证的，不靠"事后检查"。
  *
- * ★ 索引 0 约定：`palette[0..3] = 00 00 00 00`，实色占 1..usedColors。
+ * ★ 索引 0 约定：`palette[0..3] = 00 00 00 00`，实色从索引 1 开始（`palette` 里
+ *   用掉几格 = `buckets.length`，这个数不单独返回 —— 需要它的人看 `report.colorsAfter`）。
  *   实色的 alpha 写 `0x80`（游戏惯例，见 PALETTE_ALPHA_OPAQUE）；反正提取时
  *   "索引 ≠ 0 即不透明"（03-图片处理管线.md §四 ①）。
  *
@@ -1055,7 +1129,7 @@ export function quantizeOpaque(rgba: RgbaImage, maxColors = MAX_OPAQUE_COLORS): 
     // 全透明图：这是"合法但没意义"的输入（prepare_image.py 会直接 SystemExit）。
     // 本实现不抛异常，交给 checkCompliance() 报"没有不透明像素"，
     // 因为 UI 需要能显示"当前是空白画布"而不是崩掉。
-    return { palette, indices, usedColors: 0, exact: true, sourceColors: 0 };
+    return { palette, indices, exact: true, sourceColors: 0 };
   }
 
   const keys = new Uint32Array(sourceColors);
@@ -1163,7 +1237,6 @@ export function quantizeOpaque(rgba: RgbaImage, maxColors = MAX_OPAQUE_COLORS): 
   return {
     palette,
     indices,
-    usedColors: buckets.length,
     exact: buckets.length === sourceColors,
     sourceColors,
   };
@@ -1306,33 +1379,28 @@ export function prepareEmblem(
   }
 
   // ②③ 取景 + 缩放。
-  //   ★ 这里**先探一次**取景（只为拿到"实际倍率"与 `'auto'` 选出的核），再用那个核
-  //     正式取景。为什么值得多跑一次：
-  //     · `'auto'` 的判据必须落在**实际缩放倍率**上（见 `selectScaleKernel` 的说明），
-  //       而倍率只有 `fitToTarget` 知道（`contain` 的倍率由限制边决定，不是"源/目标"）。
-  //       探针返回的 `transform.scale` 就是权威值 ⇒ 判核与取景**不可能不一致**；
-  //     · 探针自己也用同一个 `'auto'` 判据选核，所以第二次取景可以锁定同一个核。
-  //     代价 = 多一遍采样（128×128 的输出，微秒级），换掉的是"两处各算一套倍率、
-  //     算歪一处就静默选错核"的风险 —— 值得。
+  //   ★ `'auto'` 时**先探一次**取景（只为拿到"实际倍率"与 `'auto'` 选出的核），然后直接复用
+  //     探针的结果。为什么值得多跑一次：`'auto'` 的判据必须落在**实际缩放倍率**上
+  //     （见 `selectScaleKernel` 的说明），而倍率只有 `fitToTarget` 知道（`contain` 的倍率由
+  //     限制边决定，不是"源/目标"）。探针返回的 `transform.scale` 就是权威值
+  //     ⇒ 判核与取景**不可能不一致**。代价 = 多一遍采样（128×128 的输出，微秒级）。
+  //   ★ 0.20 简化：**显式给了 `kernel`** 时不再跑那个"探针" —— 探针存在的唯一理由就是问
+  //     `'auto'` 会选哪个核，而 `fitToTarget` 本来就会原样返回调用方给的 `kernel`
+  //     ⇒ 原先那两遍采样（第一遍的结果被丢掉）是纯粹的浪费，输出逐字节不变。
   // ⚠ auto 核的色数口径：用**二值化之后**的图算，因为"不透明色数"的定义依赖
   //   alpha === 0xFF，半透明像素不算数。
   const fitKernelChoice = options.kernel ?? 'auto';
-  const probe = fitToTarget({ data: binarized, width, height }, options); // kernel 默认 'auto'
-  const kernel: ScaleKernel = fitKernelChoice === 'auto' ? probe.kernel : fitKernelChoice;
-  const fit = fitKernelChoice === 'auto'
-    ? probe // 探针已经是用 auto 选出的核做的取景 ⇒ 直接复用，省掉第二次采样
-    : fitToTarget({ data: binarized, width, height }, { ...options, kernel });
+  const fit = fitToTarget({ data: binarized, width, height }, options); // kernel 默认 'auto'
+  const kernel: ScaleKernel = fitKernelChoice === 'auto' ? fit.kernel : fitKernelChoice;
 
-  // ④ 缩放后**再**二值化一次
-  const reBinarize = options.reBinarizeAfterFit !== false;
-  const preFinal: Uint8ClampedArray = reBinarize
-    ? binarizeAlpha({ data: fit.data, width: fit.width, height: fit.height }, threshold)
-    : fit.data;
+  // ④ 缩放后**再**二值化一次。
+  //   这一步是必需的：缩放会混出新的半透明像素，而"索引 0 = 透明"要求 alpha 只有 0 / 0xFF。
+  //   ★ 0.45：它曾经能用 `PrepareOptions.reBinarizeAfterFit` 关掉，但**没有任何调用方**传过它
+  //   （UI 不产这个字段，测试也不传）⇒ 那个开关已删，这里恒做一次。
+  const preFinal: Uint8ClampedArray = binarizeAlpha({ data: fit.data, width: fit.width, height: fit.height }, threshold);
   let reBinarizeChanged = 0;
-  if (reBinarize) {
-    for (let i = 0; i < fit.width * fit.height; i++) {
-      if (fit.data[i * 4 + 3] !== preFinal[i * 4 + 3]) reBinarizeChanged += 1;
-    }
+  for (let i = 0; i < fit.width * fit.height; i++) {
+    if (fit.data[i * 4 + 3] !== preFinal[i * 4 + 3]) reBinarizeChanged += 1;
   }
 
   // ⑤ 减色

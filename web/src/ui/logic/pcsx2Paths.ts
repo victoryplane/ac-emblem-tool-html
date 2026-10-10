@@ -99,13 +99,13 @@ export function describeFoundFiles(paths: readonly string[]): string {
   if (hasGame) got.push('gamesettings\\*.ini');
   if (hasLog) got.push('logs\\emulog.txt');
   const miss: string[] = [];
-  if (!hasGlobal) miss.push(t('inis\\PCSX2.ini（全局设置）', 'inis\\PCSX2.ini (global settings)'));
-  if (!hasGame) miss.push(t('gamesettings\\*.ini（每游戏设置）', 'gamesettings\\*.ini (per-game settings)'));
-  if (!hasLog) miss.push(t('logs\\emulog.txt（运行日志）', 'logs\\emulog.txt (run log)'));
+  if (!hasGlobal) miss.push(t('inis\\PCSX2.ini（全局设置）', 'inis\\PCSX2.ini (global settings)', 'inis\\PCSX2.ini（グローバル設定）', 'inis\\PCSX2.ini (전역 설정)'));
+  if (!hasGame) miss.push(t('gamesettings\\*.ini（每游戏设置）', 'gamesettings\\*.ini (per-game settings)', 'gamesettings\\*.ini（ゲームごとの設定）', 'gamesettings\\*.ini (게임별 설정)'));
+  if (!hasLog) miss.push(t('logs\\emulog.txt（运行日志）', 'logs\\emulog.txt (run log)', 'logs\\emulog.txt（実行ログ）', 'logs\\emulog.txt (실행 로그)'));
   if (got.length === 0) {
     return t(
-      `这个目录里没有找到 PCSX2 的自检文件（少了 ${miss.join('、')}）—— 请确认选的是 PCSX2 的**用户目录**（含 inis\\、gamesettings\\、logs\\ 这一层）。`,
-      `No PCSX2 files to check were found in this folder (missing ${miss.join(', ')}) - please make sure you picked the PCSX2 user folder (the one that contains inis\\, gamesettings\\ and logs\\).`,
+      `这个目录里没有找到 PCSX2 的自检文件（少了 ${miss.join('、')}）—— 请确认选的是 PCSX2 的用户目录（含 inis\\、gamesettings\\、logs\\ 这一层）。`,
+      `No PCSX2 files to check were found in this folder (missing ${miss.join(', ')}) - please make sure you picked the PCSX2 user folder (the one that contains inis\\, gamesettings\\ and logs\\).`, `このフォルダには PCSX2 のチェック用ファイルが見つかりません（${miss.join('、')} がありません）—— PCSX2 のユーザーフォルダ（inis\\、gamesettings\\、logs\\ が入っている階層）を選んだか確認してください。`, `이 폴더에서 PCSX2 점검 파일을 찾지 못했습니다 (${miss.join(', ')} 누락) —— PCSX2 사용자 폴더(inis\\, gamesettings\\, logs\\ 가 들어 있는 계층)를 선택했는지 확인하세요.`,
     );
   }
   return t(
@@ -114,6 +114,6 @@ export function describeFoundFiles(paths: readonly string[]): string {
     `Found: ${got.join(', ')}` +
       (miss.length
         ? `; not found: ${miss.join(', ')} (each missing item just means less information; the verdict is still produced)`
-        : ' (all three present)'),
+        : ' (all three present)'), `読み込み：${got.join('、')}${miss.length ? `；見つからない：${miss.join('、')}（足りない項目は情報が減るだけです。判定は出します）` : '（3 つそろっています）'}`, `읽음: ${got.join(', ')}${miss.length ? `; 찾지 못함: ${miss.join(', ')} (없는 항목만큼 정보가 줄 뿐, 판정은 나옵니다)` : ' (세 개 모두 있음)'}`,
   );
 }

@@ -63,7 +63,7 @@ const preview = process.argv.includes('--preview');
 /** ★ 0.26：`--boot` = 不点掉开机告知弹窗，截"用户双击打开产物时看到的第一个画面"。 */
 const boot = process.argv.includes('--boot');
 const cardPath = argOf('--card', null);
-/** ★ 0.28：`--lang en` = 切到英文界面再截（默认 `zh`，与产物默认一致）。 */
+/** ★ 0.28：`--lang en` = 切到英文界面再截；★ 0.47 起也收 `ja` / `ko`（默认 `zh`，与产物默认一致）。 */
 const lang = argOf('--lang', 'zh');
 const size = argOf('--size', cardPath ? '1500,2300' : '1600,950');
 const out = resolve(
@@ -143,9 +143,9 @@ function makeProbe(html, mode) {
   c.ui.cropView.setCropView(false);
 `)
           : '';
-  // ★ 0.28（中英双语）：`--lang en` ⇒ 先把语言切成英文再做事，截到的就是英文界面
-  //   （静态外壳靠 `data-en` 刷，JS 生成的那部分靠切语言时的重画）。
-  const langLine = lang === 'zh' ? '' : "c.ui.lang.set('en');\n  ";
+  // ★ 0.28（中英双语）/ ★ 0.47（四语）：`--lang en|ja|ko` ⇒ 先把语言切过去再做事，
+  //   截到的就是那种语言的界面（静态外壳靠 `data-*` 刷，JS 生成的那部分靠切语言时的重画）。
+  const langLine = lang === 'zh' ? '' : `c.ui.lang.set(${JSON.stringify(lang)});\n  `;
   const inject = `
 <script>
 (function () {
@@ -197,8 +197,9 @@ function main() {
       `--window-size=${size}`,
       // ★ 0.28：`--lang en` 时把 **Chrome 自己的语言**也设成 en-US ⇒ `navigator.language` 就是 en-US
       //   ⇒ 一并验证"英文浏览器首次打开自动给 English"这条规则（`Logic/i18n.ts::detectLang`）。
-      //   探针里那次 `c.ui.lang.set('en')` 是双保险（手动切换那条路）。
-      ...(lang === 'en' ? ['--lang=en-US'] : []),
+      //   探针里那次 `c.ui.lang.set(...)` 是双保险（手动切换那条路）。
+      //   ★ 0.47：`ja` / `ko` 同理（浏览器语言 → 首屏语言）。
+      ...(lang === 'en' ? ['--lang=en-US'] : lang === 'ja' ? ['--lang=ja-JP'] : lang === 'ko' ? ['--lang=ko-KR'] : []),
       // ★ 0.20：开卡那一档要留够时间（8 MB 的卡要先 base64 解码再读完整个文件系统）
       `--virtual-time-budget=${mode === 'card' ? 15000 : 6000}`,
       `--screenshot=${out}`,

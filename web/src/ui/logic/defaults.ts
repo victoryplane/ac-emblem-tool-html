@@ -74,8 +74,11 @@ export interface UiParams {
  *
  * ⇒ `DEFAULT_PARAMS` 里这几项**从这里取**，改行为只改这一处；界面能改的仍是那 5 项
  *   （`kernel` / `alphaThreshold` / `previewZoom` / `manual*`）。
+ *
+ * ★ 0.45：去掉 `export` —— 全树没有任何文件 import 过它（消费者只有同文件的 `DEFAULT_PARAMS`），
+ *   对外暴露只会让人以为"别处也引用这份钉死的默认值"。
  */
-export const CORE_DEFAULTS = Object.freeze({
+const CORE_DEFAULTS = Object.freeze({
   targetSize: TARGET_SIZE, // 128
   fitMode: 'manual' as FitMode,
   despeckle: false,
@@ -116,9 +119,9 @@ export function cloneDefaultParams(): UiParams {
  *   所以既有判据（`ui.test.ts` 断言 `label.includes('自动')`）一个字都不用改。
  */
 export const KERNEL_LABELS: ReadonlyArray<{ value: ScaleKernelChoice; label: string; en: string }> = [
-  { value: 'auto', label: '自动判断', en: 'Auto' },
-  { value: 'nearest', label: '最近邻（像素画）', en: 'Nearest neighbour (pixel art)' },
-  { value: 'smooth', label: '面积平均（照片）', en: 'Area average (photos)' },
+  { value: 'auto', label: '自动判断', en: 'Auto', ja: '自動判定', ko: '자동 판단' },
+  { value: 'nearest', label: '最近邻（像素画）', en: 'Nearest neighbour (pixel art)', ja: '最近傍（ドット絵）', ko: '최근접(픽셀 아트)' },
+  { value: 'smooth', label: '面积平均（照片）', en: 'Area average (photos)', ja: '面積平均（写真）', ko: '면적 평균(사진)' },
 ];
 
 /**

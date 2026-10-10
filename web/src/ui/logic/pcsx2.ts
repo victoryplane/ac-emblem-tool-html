@@ -21,7 +21,7 @@
 
 import { t } from './i18n.ts';
 
-export const PCSX2_SLOTS: readonly number[] = [1, 2];
+const PCSX2_SLOTS: readonly number[] = [1, 2];
 /** 界面 Slot N → 日志里的 McdSlot 号。 */
 export const MCD_SLOT_OF: Record<number, number> = { 1: 0, 2: 1 };
 
@@ -115,7 +115,7 @@ function stripBom(s: string): string {
 }
 
 /** 逐行取 `[section]` 下的键值。键名大小写**不敏感**（PCSX2 实际写的是精确大小写）。 */
-export function parseIni(text: string): Record<string, Record<string, string>> {
+function parseIni(text: string): Record<string, Record<string, string>> {
   const out: Record<string, Record<string, string>> = {};
   let section = '';
   const lines = stripBom(text).split(/\r\n|\r|\n/);
@@ -261,25 +261,25 @@ export function analyzePcsx2(input: {
     const low = base.toLowerCase();
     if (low === 'pcsx2.ini') {
       global = memoryCardSlots(f.text);
-      recognized.push(t(`${base}（全局设置）`, `${base} (global settings)`));
+      recognized.push(t(`${base}（全局设置）`, `${base} (global settings)`, `${base}（グローバル設定）`, `${base} (전역 설정)`));
       continue;
     }
     if (low === 'emulog.txt' || low === 'emulog.log') {
       emulogText = f.text;
-      recognized.push(t(`${base}（运行日志）`, `${base} (run log)`));
+      recognized.push(t(`${base}（运行日志）`, `${base} (run log)`, `${base}（実行ログ）`, `${base} (실행 로그)`));
       continue;
     }
     if (low.endsWith('.ini')) {
       const mc = memoryCardSlots(f.text);
       if (Object.keys(mc).length > 0) {
         overrides[base] = mc;
-        recognized.push(t(`${base}（每游戏覆盖）`, `${base} (per-game override)`));
+        recognized.push(t(`${base}（每游戏覆盖）`, `${base} (per-game override)`, `${base}（ゲームごとの上書き）`, `${base} (게임별 덮어쓰기)`));
       } else {
-        recognized.push(t(`${base}（没有 [MemoryCards]，忽略）`, `${base} (no [MemoryCards], ignored)`));
+        recognized.push(t(`${base}（没有 [MemoryCards]，忽略）`, `${base} (no [MemoryCards], ignored)`, `${base}（[MemoryCards] がないため無視）`, `${base} ([MemoryCards] 가 없어 무시)`));
       }
       continue;
     }
-    recognized.push(t(`${base}（不认识，已忽略）`, `${base} (not recognised, ignored)`));
+    recognized.push(t(`${base}（不认识，已忽略）`, `${base} (not recognised, ignored)`, `${base}（不明なため無視）`, `${base} (알 수 없어 무시)`));
   }
 
   const boots = emulogText ? parseEmulog(emulogText) : [];
@@ -327,12 +327,12 @@ export function analyzePcsx2(input: {
         `★★ ${c.file} pins Slot ${c.slot} to "${c.gameValue || '(empty)'}", while the global setting says "${c.globalValue || '(empty)'}".` +
           ` => The game reads "${c.gameValue || '(empty)'}", not the card you picked in the dialog.` +
           ` Fix: edit that ini and delete the Slot${c.slot}_Filename line under [MemoryCards] (back it up first),` +
-          ` or clear the override in the emulator via Game Properties -> reset.`,
+          ` or clear the override in the emulator via Game Properties -> reset.`, `★★ ${c.file} は Slot ${c.slot} を「${c.gameValue || '(空)'}」に固定していますが、グローバル設定は「${c.globalValue || '(空)'}」です。⇒ ゲームが読むのは「${c.gameValue || '(空)'}」で、ダイアログで選んだカードではありません。対処：その ini を編集して [MemoryCards] の Slot${c.slot}_Filename 行を削除する（先にバックアップ）、またはエミュレータの Game Properties → reset で上書きを解除してください。`, `★★ ${c.file} 파일이 Slot ${c.slot} 을(를) "${c.gameValue || '(없음)'}"(으)로 고정하고 있지만 전역 설정은 "${c.globalValue || '(없음)'}"입니다. ⇒ 게임이 읽는 것은 "${c.gameValue || '(없음)'}"이며, 대화상자에서 고른 카드가 아닙니다. 해결: 그 ini를 편집해 [MemoryCards] 의 Slot${c.slot}_Filename 줄을 삭제하거나(먼저 백업), 에뮬레이터의 Game Properties → reset 으로 덮어쓰기를 해제하세요.`,
       ),
     );
   }
   if (Object.keys(overrides).length === 0) {
-    notes.push(t('没有任何游戏覆盖记忆卡设置 ✅', 'No per-game memory card override ✅'));
+    notes.push(t('没有任何游戏覆盖记忆卡设置 ✅', 'No per-game memory card override ✅', 'ゲームごとのメモリーカード上書き設定はありません ✅', '게임별 메모리 카드 덮어쓰기 설정이 없습니다 ✅'));
   }
 
   // ── 日志 vs 推断 ──
@@ -350,9 +350,9 @@ export function analyzePcsx2(input: {
         notes.push(
           t(
             `上次启动 McdSlot ${MCD_SLOT_OF[s]} 实际挂的是「${real.fileName}」，而现在配置推断是「${want || '(空)'}」` +
-              `（若你刚改过设置，这条属正常：设置对**下一次**启动生效）。`,
+              `（若你刚改过设置，这条属正常：设置对下一次启动生效）。`,
             `At the last launch McdSlot ${MCD_SLOT_OF[s]} actually had "${real.fileName}" mounted, while the config now implies "${want || '(empty)'}"` +
-              ` (if you just changed the settings this is normal: they take effect on the NEXT launch).`,
+              ` (if you just changed the settings this is normal: they take effect on the NEXT launch).`, `前回の起動で McdSlot ${MCD_SLOT_OF[s]} に実際にマウントされていたのは「${real.fileName}」で、現在の設定からの推定は「${want || '(空)'}」です（設定を変えた直後なら正常です：設定は次回の起動から有効になります）。`, `지난 실행에서 McdSlot ${MCD_SLOT_OF[s]} 에 실제로 마운트된 것은 "${real.fileName}"이고, 현재 설정이 추정하는 것은 "${want || '(없음)'}"입니다(방금 설정을 바꿨다면 정상입니다: 설정은 다음 실행부터 적용됩니다).`,
           ),
         );
       }
@@ -361,7 +361,7 @@ export function analyzePcsx2(input: {
       notes.push(
         t(
           `本次进程共 ${boots.length} 次启动；以上只列最后一次。`,
-          `${boots.length} launches in this run; only the last one is listed above.`,
+          `${boots.length} launches in this run; only the last one is listed above.`, `このプロセスでの起動は ${boots.length} 回、上に挙げたのは最後の 1 回だけです。`, `이번 프로세스에서 총 ${boots.length} 회 실행했으며, 위에는 마지막 한 번만 표시합니다.`,
         ),
       );
     }
@@ -369,16 +369,16 @@ export function analyzePcsx2(input: {
       notes.push(
         t(
           `上次运行的游戏：Serial=${lastBoot.serial ?? '(未知)'}  CRC=${lastBoot.crc || '(未知)'}`,
-          `Last game run: Serial=${lastBoot.serial ?? '(unknown)'}  CRC=${lastBoot.crc || '(unknown)'}`,
+          `Last game run: Serial=${lastBoot.serial ?? '(unknown)'}  CRC=${lastBoot.crc || '(unknown)'}`, `前回実行したゲーム：Serial=${lastBoot.serial ?? '(不明)'}  CRC=${lastBoot.crc || '(不明)'}`, `마지막으로 실행한 게임: Serial=${lastBoot.serial ?? '(알 수 없음)'}  CRC=${lastBoot.crc || '(알 수 없음)'}`,
         ),
       );
     }
-    if (lastBoot.iso) notes.push(t(`上次运行的 ISO：${lastBoot.iso}`, `Last ISO run: ${lastBoot.iso}`));
+    if (lastBoot.iso) notes.push(t(`上次运行的 ISO：${lastBoot.iso}`, `Last ISO run: ${lastBoot.iso}`, `前回実行した ISO：${lastBoot.iso}`, `마지막으로 실행한 ISO: ${lastBoot.iso}`));
   } else if (emulogText) {
     notes.push(
       t(
         'emulog 里没找到 `ELF changed, active CRC` —— 可能还没启动过游戏。',
-        'No `ELF changed, active CRC` in emulog - a game may not have been launched yet.',
+        'No `ELF changed, active CRC` in emulog - a game may not have been launched yet.', 'emulog に `ELF changed, active CRC` が見つかりません —— まだゲームを起動していない可能性があります。', 'emulog 에서 `ELF changed, active CRC` 를 찾지 못했습니다 —— 아직 게임을 실행하지 않았을 수 있습니다.',
       ),
     );
   }
@@ -386,7 +386,7 @@ export function analyzePcsx2(input: {
     notes.push(
       t(
         `生效的每游戏配置：gamesettings\\${key}` + (overrides[key] ? '' : '（该文件不存在 ⇒ 纯用全局设置）'),
-        `Effective per-game config: gamesettings\\${key}` + (overrides[key] ? '' : ' (that file does not exist => global settings only)'),
+        `Effective per-game config: gamesettings\\${key}` + (overrides[key] ? '' : ' (that file does not exist => global settings only)'), `有効なゲームごとの設定：gamesettings\\\\${key}${overrides[key] ? '' : '（そのファイルが無い ⇒ グローバル設定のみ）'}`, `적용되는 게임별 설정: gamesettings\\\\${key}${overrides[key] ? '' : '(그 파일이 없음 ⇒ 전역 설정만 사용)'}`,
       ),
     );
   }

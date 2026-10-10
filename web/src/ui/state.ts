@@ -16,6 +16,8 @@ import type { Card } from '../core/card.ts';
 import type { PrepareResult } from '../core/image.ts';
 import type { SlotModel } from './logic/slots.ts';
 import { cloneDefaultParams, type UiParams } from './logic/defaults.ts';
+import { t } from './logic/i18n.ts';
+import type { WritePermResult } from './logic/writePermission.ts';
 
 /** 已打开的记忆卡。 */
 export interface LoadedCard {
@@ -37,6 +39,16 @@ export interface LoadedCard {
    * `handle` 为 null（只读打开）时这里也是 null —— 那条路只会下载，不检查。
    */
   lastSeen: { mtime: number; size: number } | null;
+  /**
+   * ★ 0.42：**写权限的结论**（在点击那一刻问过之后记在这里）。
+   *
+   * 为什么记下来：请求写权限需要 **transient user activation**，而落盘那一步是在
+   * 整条管线 + 落盘确认框之后 —— 那时再问必然抛 `SecurityError`（用户实测："内存写 + 回读全过，
+   * 最后报一句 SecurityError"）。所以：**点击那一刻问一次**，
+   * 结果存这儿；落盘只读它。
+   * `null` = 还没问过（打开卡时 / 没句柄时）。
+   */
+  writePerm: WritePermResult | null;
 }
 
 /** 一张缩略图（游戏口径 index0）。 */
@@ -55,8 +67,17 @@ export interface SourceImage {
   data: Uint8ClampedArray;
   width: number;
   height: number;
-  /** 来源描述（文件名 / "剪贴板" / "拖入"）。 */
+  /**
+   * 来源描述：**原文件名**（拖入 / 选择文件）或剪贴板里那张文件的名字。
+   * ⚠ **不许存翻译好的文字**（0.40 的教训）：剪贴板那个前缀由 `renderOriginalBadge()` 按当前语言加，
+   *   存进来的字符串一旦是中文/英文，切语言后那行就再也换不过来了。
+   */
   name: string;
+  /**
+   * ★ 0.40：这张图是从剪贴板来的（`Ctrl+V` / 粘贴事件）。
+   * 渲染时才把"剪贴板 · "这个前缀按当前语言拼上去（`pipeline.ts::renderOriginalBadge()`）。
+   */
+  clipboard?: boolean;
 }
 
 export interface State {
@@ -77,6 +98,11 @@ export interface State {
   thumbs: Array<SlotThumb | null>;
   /** 状态行的文本（右下角）。 */
   status: string;
+  /**
+   * ★ 0.40：状态行那句话的**重算办法**（切语言时用它按新语言再说一遍）。
+   * `null` = 这条消息没有重算办法（切语言时会被清空，见 `setStatus()` / `relayoutStatus()`）。
+   */
+  statusRedo: (() => string) | null;
   /** 是否正在忙（防重入）。 */
   busy: boolean;
 }
@@ -91,6 +117,7 @@ export const state: State = {
   selectedSlot: 0,
   thumbs: new Array(8).fill(null),
   status: '',
+  statusRedo: null,
   busy: false,
 };
 
@@ -110,11 +137,40 @@ export function setPrepared(r: PrepareResult | null, errorText: string | null): 
  * 9 处 `setStatus()` 里有 2 处忘了配（"已取消选择记忆卡/目录"）⇒ 状态行永远停在上一条文字。
  * 现在 `state.status` 与 `#status` 在同一步里更新，"忘了刷"这件事在结构上不可能发生。
  * （`renderStatus()` 仍然保留：它只负责 `#busy` 那个转圈提示与"整批重画"时的兜底。）
+ *
+ * ★ 0.40（审查抓到的同一类问题）：`state.status` 存的是**已经渲染好的字符串** ⇒ 切语言时
+ *   它要么留在旧语言、要么只能被清掉。所以这里多收一个 `redo`：**把"这句话怎么再说一遍"
+ *   一起存下来**（`() => t('中文','English')` 或 `() => 重新算一遍`），切语言时用它重说。
+ *   ⚠ 传不出 `redo` 的消息（例如数据来自核心层、只有中文）切语言时会被**清空** ——
+ *   宁可空着，也不要留一句旧语言的话（`relayoutStatus()`）。
  */
-export function setStatus(text: string): void {
+export function setStatus(text: string, redo?: (() => string) | null): void {
   state.status = text;
+  state.statusRedo = redo ?? null;
   const node = document.getElementById('status');
   if (node) node.textContent = text;
+}
+
+/**
+ * ★ 0.40：**成对文案**的状态行写法；★ 0.47 起是**四语**（`setStatusPair(zh, en, ja, ko)`）。
+ *
+ * 它把"四种语言的原文"都留着（`redo` 里再 `t()` 一次）⇒ 切语言时这句话能自动按新语言重说。
+ * 推荐状态行一律用它（而不是 `setStatus(t(a, b, c, d))`）：后者只留下**当时那种语言**的字符串。
+ * ⚠ 四个参数都要传**同一句话的四种语言**（不是"四个片段"）。
+ */
+export function setStatusPair(zh: string, en: string, ja: string, ko: string): void {
+  setStatus(t(zh, en, ja, ko), () => t(zh, en, ja, ko));
+}
+
+/**
+ * ★ 0.40：切语言时把状态行**按新语言再说一遍**。
+ * 返回 `false` = 这条消息没有"重算办法"（调用方自己决定是清空还是换成"就绪"那句）。
+ */
+export function relayoutStatus(): boolean {
+  const redo = state.statusRedo;
+  if (!redo) return false;
+  setStatus(redo(), redo);
+  return true;
 }
 
 export function resetThumbs(): void {

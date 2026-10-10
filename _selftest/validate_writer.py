@@ -13,6 +13,13 @@ import os
 import sys
 
 PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# ★ 不要写 __pycache__：本脚本 import `acet_format`，默认会在 tools\ 下留一个
+#   `__pycache__\acet_format.cpython-3xx.pyc`。本项目规矩是"跑完判据后仓库干净"
+#   （照 web\test\make_image_fixtures.py 的做法），所以这里显式关掉字节码缓存。
+#   ⚠ 必须在下面 `import acet_format` **之前**设置。
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, os.path.join(PROJ, "tools"))
 import acet_format as af                                    # noqa: E402
 

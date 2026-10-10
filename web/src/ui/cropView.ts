@@ -7,6 +7,9 @@
  *   · **拖动图片**（在哪儿拖都一样）= 平移源图，把要用的部分**拖进白框**；
  *   · **滚轮** = 以**白框中心**为锚点缩放 —— ★ 往里滚到"白框 = 目标边长（128 源像素）"就**停**
  *     （0.11 起**不允许把源图放大**：再小就是把几个像素吹成 128×128，出来是一堆马赛克）；
+ *   · ★ 0.38（用户）：白框边长还可以**精确调** —— 取景动作行最左边是**滑条 + 输入框**
+ *     （单位 = 源像素，`step=1`），锚点与滚轮**同一条规则**（白框中心不动）。
+ *     来由：「现在的取景框只能用鼠标缩放，精度不够高」。入口是 `setCropWindowSize()`。
  *   · 〔确定取景〕= 把**白框里那一块**烘焙成 128×128（有自检，见 `confirmCrop`）；
  *   · 〔取消〕= 回滚到进入取景视图之前的参数。
  *
@@ -78,6 +81,7 @@ import {
   imagePlacement,
   manualToWindow,
   panWindow,
+  resizeWindowTo,
   windowBoundsFor,
   windowSourceRect,
   windowToManual,
@@ -107,6 +111,10 @@ interface CropRefs {
   zoomNote: HTMLElement | null;
   /** 源图画布：自然尺寸 + `transform: translate/scale`。 */
   canvas: HTMLCanvasElement;
+  /** ★ 0.38：白框边长的滑条（`#crop-size-range`，源像素）。 */
+  sizeRange: HTMLInputElement | null;
+  /** ★ 0.38：白框边长的输入框（`#crop-size-num`，源像素，可手输）。 */
+  sizeNum: HTMLInputElement | null;
 }
 
 let refs: CropRefs | null = null;
@@ -158,15 +166,21 @@ function collect(): CropRefs {
     cropBtn: document.getElementById('btn-crop') as HTMLButtonElement,
     zoomNote: document.getElementById('preview-zoom-note'),
     canvas,
+    sizeRange: document.getElementById('crop-size-range') as HTMLInputElement | null,
+    sizeNum: document.getElementById('crop-size-num') as HTMLInputElement | null,
   };
   installPointer(refs);
   return refs;
 }
 
-function setStatusText(text: string): void {
-  setStatus(text); // 状态行的唯一真值来源
-  const s = document.getElementById('status');
-  if (s) s.textContent = text;
+/**
+ * 写状态行。
+ *
+ * ★ 0.40：原来这里自己又写了一遍 `#status`（`setStatus()` 已经写了）⇒ 拖动期间每帧写两遍同一个
+ *   节点，纯浪费。现在就是 `setStatus()` 的薄包装，只负责把 `redo` 一起带上（切语言时重说）。
+ */
+function setStatusText(text: string, redo?: () => string): void {
+  setStatus(text, redo ?? null);
 }
 
 /**
@@ -244,6 +258,12 @@ export function layoutCropView(): void {
   const box = stageBox();
   const f = frameRectFor(box);
   frameSide = f.size;
+  // ★ 0.41：角标文字（`styles.css` 的 `.crop-frame::after { content: attr(data-label) }`）按
+  //   **唯一真值** `params.targetSize` 写 —— 原来 CSS 里写死 '128×128'，换目标边长就会撒谎。
+  {
+    const label = `${state.params.targetSize}×${state.params.targetSize}`;
+    if (r.frame.getAttribute('data-label') !== label) r.frame.setAttribute('data-label', label);
+  }
   r.frame.style.left = `${f.left}px`;
   r.frame.style.top = `${f.top}px`;
   r.frame.style.width = `${f.size}px`;
@@ -255,10 +275,26 @@ export function layoutCropView(): void {
   const pl = imagePlacement(box, w);
   r.canvas.style.transformOrigin = '0 0';
   r.canvas.style.transform = `translate(${pl.left}px, ${pl.top}px) scale(${pl.k})`;
-  // 放大（或整数倍缩小）用最近邻，其余缩小用浏览器平滑 —— 与核心 `chooseKernel` 的口径一致
+  // 放大（或整数倍缩小）用最近邻，其余缩小用浏览器平滑 —— 与核心选核的口径一致
+  // （口径在 `core/image.ts::selectScaleKernel()`；0.41 审查顺手删掉了没人调用的旧包装 `chooseKernel()`）
   const inv = pl.k > 0 ? 1 / pl.k : 1;
   const crisp = pl.k >= 1 - 1e-9 || Math.abs(inv - Math.round(inv)) < 1e-9;
   r.canvas.style.imageRendering = crisp ? 'pixelated' : 'auto';
+}
+
+/**
+ * ★ 0.40：切语言时重画取景那几行**文字**（`#crop-readout` + 状态行里那句"取景：白框 = …"）。
+ *
+ * 为什么需要单独一个入口：`layoutCropView()` **只写样式**，文字全在 `describeWindow()` 里，
+ * 而切语言那条路原来只调了 `layoutCropView()` ⇒ 白框下面那行读数停在旧语言
+ * （审查抓到的：中文进取景 → 切 English，读数还是"左上角 (320, 0) · 倍率 0.120 · ★ 已到最小…"）。
+ * ⚠ 顺带把舞台尺寸缓存作废：两种语言的读数长短不同 ⇒ 动作行高度可能变 ⇒ 白框要重新摆一次。
+ */
+export function refreshCropText(): void {
+  if (!active) return;
+  describeWindow();
+  cachedBox = null;
+  layoutCropView();
 }
 
 /**
@@ -275,6 +311,83 @@ function setReadout(text: string, atMin = false): void {
   host.className = atMin ? 'crop-readout at-min' : 'crop-readout';
 }
 
+/**
+ * ★ 0.38（用户）：把白框边长**一步设成** `size` 源像素 —— 滑条与输入框共用的**唯一**入口。
+ *
+ * 用户原话：「在图中红方块位置放一个缩放条，用于控制白框取景的大小，边上再加一个输入框，
+ * 可以实时看到目前取景框的大小，也可以修改大小」「现在的取景框只能用鼠标缩放，精度不够高」。
+ *
+ * ⚠ 与拖动/滚轮一样**只动视觉**：不碰 `state.params`、不跑管线（性能契约不变，见文件头）。
+ * 锚点是**白框中心**（`resizeWindowTo()`），与滚轮同一条规则 ⇒ 两种操作手感一致。
+ */
+export function setCropWindowSize(size: number): void {
+  const s = state.source;
+  if (!active || !s || !win) return;
+  win = resizeWindowTo(win, size, s.width, s.height, windowBounds() ?? undefined);
+  layoutCropView();
+  describeWindow(); // 顺手把滑条 / 输入框同步成夹取之后的真值
+}
+
+/**
+ * 把滑条与输入框同步成**当前窗口**的边长（滚轮/拖动改过之后也要跟上）。
+ *
+ * ⚠ 两条纪律：
+ *   ① **输入框正在被编辑时不回写** —— 否则用户敲"1"（想输 180）就先被夹成 128 再写回框里，
+ *      字直接被吃掉。`force = true`（敲完那一下：`change` / `blur`）才写：那一刻用户已经
+ *      "交卷"了，把夹取之后的真值显示给他才是对的（输 `9999` 就该看到 `604`，不能留一个假读数）。
+ *   ② 值没变就**不写** —— 这个函数每帧（拖动/滚轮期间）都会被 `describeWindow()` 叫一次，
+ *      无谓的赋值会让浏览器白干活。
+ */
+function syncSizeControls(force = false): void {
+  const b = windowBounds();
+  if (!b || !win) return;
+  const r = collect();
+  const v = Math.round(win.size);
+  const lo = Math.ceil(b.min);
+  const hi = Math.floor(b.max);
+  for (const el of [r.sizeRange, r.sizeNum]) {
+    if (!el) continue;
+    if (el.min !== String(lo)) el.min = String(lo);
+    if (el.max !== String(hi)) el.max = String(hi);
+    if (el.step !== '1') el.step = '1';
+  }
+  if (r.sizeRange && r.sizeRange.value !== String(v)) r.sizeRange.value = String(v);
+  if (r.sizeNum && (force || document.activeElement !== r.sizeNum) && r.sizeNum.value !== String(v)) {
+    r.sizeNum.value = String(v);
+  }
+}
+
+/** 输入框里那串字 ⇒ 边长；不是数字（空串 / 半截负号）⇒ `null`（这一下什么都不做）。 */
+function sizeFromInput(raw: string): number | null {
+  const v = Number(raw.trim());
+  return Number.isFinite(v) && v > 0 ? Math.round(v) : null;
+}
+
+/**
+ * 绑定滑条与输入框。
+ *
+ *   · 滑条：`input` 事件实时生效（`step=1` ⇒ 精确到一个源像素）；
+ *   · 输入框：`input` 事件里**只认合法数字**（边打边生效），敲完（`change`/`blur`）再校正一次
+ *     —— 手输 `99999` 会被夹到上限、清空则回到当前值，两种都不会留下一个假读数。
+ */
+function bindSizeControls(r: CropRefs): void {
+  r.sizeRange?.addEventListener('input', () => {
+    const v = sizeFromInput(r.sizeRange?.value ?? '');
+    if (v !== null) setCropWindowSize(v);
+  });
+  r.sizeNum?.addEventListener('input', () => {
+    const v = sizeFromInput(r.sizeNum?.value ?? '');
+    if (v !== null) setCropWindowSize(v);
+  });
+  const tidy = (): void => {
+    const v = sizeFromInput(r.sizeNum?.value ?? '');
+    if (v !== null) setCropWindowSize(v);
+    syncSizeControls(true); // 敲完了 ⇒ 强制把框里的字改成夹取之后的真值（输 9999 要看到 604）
+  };
+  r.sizeNum?.addEventListener('change', tidy);
+  r.sizeNum?.addEventListener('blur', tidy);
+}
+
 /** 状态行上的取景读数（白框 = 源图上的哪一块）—— 顺手把当前倍率也报出来。 */
 function describeWindow(): void {
   const s = state.source;
@@ -283,31 +396,43 @@ function describeWindow(): void {
   // ★ 0.11：窗口有**下限**（= 目标边长，1:1）⇒ 到底了就明确说一句，别让人以为滚轮坏了
   const b = windowBounds();
   const atMin = !!b && win.size <= b.min + 1e-6;
+  // ★ 0.38：读数里**不再重复"白框 N×N 源像素"** —— 它就写在同一个动作行的输入框里
+  //   （那一格既可看又可改）；这一行挤了会把〔取消〕顶到第二行去。留下的是"位置 + 倍率 + 到没到最小"。
   // ① 白框下面那行（取景时唯一看得见的地方）
   setReadout(
     t(
-      `白框 ${fmt(win.size)}×${fmt(win.size)} 源像素 · 左上角 (${fmt(win.x)}, ${fmt(win.y)}) · 倍率 ${scale.toFixed(3)}`,
-      `Box ${fmt(win.size)}×${fmt(win.size)} source px · top-left (${fmt(win.x)}, ${fmt(win.y)}) · zoom ${scale.toFixed(3)}`,
-    ) + (atMin ? t(' · ★ 已到最小（1:1，不能再放大）', ' · ★ At minimum (1:1, cannot zoom in further)') : ''),
+      `左上角 (${fmt(win.x)}, ${fmt(win.y)}) · 倍率 ${scale.toFixed(3)}`,
+      `top-left (${fmt(win.x)}, ${fmt(win.y)}) · zoom ${scale.toFixed(3)}`, `左上 (${fmt(win.x)}, ${fmt(win.y)}) · 倍率 ${scale.toFixed(3)}`, `왼쪽 위 (${fmt(win.x)}, ${fmt(win.y)}) · 배율 ${scale.toFixed(3)}`,
+    ) + (atMin ? t(' · ★ 已到最小（1:1，不能再放大）', ' · ★ At minimum (1:1, cannot zoom in further)', ' · ★ 最小です（1:1、これ以上拡大できません）', ' · ★ 최소입니다(1:1, 더 이상 확대할 수 없음)') : ''),
     atMin,
   );
   // ② 页面最下面的状态行（也在写入日志旁边，留着方便回溯）
-  setStatusText(
-    t(
-      `取景：白框 = 源图 ${fmt(win.size)}×${fmt(win.size)}，左上角 (${fmt(win.x)}, ${fmt(win.y)})，倍率 ${scale.toFixed(3)}`,
-      `Crop: box = ${fmt(win.size)}×${fmt(win.size)} of the source image, top-left (${fmt(win.x)}, ${fmt(win.y)}), zoom ${scale.toFixed(3)}`,
-    ) +
-      (atMin
+  //   ★ 0.40：写成**一个可重算的函数**并交给 `setStatus()` 当 `redo` —— 切语言时它会按新语言
+  //   再说一遍（读的是**当前**窗口，所以拖动之后再切语言也不会说到旧数字）。
+  const statusLine = (): string => {
+    if (!win) return '';
+    const sc = state.params.targetSize / win.size;
+    const min = !!b && win.size <= b.min + 1e-6;
+    return (
+      t(
+        `取景：白框 = 源图 ${fmt(win.size)}×${fmt(win.size)}，左上角 (${fmt(win.x)}, ${fmt(win.y)})，倍率 ${sc.toFixed(3)}`,
+        `Crop: box = ${fmt(win.size)}×${fmt(win.size)} of the source image, top-left (${fmt(win.x)}, ${fmt(win.y)}), zoom ${sc.toFixed(3)}`, `トリミング：白枠 = 元画像の ${fmt(win.size)}×${fmt(win.size)}、左上 (${fmt(win.x)}, ${fmt(win.y)})、倍率 ${sc.toFixed(3)}`, `자르기: 흰색 상자 = 원본 이미지 ${fmt(win.size)}×${fmt(win.size)}, 왼쪽 위 (${fmt(win.x)}, ${fmt(win.y)}), 배율 ${sc.toFixed(3)}`,
+      ) +
+      (min
         ? t(
             `　——　★ 已经到最小（1:1，再往里滚不会更小：不允许把源图放大）`,
-            '  —  ★ Already at minimum (1:1; scrolling further will not shrink it: upscaling the source is not allowed)',
+            '  —  ★ Already at minimum (1:1; scrolling further will not shrink it: upscaling the source is not allowed)', '　——　★ すでに最小です（1:1。これ以上スクロールしても小さくなりません：元画像の拡大はできません）', '　——　★ 이미 최소입니다(1:1, 더 스크롤해도 더 작아지지 않습니다: 원본 이미지 확대는 허용되지 않습니다)',
           )
         : '') +
       t(
         `　——　拖图片移动 · 滚轮缩放（缩小可看到整张图）；参数面板等〔确定取景〕时一次更新。`,
-        '  —  Drag to move · scroll to zoom (zoom out to see the whole image); the parameter panel updates once you press Apply crop.',
-      ),
-  );
+        '  —  Drag to move · scroll to zoom (zoom out to see the whole image); the parameter panel updates once you press Apply crop.', '　——　ドラッグで画像を移動 · ホイールで拡大縮小（縮小すると画像全体が見えます）。パラメータパネルは〔トリミングを確定〕で一度に更新されます。', '　——　드래그로 이미지 이동 · 휠로 확대·축소(축소하면 이미지 전체가 보입니다). 매개변수 패널은〔자르기 적용〕을 누를 때 한 번에 갱신됩니다.',
+      )
+    );
+  };
+  setStatusText(statusLine(), statusLine);
+  // ★ 0.38：滑条 / 输入框跟着一起同步（滚轮、拖动、进视图都从这里过）
+  syncSizeControls();
 }
 
 // --------------------------------------------------------------------------
@@ -525,12 +650,13 @@ export function setCropView(on: boolean): void {
   if (on) {
     const s = state.source;
     if (!s) {
-      setStatusText(
+      // ★ 0.40：这句话也要能"重说"（切语言时按新语言再说一遍），所以带上 redo
+      const line = (): string =>
         t(
           '还没有导入图片 —— 先「选择 / 粘贴图片」。（取景是"按需"的：点这里才进取景视图）',
-          'No image imported yet - press "Choose / paste image" first. (Cropping is on demand: this button switches into the crop view.)',
-        ),
-      );
+          'No image imported yet - press "Choose / paste image" first. (Cropping is on demand: this button switches into the crop view.)', '画像がまだ読み込まれていません——先に「画像を選択／貼り付け」を押してください。（トリミングは"オンデマンド"です：ここを押すとトリミングビューに入ります）', '아직 이미지를 불러오지 않았습니다 —— 먼저 「이미지 선택 / 붙여넣기」를 누르세요. (자르기는 "필요할 때만" 합니다: 이 버튼을 눌러야 자르기 보기로 들어갑니다)',
+        );
+      setStatusText(line(), line);
       return;
     }
     snapshot = {
@@ -559,7 +685,7 @@ export function setCropView(on: boolean): void {
         '取景中：拖动图片，把要用的部分放进白框里（滚轮缩放）。' +
           '参数面板要等〔确定取景〕才更新一次（这样拖动才不卡）；〔取消〕原样返回。',
         'Cropping: drag the image so the part you want sits inside the white box (scroll to zoom). ' +
-          'The parameter panel updates only when you press Apply crop (that is what keeps dragging smooth); Cancel returns unchanged.',
+          'The parameter panel updates only when you press Apply crop (that is what keeps dragging smooth); Cancel returns unchanged.', `トリミング中：画像をドラッグして、使う部分を白枠に入れてください（スクロールでズーム）。パラメータパネルは〔トリミングを確定〕を押したときに一度だけ更新されます（そのほうがドラッグが滑らかです）。〔キャンセル〕は元のまま戻ります。`, `자르기 중: 이미지를 드래그해 사용할 부분을 흰색 상자 안에 넣으세요(스크롤로 확대·축소). 매개변수 패널은 〔자르기 적용〕을 눌렀을 때 한 번만 갱신됩니다(그래야 드래그가 끊기지 않습니다). 〔취소〕는 그대로 되돌립니다.`,
       ),
     );
   } else {
@@ -641,14 +767,14 @@ export function confirmCrop(): void {
   commitWindow();
   const p = state.prepared;
   if (!p) {
-    const why = state.prepareError ?? t('prepareEmblem 没有产出结果。', 'prepareEmblem produced no result.');
-    setStatusText(
+    const why = state.prepareError ?? t('prepareEmblem 没有产出结果。', 'prepareEmblem produced no result.', 'prepareEmblem が結果を返しませんでした。', 'prepareEmblem 이 결과를 내지 못했습니다.');
+    const line = (): string =>
       t(
         `〔确定取景〕没通过：${why}（视图先不关，你可以继续拖/缩放，或按〔取消〕）`,
-        `Apply crop failed: ${why} (the view stays open - keep dragging/zooming, or press Cancel)`,
-      ),
-    );
-    toast('error', t('取景没法确定：这一步没算出 128×128', 'Cannot apply the crop: this step did not produce a 128×128 image'), why);
+        `Apply crop failed: ${why} (the view stays open - keep dragging/zooming, or press Cancel)`, `〔トリミングを確定〕に失敗しました：${why}（ビューは開いたままです —— ドラッグ／拡大縮小を続けるか、〔キャンセル〕を押してください）`, `〔자르기 적용〕실패: ${why} (보기는 닫지 않습니다 - 계속 드래그/확대·축소하거나〔취소〕를 누르세요)`,
+      );
+    setStatusText(line(), line);
+    toast('error', t('取景没法确定：这一步没算出 128×128', 'Cannot apply the crop: this step did not produce a 128×128 image', 'トリミングを確定できません：この手順で 128×128 が生成されませんでした', '자르기를 적용할 수 없습니다: 이 단계에서 128×128이 만들어지지 않았습니다'), why);
     return;
   }
   const st = imageStats({ data: p.rgba, width: p.width, height: p.height });
@@ -664,30 +790,31 @@ export function confirmCrop(): void {
     //   或尺寸不符 ⇒ 文案与真实原因打架。现在开头只陈述事实，原因交给 `check.errors`。
     const how = t(
       '〔确定取景〕没通过自检，所以先不关这个视图（你可以继续拖 / 缩放，或按〔取消〕）。',
-      'Apply crop did not pass the self-check, so this view stays open (keep dragging/zooming, or press Cancel).',
+      'Apply crop did not pass the self-check, so this view stays open (keep dragging/zooming, or press Cancel).', '〔トリミングを確定〕がセルフチェックを通らなかったため、このビューは開いたままにします（ドラッグ／拡大縮小を続けるか、〔キャンセル〕を押してください）。', '〔자르기 적용〕이 자체 점검을 통과하지 못해 이 보기를 닫지 않습니다 —— 계속 드래그/확대·축소하거나〔취소〕를 누르세요.',
     );
-    setStatusText(`${how} ${check.errors[0]}`);
+    setStatusText(`${how} ${check.errors[0]}`, () => `${how} ${check.errors[0]}`);
     toast('error', how, check.errors.join('\n'));
     return;
   }
   // ★ 这里**不再**调 onChanged：commitWindow() 已经刷过一次了（一次确定 = 一次管线）
   teardown();
-  const okText = t(
-    `取景已确定：白框 = 源图 ${fmt(w.size)}×${fmt(w.size)} @(${fmt(w.x)}, ${fmt(w.y)})，倍率 ${state.params.manualScale.toFixed(3)}。` +
-      `想改就再点〔取景〕。`,
-    `Crop applied: box = ${fmt(w.size)}×${fmt(w.size)} of the source image @(${fmt(w.x)}, ${fmt(w.y)}), zoom ${state.params.manualScale.toFixed(3)}. ` +
-      `Press Crop again to change it.`,
-  );
-  setStatusText(okText);
+  const okLine = (): string =>
+    t(
+      `取景已确定：白框 = 源图 ${fmt(w.size)}×${fmt(w.size)} @(${fmt(w.x)}, ${fmt(w.y)})，倍率 ${state.params.manualScale.toFixed(3)}。` +
+        `想改就再点〔取景〕。`,
+      `Crop applied: box = ${fmt(w.size)}×${fmt(w.size)} of the source image @(${fmt(w.x)}, ${fmt(w.y)}), zoom ${state.params.manualScale.toFixed(3)}. ` +
+        `Press Crop again to change it.`, `トリミングを確定しました：白枠 = 元画像 ${fmt(w.size)}×${fmt(w.size)} @(${fmt(w.x)}, ${fmt(w.y)})、倍率 ${state.params.manualScale.toFixed(3)}。変更するにはもう一度〔トリミング〕を押してください。`, `자르기를 적용했습니다: 흰색 상자 = 원본 이미지 ${fmt(w.size)}×${fmt(w.size)} @(${fmt(w.x)}, ${fmt(w.y)}), 배율 ${state.params.manualScale.toFixed(3)}. 바꾸려면 〔자르기〕를 다시 누르세요.`,
+    );
+  setStatusText(okLine(), okLine);
   if (check.warnings.length > 0) {
-    toast('warn', t('取景已确定，但有一点要注意', 'Crop applied, but note this'), check.warnings.join('\n'));
+    toast('warn', t('取景已确定，但有一点要注意', 'Crop applied, but note this', 'トリミングを確定しましたが、1 点注意があります', '자르기를 적용했습니다. 다만 한 가지 주의할 점이 있습니다'), check.warnings.join('\n'));
   } else {
     toast(
       'ok',
-      t('取景已确定', 'Crop applied'),
+      t('取景已确定', 'Crop applied', 'トリミングを確定しました', '자르기를 적용했습니다'),
       t(
         `${p.width}×${p.height} · 实色 ${p.report.colorsAfter} · 不透明像素 ${st.opaquePixels}`,
-        `${p.width}×${p.height} · ${p.report.colorsAfter} colors · ${st.opaquePixels} opaque pixels`,
+        `${p.width}×${p.height} · ${p.report.colorsAfter} colors · ${st.opaquePixels} opaque pixels`, `${p.width}×${p.height} · 実色 ${p.report.colorsAfter} · 不透明ピクセル ${st.opaquePixels}`, `${p.width}×${p.height} · 실제 색 ${p.report.colorsAfter} · 불투명 픽셀 ${st.opaquePixels}`,
       ),
     );
   }
@@ -714,17 +841,26 @@ export function cancelCrop(): void {
     snapshot = null;
   }
   teardown();
-  setStatusText(t('已取消取景（参数回到进入前的状态）。', 'Crop cancelled (the parameters are back to what they were).'));
+  setStatusText(
+    t('已取消取景（参数回到进入前的状态）。', 'Crop cancelled (the parameters are back to what they were).', 'トリミングをキャンセルしました（パラメータは元の状態に戻りました）。', '자르기를 취소했습니다 (매개변수가 들어오기 전 상태로 돌아갔습니다).'),
+    () => t('已取消取景（参数回到进入前的状态）。', 'Crop cancelled (the parameters are back to what they were).', 'トリミングをキャンセルしました（パラメータは元の状態に戻りました）。', '자르기를 취소했습니다 (매개변수가 들어오기 전 상태로 돌아갔습니다).'),
+  );
 }
 
 /** 由 `main.ts` 在启动时调用一次：注入回调（提交 / 轻量重排）+ 绑按钮。 */
 export function initCropView(opts: { onChange: () => void; onRelayout?: () => void }): void {
   onChanged = opts.onChange;
+  // ★ 0.45（简化普查复核）：这个 `?? opts.onChange` 的**回落点是完整管线**（`recompute()` + 重画图片）。
+  //   哪天调用方忘传 `onRelayout`，一进/一出取景视图就会跑它 —— 正是 0.7 花一整版修掉的卡顿
+  //   （文件头那张 397 ms 的表），而且**不会有任何测试变红**（`main.ts` 现在两样都传）。
+  //   ⇒ 新增调用方时 `onRelayout` 必须传；要更稳就把回落点改成空实现，别指向 `onChange`。
   onRelayout = opts.onRelayout ?? opts.onChange ?? null;
   const r = collect();
   r.cropBtn.addEventListener('click', () => toggleCropView());
   $('btn-crop-ok').addEventListener('click', () => confirmCrop());
   $('btn-crop-cancel').addEventListener('click', () => cancelCrop());
+  // ★ 0.38：白框边长的滑条 / 输入框（用户："精度不够高"）
+  bindSizeControls(r);
   // 窗口尺寸变了：白框（只看舞台）与源图显示倍率都要重排；窗口本身（源像素）不变。
   // 这里必须**强制重新量一次**舞台（缓存作废），然后只做视觉重排。
   window.addEventListener('resize', () => {

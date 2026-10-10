@@ -298,8 +298,6 @@ export interface Dirent {
   nameRaw: Uint8Array;
   /** 该 dirent 在目录项 512 B 里的原始字节（副本）。 */
   raw: Uint8Array;
-  /** mode 的 bit15（0x8000）= "已用"。 */
-  used: boolean;
   /** 本层的目录判据（见 `modeIsDir` 的长注释）。 */
   isDir: boolean;
   /** 名字是 `.` 或 `..`。 */
@@ -769,7 +767,6 @@ export class Card {
         name,
         nameRaw,
         raw: e,
-        used: true,
         isDir: modeIsDir(mode),
         isDot,
         isEmblemDir: !isDot && isEmblemArchiveDirName(name),
@@ -853,6 +850,8 @@ export class Card {
       if (fc !== INVALID_CLUSTER) used.add(fc); // 各 FAT 块（绝对簇号）
     }
     mark(this.rootdir); // ★ 根目录自己
+    // ⚠ 只沿 **dirent 链** 走 ⇒ "刚分配、还没有 dirent 指向"的那些数据簇**看不见**。
+    //   `createFileInDir` 第 4 步（扩目录簇）必须自己把它们并回集合 —— 理由与实测见那一段。
     for (const e of this.listRoot()) {
       if (e.isDot) continue;
       mark(e.cluster); // 子目录自己
@@ -916,11 +915,14 @@ export class Card {
    *   （绝对页 1557）整页 FF、mode=0xFFFFFFFF；而 `.` / `..` / `data0` 等
    *   有效项的 mode 都带 bit15。
    *
-   * ★ 扫描顺序：**先扫 `[0, count)`（声明项数范围内），再扫 `[count, 槽数)`**。
-   *   后一段是有意为之 —— 真卡的声明项数会**滞后**（实测 `BISLPS-25462EMB`
-   *   曾"声明 6 项、里面已有 7 项"），不扫的话会把已存在的项覆盖掉。
+   * ★ 扫描顺序：**从 0 一路扫到链尾**（不区分"声明项数之内 / 之外"）。
+   *   为什么要扫到声明项数**之外** —— 真卡的声明项数会**滞后**（实测 `BISLPS-25462EMB`
+   *   曾"声明 6 项、里面已有 7 项"），只看 `[0, count)` 会把已存在的项覆盖掉。
    *   副作用：对 `BISLPS-25462GAME`（声明 9 项 / 链 10 槽）调 `findFreeSlot(chain, 9)`
    *   返回的是 **9（未声明的那个空槽）**，不是 -1 —— 复用它是安全且正确的。
+   *   （0.20：原先写成"先扫 `[0, count)`、再扫 `[count, slots)`"两个逐字相同的循环，
+   *    注释声称"有意为之"但两段代码没有任何区别 ⇒ 合成一个循环。语义逐字不变：
+   *    两段拼起来就是从 0 扫到 `slots`，`count` 只在这条注释里还有意义。）
    */
   findFreeSlot(first: number, count: number): number {
     const chain = this.chain(first, 4096);
@@ -934,12 +936,9 @@ export class Card {
         got += PAGE_SIZE;
       }
     }
-    const limit = Math.min(slots, Math.max(count, 0));
-    for (let i = 0; i < limit; i++) {
-      if (u32le(raw, i * PAGE_SIZE) === DIRENT_EMPTY_MODE) return i;
-    }
-    // 声明项数之后可能还有未声明的空槽（真卡会滞后）——继续往后找
-    for (let i = limit; i < slots; i++) {
+    // `count` 只用于文档/调用方语义（见上），扫描范围是整条链
+    void count;
+    for (let i = 0; i < slots; i++) {
       if (u32le(raw, i * PAGE_SIZE) === DIRENT_EMPTY_MODE) return i;
     }
     return -1;
@@ -1102,7 +1101,9 @@ export class Card {
     const touched: number[] = [];
 
     // ---- 1) 分配数据簇 ----
-    const used = this.collectUsedClusters();
+    //   ⚠ `used` 会被 `allocateClusters()` **就地补进**这 18 个数据簇；第 4 步扩目录簇时
+    //     要重新收集并把这 18 个并回去（理由见那一段的注释）。
+    let used = this.collectUsedClusters();
     const ncl = Math.max(1, Math.ceil(data.length / (this.ppc * PAGE_SIZE)));
     const clusters = this.allocateClusters(ncl, used);
 
@@ -1129,6 +1130,26 @@ export class Card {
     let slot = this.findFreeSlot(dirFirst, dirCount);
     if (slot < 0) {
       if (!extendDir) throw new Error(`${dirName} 没有空槽（需要扩目录）`);
+      // ★★ 0.20 修正（占用集合的三条腿都要是最新的）：
+      //   这一步原先直接复用第 1 步那个 `used`（**第 1 步时**的快照）。逐条说清它哪儿靠得住：
+      //     · **数据簇那条腿**：`used` 里含"第 1 步刚分配、还没有任何 dirent 指向的 18 个数据簇"
+      //       —— 那是 `allocateClusters()` **就地 `u.add(cur)`** 补进去的。这部分**必须保住**：
+      //       `collectUsedClusters()` 只沿 **dirent 链** 走（根目录/子目录/文件链），
+      //       此刻还没有 dirent 指向这 18 个簇（dirent 要到下面第 4/5 步才写）
+      //       ⇒ 单纯换成"重新收集"会把它们当空闲（实测：新收集的集合里 1408..1425 一个都没有，
+      //         重新分配会**又给 1408** ⇒ 直接把刚写好的数据覆盖掉）。
+      //     · **系统区那条腿**（`ifc[0]` / `ind[]`）：`used` 里是第 1 步抄的，而第 3 步
+      //       `writeFatChain()` 刚刚写过那些 FAT 块所在的页 ⇒ 集合与磁盘真值可能脱节。
+      //       ⚠ 这是**潜在的**（不是当前就错）：本卡 FAT 块是绝对簇 9..40，而分配器从 `aoff+2 = 43`
+      //       起扫、第一个空闲簇在 1408 ⇒ 现在踩不到；换成 FAT 块位置更靠后的卡就可能
+      //       把新簇分配到 FAT 块上 ⇒ **写坏 FAT**。
+      //   ⇒ 所以做法是"重新收集一次（刷新系统区那条腿），再把数据簇并回去"。
+      //     实测（`Mcd001_embdata2.ps2` 的两个徽章目录，18 簇数据 / 声明项数满）：
+      //     新旧两条路径给出的扩目录簇**完全相同**（都是 1426），且扩簇的两页
+      //     （绝对页 2934/2935）与 18 个数据簇的页（2898..2933）**交集为空**
+      //     ⇒ 这次修正对现有证据卡是**行为中性**的，`card.test.ts` 的 D 实验期望值不用动。
+      used = this.collectUsedClusters();
+      for (const cl of clusters) used.add(cl);
       const newCl = this.allocateClusters(1, used)[0];
       dirExtensionClusters.push(newCl);
       // 目录链尾 → 新簇；新簇 = 链尾

@@ -64,7 +64,7 @@
  *      确认"双击打开"时不会在脚本解析 / 模块初始化阶段就炸。
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, rmSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripTypeScriptTypes } from 'node:module';
@@ -345,6 +345,51 @@ function parseBindingNames(src, pos) {
 const NAMESPACE_RE = /^import\s*\*\s*as\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+['"]/;
 const DEFAULT_RE = /^import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*(?:,|from\b)/;
 
+/**
+ * 从 `pos` 往前找"上一个真代码字符"（跳过空白与注释——注释在 `mask` 里已经是空白，
+ * 所以实际只需要跳过空白；这里用 `mask` 而不是 `src`，就是为了不被注释/字符串干扰）。
+ *
+ * ⚠ 为什么需要它：`import` / `export` 既是**语句关键字**、也可以是**属性名**
+ *   （`obj.import`、`{ export: 1 }` 都是合法 JS，而且掩码抹不掉它们）。
+ *   只有"语句起始位置"的那一个才按关键字处理，剩下的必须当普通标识符放过去。
+ */
+function atStatementStart(mask, pos) {
+  let i = pos - 1;
+  while (i >= 0 && /\s/.test(mask[i])) i -= 1;
+  if (i < 0) return true; // 文件开头
+  const c = mask[i];
+  // `;` / `}` ⇒ 上一句结束了；其它情况（`.`、`(`、`,`、标识符…）都是在表达式里
+  return c === ';' || c === '}';
+}
+
+/** `export` 后面只能跟这些（我们的子集）——其它一律当普通标识符，不碰。 */
+const EXPORT_FORMS = new Set([
+  'default',
+  'type',
+  'interface',
+  'declare',
+  'const',
+  'let',
+  'var',
+  'function',
+  'class',
+  'async',
+]);
+
+/**
+ * `export` 的下一个 token 是不是我们认识的导出形式？
+ *
+ * ⚠ 别用 `/^[A-Za-z]+/` + 集合比：`export:` 这种下一个字符是 `:`，正则取到空串，
+ *   会被误判成"认识的导出形式"⇒ 走进报错分支。所以这里按"有没有下一个 token"来判。
+ */
+function hasExportForm(mask, j) {
+  const c = mask[j];
+  if (c === '{' || c === '*') return true;
+  if (c === undefined || !/[A-Za-z_$]/.test(c)) return false;
+  const word = /^[A-Za-z]+/.exec(mask.slice(j, j + 20))?.[0] ?? '';
+  return EXPORT_FORMS.has(word);
+}
+
 /** 从 `pos` 起第一个引号（`'` / `"` / 反引号）的位置；没有则 -1。 */
 function nextQuote(src, pos) {
   for (let i = pos; i < src.length; i++) {
@@ -412,196 +457,108 @@ export function maskSource(src) {
   /**
    * ★★★ 找出**注释区间**（行注释与块注释），返回等长掩码：1 = 注释里的字节。
    *
-   * 为什么非要先单独找出注释（本构建器在这一处连踩五次，值得写清楚）：
+   * 为什么非要先单独找出注释（本构建器在这一处连踩六次，值得写清楚）：
    *   本项目的中文注释大量使用反引号引用代码词，例如
    *       * ⚠ `findInRoot` / `emblemDirs()` 用的判据是名字（`E\d\d$` | `EMB$`）
    *   这一行里 `${...}` 里的 `$`+`{` 正好拼成模板插值的开头 —— 于是"注释里的
    *   反引号"会把后面几百行真代码（甚至整篇 HTML）当成模板字面量吞掉。
    *   那种错误**不报错**，只会静默产出坏包；所以宁可多写一步，也要先把注释圈出来。
    *
-   * 本轮的判据（分两遍，第二遍用第一遍的结果）：
-   *   第一遍：用"同行反引号是否配对"这个保守启发式 + 括号/注释块把大概边界扫出来；
-   *   第二遍：在**第一遍已标记为注释**的区间里，反引号一律不当界符，重新精确扫一遍。
-   *   两遍的结果取并集 ⇒ 只可能"多标成注释"（安全方向），不会漏标。
+   * 判据：**一遍，就是一个正经词法器**，与下面 `scanCode()` 同一套规则 ——
+   *   注释 / 字符串 / 模板串 / 正则字面量 / `${}` 括号配对；
+   *   模板串内部只认 `\`、闭合反引号、`${`（**模板里的 `//` 不是注释**）。
+   *   没有"同行反引号是否配对"那类启发式 —— 那类启发式对**跨行模板串**必然误判。
+   *
+   * ⚠⚠ 为什么不能"先粗扫一遍、再拿粗扫结果精确扫一遍"（上一版就是错的）：
+   *   粗扫（`rough`）在模板串内部不认 `//` ⇒ 会把 `const s = `a\n// b`;` 第二行
+   *   整行标成注释、**连闭合反引号一起**；精确扫（`exact`）再"按注释区间决定反引号
+   *   算不算界符" ⇒ 模板串永远闭不上，扫描器一路吃到文件尾 ⇒ 其后整份源码在掩码里
+   *   被抹空、`export` 静默消失（**不报错**，只是坏包）。最小复现（实测踩过）：
+   *       const s = `a
+   *       // b`;
+   *       export const K = 2;     ← 修复前这句在掩码里没了
+   *   ⇒ 教训：注释扫描**自己就必须是正确的词法器**，不能拿一个会错的粗扫结果当输入。
    */
   const markComments = () => {
     const flags = new Uint8Array(src.length);
-    const isComment = (i) => flags[i] === 1;
+    const mark = (from, to) => {
+      for (let k = from; k < to && k < src.length; k++) flags[k] = 1;
+    };
 
-    // ---------- 第一遍：纯靠"同行反引号配对"的保守扫描 ----------
-    const loneTick = new Uint8Array(src.length);
-    {
-      let start = 0;
-      while (start <= src.length) {
-        let end = src.indexOf('\n', start);
-        if (end < 0) end = src.length;
-        const ticks = [];
-        for (let k = start; k < end; k++) if (src[k] === '`') ticks.push(k);
-        if (ticks.length % 2 === 1) for (const k of ticks) loneTick[k] = 1;
-        start = end + 1;
-      }
-    }
-
-    /** 粗扫：只为了把"注释区间"标出来。`flags` 里 1 = 注释。 */
-    const rough = (pos, stopAtBrace) => {
-      let i = pos;
+    /** 跳过字符串（`'` / `"`，含转义），返回闭合引号之后的位置。 */
+    const skipQuoted = (pos) => {
+      const q = src[pos];
+      let i = pos + 1;
       while (i < src.length) {
-        const c = src[i];
-        const n = src[i + 1];
-        if (c === '/' && n === '/') {
-          while (i < src.length && src.charCodeAt(i) !== 10) {
-            flags[i] = 1;
-            i += 1;
-          }
-          continue;
-        }
-        if (c === '/' && n === '*') {
-          flags[i] = 1;
-          flags[i + 1] = 1;
+        if (src[i] === '\\') {
           i += 2;
-          while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
-            flags[i] = 1;
-            i += 1;
-          }
-          if (i < src.length) {
-            flags[i] = 1;
-            flags[i + 1] = 1;
-            i += 2;
-          }
           continue;
         }
-        if (c === '"' || c === "'") {
-          i += 1;
-          while (i < src.length) {
-            if (src[i] === '\\') {
-              i += 2;
-              continue;
-            }
-            if (src[i] === c) {
-              i += 1;
-              break;
-            }
-            i += 1;
-          }
-          continue;
-        }
-        if (c === '`' && !loneTick[i]) {
-          i += 1;
-          for (;;) {
-            let closed = false;
-            while (i < src.length) {
-              if (src[i] === '\\') {
-                i += 2;
-                continue;
-              }
-              if (src[i] === '`' && !loneTick[i]) {
-                i += 1;
-                closed = true;
-                break;
-              }
-              if (src[i] === '$' && src[i + 1] === '{') {
-                i += 2;
-                break;
-              }
-              i += 1;
-            }
-            if (closed) break;
-            i = rough(i, true);
-            if (i < src.length && src[i] === '}') i += 1;
-            else break;
-          }
-          continue;
-        }
-        if (stopAtBrace && c === '}') return i;
+        if (src[i] === q) return i + 1;
         i += 1;
       }
       return i;
     };
 
-    rough(0, false);
+    /** 跳过模板串（`${…}` 里的表达式按代码继续扫），返回闭合反引号之后的位置。 */
+    const skipTemplate = (pos) => {
+      let i = pos + 1;
+      while (i < src.length) {
+        const ch = src[i];
+        if (ch === '\\') {
+          i += 2;
+          continue;
+        }
+        if (ch === '`') return i + 1;
+        if (ch === '$' && src[i + 1] === '{') {
+          i = walk(i + 2, true);
+          if (i < src.length && src[i] === '}') i += 1;
+          continue;
+        }
+        i += 1;
+      }
+      return i;
+    };
 
-    // ---------- 第二遍：用第一遍的注释标记，精确重扫 ----------
-    const exact = (pos, stopAtBrace) => {
+    /** 词法主循环；`insideExpr` 时遇到配对的 `}` 就停下并返回它的位置。 */
+    const walk = (pos, insideExpr) => {
       let i = pos;
       while (i < src.length) {
         const c = src[i];
         const n = src[i + 1];
         if (c === '/' && n === '/') {
-          while (i < src.length && src.charCodeAt(i) !== 10) {
-            flags[i] = 1;
-            i += 1;
-          }
+          const start = i;
+          while (i < src.length && src.charCodeAt(i) !== 10) i += 1;
+          mark(start, i);
           continue;
         }
         if (c === '/' && n === '*') {
-          flags[i] = 1;
-          flags[i + 1] = 1;
+          const start = i;
           i += 2;
-          while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
-            flags[i] = 1;
-            i += 1;
-          }
-          if (i < src.length) {
-            flags[i] = 1;
-            flags[i + 1] = 1;
-            i += 2;
-          }
+          while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i += 1;
+          i = Math.min(src.length, i + 2);
+          mark(start, i);
           continue;
         }
         if (c === '"' || c === "'") {
-          i += 1;
-          while (i < src.length) {
-            if (src[i] === '\\') {
-              i += 2;
-              continue;
-            }
-            if (src[i] === c) {
-              i += 1;
-              break;
-            }
-            i += 1;
-          }
+          i = skipQuoted(i);
           continue;
         }
         if (c === '`') {
-          if (isComment(i)) {
-            // 注释里的反引号 —— 不是界符
-            i += 1;
-            continue;
-          }
-          i += 1;
-          for (;;) {
-            let closed = false;
-            while (i < src.length) {
-              if (src[i] === '\\') {
-                i += 2;
-                continue;
-              }
-              if (src[i] === '`' && !isComment(i)) {
-                i += 1;
-                closed = true;
-                break;
-              }
-              if (src[i] === '$' && src[i + 1] === '{') {
-                i += 2;
-                break;
-              }
-              i += 1;
-            }
-            if (closed) break;
-            i = exact(i, true);
-            if (i < src.length && src[i] === '}') i += 1;
-            else break;
-          }
+          i = skipTemplate(i);
           continue;
         }
-        if (stopAtBrace && c === '}') return i;
+        if (c === '/' && regexAllowed(src, i)) {
+          i = skipRegex(src, i);
+          continue;
+        }
+        if (insideExpr && c === '}') return i;
         i += 1;
       }
       return i;
     };
 
-    exact(0, false);
+    walk(0, false);
     return flags;
   };
 
@@ -612,6 +569,14 @@ export function maskSource(src) {
     for (let k = from; k < to && k < src.length; k++) out[k] = src[k] === '\n' ? '\n' : ' ';
   };
 
+  /**
+   * 在**模板串内部**扫一格：反引号是闭合符、`${` 是插值开头 —— **与注释标记无关**。
+   *
+   * ⚠ 这里以前写的是 `ch === '`' && !comment[i]`，于是"被误标成注释的闭合反引号"
+   *   会被跳过去：扫描器一路吃到文件尾，其后整份源码被抹空（与 `markComments` 那处
+   *   是同一个 bug 的两半）。既然 `markComments` 现在是正确的词法器，这里就没有任何
+   *   理由再参考 `comment`；退一步说，"扫描器已经进了模板串"本身就说明这个反引号是界符。
+   */
   const scanTemplateText = (pos) => {
     let i = pos;
     while (i < src.length) {
@@ -620,7 +585,7 @@ export function maskSource(src) {
         i += 2;
         continue;
       }
-      if (ch === '`' && !comment[i]) return { next: i + 1, kind: 'end' };
+      if (ch === '`') return { next: i + 1, kind: 'end' };
       if (ch === '$' && src[i + 1] === '{') return { next: i + 2, kind: 'expr' };
       i += 1;
     }
@@ -710,6 +675,103 @@ export function maskSource(src) {
   return out.join('');
 }
 
+/**
+ * ★ 抽出**字符串字面量的内容**（`'…'` / `"…"` / 模板串的文本段；模板 `${…}` 里递归）。
+ *
+ * 为什么需要它（`maskSource()` 不够用）：`maskSource()` 是为了"只看真代码"而设计的
+ * —— 它把字符串内容一起抹成空格。可 `checkHtml()` 里"产物不许有任何外部引用"这条
+ * **恰恰要查字符串里写了什么**：`var u = "http://evil/x.js"` 在掩码里只剩一对引号，
+ * 于是那条断言静默放行（实测）。所以要有一个"只保留字符串、别的一律不输出"的口径。
+ *
+ * 返回 `[{ start, text }]`：`start` 是字面量**内容**在原串里的起始偏移（报错时回切片用）。
+ * 反斜杠转义原样保留（查 URL 用不着解码）。
+ */
+export function stringLiteralSpans(src) {
+  const out = [];
+
+  /** 跳过 `//` / `/* *​/` 注释，返回之后的位置。 */
+  const skipCommentHere = (pos) => {
+    if (src[pos + 1] === '/') {
+      let i = pos + 2;
+      while (i < src.length && src.charCodeAt(i) !== 10) i += 1;
+      return i;
+    }
+    let i = pos + 2;
+    while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i += 1;
+    return Math.min(src.length, i + 2);
+  };
+
+  /** 跳过模板串的文本段；遇到 `${` 停下（返回 kind: 'expr'）。 */
+  const scanTemplateText = (pos) => {
+    let i = pos;
+    while (i < src.length) {
+      const ch = src[i];
+      if (ch === '\\') {
+        i += 2;
+        continue;
+      }
+      if (ch === '`') return { next: i + 1, kind: 'end' };
+      if (ch === '$' && src[i + 1] === '{') return { next: i + 2, kind: 'expr' };
+      i += 1;
+    }
+    return { next: src.length, kind: 'end' };
+  };
+
+  /** 扫一段代码；`insideExpr` 时遇到配对的 `}` 停下。 */
+  const scan = (pos, insideExpr) => {
+    let i = pos;
+    while (i < src.length) {
+      const c = src[i];
+      const n = src[i + 1];
+      if (c === '/' && (n === '/' || n === '*')) {
+        i = skipCommentHere(i);
+        continue;
+      }
+      if (c === "'" || c === '"') {
+        const start = i + 1;
+        let j = start;
+        while (j < src.length) {
+          if (src[j] === '\\') {
+            j += 2;
+            continue;
+          }
+          if (src[j] === c) break;
+          j += 1;
+        }
+        out.push({ start, text: src.slice(start, Math.min(j, src.length)) });
+        i = j + 1;
+        continue;
+      }
+      if (c === '`') {
+        const start = i + 1;
+        let cur = start;
+        for (;;) {
+          const seg = scanTemplateText(cur);
+          out.push({ start: cur, text: src.slice(cur, seg.kind === 'end' ? Math.max(cur, seg.next - 1) : seg.next - 2) });
+          if (seg.kind === 'end') {
+            i = seg.next;
+            break;
+          }
+          const r = scan(seg.next, true);
+          i = r.end < src.length ? r.end + 1 : r.end;
+          cur = i;
+        }
+        continue;
+      }
+      if (c === '/' && regexAllowed(src, i)) {
+        i = skipRegex(src, i);
+        continue;
+      }
+      if (insideExpr && c === '}') return { end: i };
+      i += 1;
+    }
+    return { end: src.length };
+  };
+
+  scan(0, false);
+  return out;
+}
+
 /** 从 `pos` 开始找语句的 `;`（含嵌套配平）或换行；返回语句结束位置。 */
 function findStatementEnd(src, pos) {
   let i = pos;
@@ -759,7 +821,11 @@ function checkSpec(file, src, pos, spec) {
 /**
  * 把一个已经擦过类型的模块源码变成"可被 require"的形式。
  * ⚠ 抛出的 `DisciplineError` 消息里**一定**带 `${file}:${line}`。
- * ⚠ 已导出，供 `web/test/ui.test.ts` 直接测各种不支持语法的报错。
+ * ⚠ **它没有导出**（`ui.test.ts` 只从本文件 import `maskSource` / `checkHtml` /
+ *   `extractScripts` / `readAppVersion` / `smokeBoot`）⇒ 下面那些"不支持的语法要报错"
+ *   的分支靠**冒烟**覆盖：`ui.test.ts` 分节 (g)、`checkHtml()`、以及无头 Chrome 走一遍。
+ *   要把它们逐条钉死，就得把它 `export` 出去 —— 那会改动测试期望的 API 面，
+ *   当前不划算（注释与代码必须一致，所以这里写明"没导出"，别写成"已导出供测试"）。
  */
 function transformModule(file, src) {
   const mask = maskSource(src);
@@ -790,82 +856,98 @@ function transformModule(file, src) {
     //   第一版就是因为在这里"又跳了一次"，被注释里的反引号带偏过。
 
     // ── import（只在掩码里找，所以注释/字符串里的这六个字母不算）──
-    if (c === 'i' && mask.startsWith('import', i) && atWordStart(mask, i)) {
+    //   ⚠ 只有**语句起始位置**的 `import` 才当关键字：`obj.import` / `{ import: 1 }`
+    //     这种属性名是合法代码（掩码抹不掉它），以前会走进下面"找引号"的分支 ——
+    //     `nextQuote()` 无边界地向后找引号，`findStatementEnd()` 随后把中间代码整段擦掉。
+    if (c === 'i' && mask.startsWith('import', i) && atWordStart(mask, i) && atStatementStart(mask, i)) {
       const after = src[i + 6];
-      if (after === '(' || (after === '.' && src.startsWith('.meta', i + 6))) {
-        fail(
-          file,
-          src,
-          i,
-          '不支持动态 `import()` 或 `import.meta`（单文件经典脚本里没有模块加载器）。' +
-            '需要"等运行时再加载"就把逻辑写成普通函数。',
-        );
-      }
-      if (after !== undefined && isIdChar(after)) {
-        take(i, i + 6);
-        i += 6;
-        continue;
-      }
+      const isDynamicOrMeta = after === '(' || (after === '.' && src.startsWith('.meta', i + 6));
+      const looksLikeStatement =
+        isDynamicOrMeta ||
+        after === '"' ||
+        after === "'" ||
+        after === '{' ||
+        after === '*' ||
+        (after !== undefined && /\s/.test(after));
+      if (looksLikeStatement) {
+        if (isDynamicOrMeta) {
+          fail(
+            file,
+            src,
+            i,
+            '不支持动态 `import()` 或 `import.meta`（单文件经典脚本里没有模块加载器）。' +
+              '需要"等运行时再加载"就把逻辑写成普通函数。',
+          );
+        }
 
-      // ★★ 说明符与子句必须回**原文**里取（掩码把引号连内容一起抹成了空白）。
-      //   判"是不是纯副作用 import"也就只能看原文里有没有 `from`：
-      //   有 `from` ⇒ 具名/命名空间导入；没有 ⇒ `import './x.ts';`。
-      const q1 = nextQuote(src, i);
-      if (q1 < 0) fail(file, src, i, '看不懂的 import 语句（没找到引号）。');
-      const closes = closeQuote(src, q1);
-      const specName = src.slice(q1 + 1, closes);
-      const clauseSrc = src.slice(i + 6, q1);
-      const hasFrom = /\bfrom\b/.test(clauseSrc);
-      const stmtEnd = findStatementEnd(src, closes + 1);
-      checkSpec(file, src, i, specName);
+        // ★★ 说明符与子句必须回**原文**里取（掩码把引号连内容一起抹成了空白）。
+        //   判"是不是纯副作用 import"也就只能看原文里有没有 `from`：
+        //   有 `from` ⇒ 具名/命名空间导入；没有 ⇒ `import './x.ts';`。
+        const q1 = nextQuote(src, i);
+        if (q1 < 0) fail(file, src, i, '看不懂的 import 语句（没找到引号）。');
+        const closes = closeQuote(src, q1);
+        const specName = src.slice(q1 + 1, closes);
+        const clauseSrc = src.slice(i + 6, q1);
+        const hasFrom = /\bfrom\b/.test(clauseSrc);
+        const stmtEnd = findStatementEnd(src, closes + 1);
+        checkSpec(file, src, i, specName);
 
-      if (!hasFrom) {
-        // `import './x.ts';` —— 纯副作用，不建本地绑定
-        deps.push({ spec: specName, bindings: [], kind: 'side-effect', line: lineOf(src, i) });
+        if (!hasFrom) {
+          // `import './x.ts';` —— 纯副作用，不建本地绑定
+          deps.push({ spec: specName, bindings: [], kind: 'side-effect', line: lineOf(src, i) });
+          blank(i, stmtEnd);
+          i = stmtEnd;
+          continue;
+        }
+
+        if (NAMESPACE_RE.exec(src.slice(i, q1 + 1))) {
+          fail(
+            file,
+            src,
+            i,
+            '不支持 `import * as ns from …`（命名空间导入）。请改成具名导入：`import { a, b } from …`。',
+          );
+        }
+
+        const df = DEFAULT_RE.exec(mask.slice(i, i + 400));
+        if (df) {
+          fail(
+            file,
+            src,
+            i,
+            `不支持默认导入（\`import ${df[1]} from …\`）。本项目一律用具名导出：` +
+              '`export function f(){}` + `import { f } from …`。',
+          );
+        }
+
+        const clause = clauseSrc.trim();
+        if (/^type\b/.test(clause)) {
+          blank(i, stmtEnd); // import type：只删不连边
+          i = stmtEnd;
+          continue;
+        }
+        if (!clause.startsWith('{')) {
+          fail(file, src, i, `看不懂的 import 子句 \`${clause}\`（只支持 \`{ a, b }\` 形式）。`);
+        }
+        const inner = clause.slice(1, clause.lastIndexOf('}'));
+        const sp = splitSpecifiers(inner, file, src, i);
+        if (!sp.typeOnly) deps.push({ spec: specName, bindings: sp.names, kind: 'named', line: lineOf(src, i) });
         blank(i, stmtEnd);
         i = stmtEnd;
         continue;
       }
-
-      if (NAMESPACE_RE.exec(src.slice(i, q1 + 1))) {
-        fail(
-          file,
-          src,
-          i,
-          '不支持 `import * as ns from …`（命名空间导入）。请改成具名导入：`import { a, b } from …`。',
-        );
-      }
-
-      const df = DEFAULT_RE.exec(mask.slice(i, i + 400));
-      if (df) {
-        fail(
-          file,
-          src,
-          i,
-          `不支持默认导入（\`import ${df[1]} from …\`）。本项目一律用具名导出：` +
-            '`export function f(){}` + `import { f } from …`。',
-        );
-      }
-
-      const clause = clauseSrc.trim();
-      if (/^type\b/.test(clause)) {
-        blank(i, stmtEnd); // import type：只删不连边
-        i = stmtEnd;
-        continue;
-      }
-      if (!clause.startsWith('{')) {
-        fail(file, src, i, `看不懂的 import 子句 \`${clause}\`（只支持 \`{ a, b }\` 形式）。`);
-      }
-      const inner = clause.slice(1, clause.lastIndexOf('}'));
-      const sp = splitSpecifiers(inner, file, src, i);
-      if (!sp.typeOnly) deps.push({ spec: specName, bindings: sp.names, kind: 'named', line: lineOf(src, i) });
-      blank(i, stmtEnd);
-      i = stmtEnd;
+      // 不是"语句形式的 import"（属性名 `obj.import`、`{ import: 1 }`，或 `importXyz`
+      // 这种已经过了 `atWordStart` 的词）⇒ 当普通标识符，只推进 6 个字符。
+      take(i, i + 6);
+      i += 6;
       continue;
     }
 
     // ── export ──
-    if (c === 'e' && mask.startsWith('export', i) && atWordStart(mask, i)) {
+    //   ⚠ 只有**语句起始位置**的 `export` 才当关键字：`obj.export` / `{ export: 1 }`
+    //     里的那个是**属性名**，合法代码，掩码也抹不掉它（踩过：`nextQuote()` 会从
+    //     它开始向后无边界找引号，`findStatementEnd()` 随后把中间代码整段擦掉）。
+    if (c === 'e' && mask.startsWith('export', i) && atWordStart(mask, i) && atStatementStart(mask, i)) {
       const after = mask[i + 6];
       if (after !== undefined && isIdChar(after)) {
         take(i, i + 6);
@@ -876,6 +958,27 @@ function transformModule(file, src) {
       while (j < src.length && /\s/.test(mask[j])) j += 1;
       const word = (/^[A-Za-z]+/.exec(mask.slice(j, j + 20)) ?? [''])[0];
 
+      if (!hasExportForm(mask, j)) {
+        // 走到这里说明它是"语句开头的 `export`"，却不是我们认识的任何一种导出形式
+        // —— 与其静默擦掉后面的代码，不如直接报错（宁可不打包，也不产出坏包）。
+        if (word === '') {
+          fail(
+            file,
+            src,
+            i,
+            '看不懂的 `export`：不支持 `export = …`（TS 的 CJS 赋值导出），' +
+              '也**不允许**把 `export` 当属性名写在语句开头。请改成具名导出。',
+          );
+        }
+        fail(
+          file,
+          src,
+          i,
+          `看不懂的导出形式（\`export ${word}\`）。支持的：` +
+            '`export const|let|var` / `export function` / `export class` / `export {…}` / ' +
+            '`export type` / `export interface` / `export * as ns from …`。',
+        );
+      }
       if (word === 'default') {
         fail(file, src, i, '不支持 `export default`。请用具名导出（`export function f(){}` / `export const x = …`）。');
       }
@@ -964,12 +1067,16 @@ function transformModule(file, src) {
         i = j;
         continue;
       }
+      // ★ 走到这里说明 `hasExportForm()` 已经点头、上面各个分支又都没接住 ——
+      //   当前子集里没有这种形式（例如 `export async const …`）。仍然硬报错，
+      //   不静默擦除（"擦多了"在别处只会表现为产物白屏，很难查）。
       fail(
         file,
         src,
         i,
         `看不懂的导出形式（\`export ${word || src[j] || ''}\`）。支持的：` +
-          '`export const|let|var` / `export function` / `export class` / `export {…}` / `export type` / `export interface`。',
+          '`export const|let|var` / `export function` / `export class` / `export {…}` / ' +
+          '`export type` / `export interface` / `export * as ns from …`。',
       );
     }
 
@@ -1163,16 +1270,19 @@ export function checkHtml(html) {
   if (files.length !== 1) failures.push(`dist 里应恰好 1 个 html，实到 ${files.length}：${files.join(', ')}`);
   if (files[0] !== 'emblem-tool.html') failures.push(`产物文件名应为 emblem-tool.html，实到 ${files[0] ?? '(无)'}`);
 
+  // ★ 重活只算一遍：`stripMarkupComments()` 内部要跑 `maskSource()`，`extractScripts()`
+  //   也是全量扫 —— 以前在同一份 `html` 上各算了两三次（行为不变，纯浪费）。
+  const markup = stripMarkupComments(html);
+  const scripts = extractScripts(html);
+
   // ② <script> 只有一个，且没有 module
-  const scanHtml = stripMarkupComments(html);
-  const scriptTagCount = (scanHtml.match(/<script\b/g) ?? []).length;
-  const moduleAttr = /type\s*=\s*["']module["']/i.test(scanHtml);
+  const scriptTagCount = (markup.match(/<script\b/g) ?? []).length;
+  const moduleAttr = /type\s*=\s*["']module["']/i.test(markup);
   facts.push({ key: '<script> 标签数', value: String(scriptTagCount) });
   facts.push({ key: 'type="module"', value: moduleAttr ? '存在 ❌' : '不存在 ✅' });
   if (scriptTagCount !== 1) failures.push(`应恰好 1 个 <script>，实到 ${scriptTagCount}`);
   if (moduleAttr) failures.push('产物里出现了 type="module" —— file:// 下会被 CORS 拦死（SPEC.md §一）');
 
-  const scripts = extractScripts(html);
   if (scripts.length === 0) failures.push('没有找到经典的 <script>…</script> 内容');
   const script = scripts.join('\n');
   const scriptMask = maskSource(script); // ★ 注释/字符串已抹掉：只查真代码
@@ -1193,8 +1303,33 @@ export function checkHtml(html) {
   const openTag = script.indexOf('<script');
   if (openTag >= 0) failures.push(`内联脚本里出现 <script（偏移 ${openTag}）`);
 
-  // ④ 全文不许有对外引用（在"抹掉注释"的副本上扫）
-  const markup = stripMarkupComments(html);
+  // ③b ★ 脚本**字符串字面量**里的对外引用（`maskSource()` 把字符串内容也抹白了 ⇒ ③④ 都看不见它）
+  //
+  //   为什么必须单独查：产物里写一句 `var u = "http://evil/x.js"`、`"<img src=x.png>"`、
+  //   `"<link rel=stylesheet href=a.css>"` 时 —— ③ 查的是掩码后的脚本（字符串只剩引号）、
+  //   ④ 查的是 `markup`（同样被掩码），于是**全都看不见**，那条"没有任何外部引用"的断言
+  //   形同虚设、静默放行。这里把 `<script>` 块的**原文**过一遍字符串抽取器，只扫字面量内容。
+  const literalScans = [
+    ['脚本字符串里的 http(s)://', /https?:\/\//i],
+    ['脚本字符串里的 link/img/script 标签', /<\s*(link|img|script)\b/i],
+  ];
+  //   ★ 唯一放行的**字符串**：`createElementNS` 的 SVG 命名空间（标准常量，不是网络引用）。
+  const W3C_NS = 'http://www.w3.org/';
+  for (const lit of stringLiteralSpans(script)) {
+    if (lit.text.includes(W3C_NS)) continue;
+    for (const [label, re] of literalScans) {
+      const m = re.exec(lit.text);
+      if (!m) continue;
+      const at = lit.start + m.index;
+      facts.push({ key: `外部引用 ${label}`, value: '1 处 ❌' });
+      failures.push(
+        `产物里有外部引用 \`${label}\`（脚本字符串偏移 ${at}）：` +
+          JSON.stringify(script.slice(Math.max(0, at - 70), at + 70)),
+      );
+    }
+  }
+
+  // ④ 全文不许有对外引用（在"抹掉注释与字符串"的副本上扫；字符串里的那一半由 ③b 负责）
   const externals = [
     ['http://', /http:\/\//g],
     ['https://', /https:\/\//g],
@@ -1662,7 +1797,6 @@ export function smokeBoot(html) {
       offsetX: 0,
       offsetY: 0,
       closed: false,
-      drags: 0,
       prepareDuringDrag: -1,
       refreshDuringDrag: -1,
       canvasesDuringDrag: -1,
@@ -1755,11 +1889,13 @@ export function smokeBoot(html) {
       }
 
       // ② ★ 连续拖动 30 次 + 滚轮 10 次：**一次管线都不能跑**，也不能新建画布
+      //   ⚠ 0.45：这里原来还写 `crop.drags = 40`，而 `ui.test.ts` 断言 `crop.drags === 40`
+      //     —— 那是**断言一个刚赋进去的常量**（恒真）。手势次数不是可观测量，判据要靠下面
+      //     的"调用计数"与 `movedVisually`（视觉真的动了）来立；次数本身只出现在 detail 文案里。
       const canvasesBefore = canvasCreations;
       for (let i = 0; i < 30; i++) cropApi.applyDrag(7, -3);
       for (let i = 0; i < 10; i++) cropApi.applyZoom(1.15);
       cropApi.flushCropLayout();
-      crop.drags = 40;
       const during = stat();
       crop.prepareDuringDrag = during.prepareCalls - base.prepareCalls;
       crop.refreshDuringDrag = during.refreshCalls - base.refreshCalls;
@@ -1781,6 +1917,40 @@ export function smokeBoot(html) {
       if (!(info1.size < info0.size)) return { ok: false, detail: `滚轮没有缩小窗口：${info0.size} → ${info1.size}`, domCalls, crop };
       if (Math.abs(info1.y - info0.y) < 1e-9 && Math.abs(info1.x - info0.x) < 1e-9) {
         return { ok: false, detail: '拖动没有改变窗口位置（视觉动了但窗口没动？）', domCalls, crop };
+      }
+
+      // ②b ★ 0.38：滑条 / 输入框那条路（`setCropWindowSize()`）—— 直接给整数边长，**同样不跑管线**
+      //   判据三条：给中间的整数 ⇒ 正好是它；给太小 / 太大 ⇒ 夹到 windowBoundsFor() 的上下限。
+      {
+        const lo = Math.min(128, Math.min(SW, SH));
+        const hi = Math.max(SW, SH);
+        const want = Math.round((lo + hi) / 2);
+        const before = stat();
+        cropApi.setCropWindowSize(want);
+        crop.setSizeExact = cropApi.cropInfo().size;
+        cropApi.setCropWindowSize(lo - 500);
+        crop.setSizeLowClamp = cropApi.cropInfo().size;
+        cropApi.setCropWindowSize(hi + 5000);
+        crop.setSizeHighClamp = cropApi.cropInfo().size;
+        crop.setSizePrepareDelta = stat().prepareCalls - before.prepareCalls;
+        crop.setSizeRefreshDelta = stat().refreshCalls - before.refreshCalls;
+        if (crop.setSizeExact !== want) {
+          return { ok: false, detail: `setCropWindowSize(${want}) 之后边长是 ${crop.setSizeExact}`, domCalls, crop };
+        }
+        if (crop.setSizeLowClamp !== lo) {
+          return { ok: false, detail: `给太小的值应夹到下限 ${lo}，实到 ${crop.setSizeLowClamp}`, domCalls, crop };
+        }
+        if (crop.setSizeHighClamp !== hi) {
+          return { ok: false, detail: `给太大的值应夹到上限 ${hi}，实到 ${crop.setSizeHighClamp}`, domCalls, crop };
+        }
+        if (crop.setSizePrepareDelta !== 0 || crop.setSizeRefreshDelta !== 0) {
+          return {
+            ok: false,
+            detail: `★ 用滑条改白框大小不该跑管线/刷面板（实到 ${crop.setSizePrepareDelta}/${crop.setSizeRefreshDelta}）`,
+            domCalls,
+            crop,
+          };
+        }
       }
 
       // ③ ★ 2026-10-05（v0.9）：〔↺ 复位 / 适应〕按钮已按用户要求**删除**
@@ -1912,7 +2082,7 @@ export function smokeBoot(html) {
       detail:
         `引导成功（DOM 调用 ${domCalls} 次）+ 核心层冒烟通过（encodeEmblem/extractImage 18 段校验）` +
         `+ 取景冒烟通过（1024×600 → 倍率 ${crop.manualScale}、偏移 ${crop.offsetX},${crop.offsetY}、` +
-        `不透明 ${crop.opaquePixels}/16384；拖动/滚轮 ${crop.drags} 次 ⇒ prepareEmblem ${crop.prepareDuringDrag} 次、` +
+        `不透明 ${crop.opaquePixels}/16384；拖动 30 次 + 滚轮 10 次 ⇒ prepareEmblem ${crop.prepareDuringDrag} 次、` +
         `面板刷新 ${crop.refreshDuringDrag} 次、新画布 ${crop.canvasesDuringDrag} 个；` +
         `〔确定取景〕⇒ ${crop.prepareOnConfirm}/${crop.refreshOnConfirm} 次；〔取消〕⇒ ${crop.prepareOnCancel} 次；` +
         `工具条收起 ⇒ ${crop.prepareOnToggleClean}/${crop.prepareOnToggleDirty} 次）`,
@@ -1952,6 +2122,46 @@ export function readAppVersion() {
     );
   }
   return m[1];
+}
+
+/** 产物里版本号那两处真值的写法（`assemble()` 写进去的就是它）。 */
+const ARTIFACT_VERSION_ATTR_RE = /data-app-version="v([^"]*)"/;
+const ARTIFACT_VERSION_TEXT_RE = /<span class="brand-sub" id="app-version"[^>]*>([^<]*)<\/span>/;
+
+/**
+ * ★★ 产物版本号**硬校验**：产物里印着的版本号必须与 `version.ts::APP_VERSION` 一致。
+ *
+ * 为什么必须有（0.41 才补上，之前是**假校验**）：以前这里只查"源码里那个常量的格式
+ * 是不是 `0.xx`"，于是改了 `version.ts` 之后跑 `node web\build.mjs --check`
+ * （旧产物还在）会打印**旧**版本号、报 ✅、exit 0 —— "界面写着 v0.40、源码是 v0.41"
+ * 这种事永远查不出来。现在读产物文本比对，不一致就**非零退出**并说清"产物过期了"。
+ *
+ * 返回"失败原因"数组（空 = 一致）。导出是为了让测试/手工排查能单独打这条判据。
+ */
+export function checkArtifactVersion(html, appVersion) {
+  const failures = [];
+  const wantLabel = `v${appVersion}`;
+  const m = ARTIFACT_VERSION_ATTR_RE.exec(html);
+  const text = ARTIFACT_VERSION_TEXT_RE.exec(html);
+  if (!m) {
+    failures.push(
+      '产物里找不到 `data-app-version="v…"`（版本号占位 span 没被替换？）' +
+        ' —— 产物过期或损坏，请重新构建：node web\\build.mjs',
+    );
+    return failures;
+  }
+  if (m[1] !== appVersion) {
+    failures.push(
+      `★ 产物过期了：产物里是 v${m[1]}，而 src/ui/logic/version.ts 里是 ${wantLabel}` +
+        ' —— 请重新构建：node web\\build.mjs（--check 只校验已有产物，不会替你重新打包）',
+    );
+  }
+  if (!text) {
+    failures.push('产物里找不到版本号 span（`<span class="brand-sub" id="app-version">…</span>`）—— 产物损坏，请重新构建');
+  } else if (text[1] !== wantLabel) {
+    failures.push(`★ 产物顶栏显示的版本号是 ${text[1]}，与源码里的 ${wantLabel} 不一致 —— 请重新构建：node web\\build.mjs`);
+  }
+  return failures;
 }
 
 /** 外壳里版本号的占位 span（构建时整段替换成带真值的 span —— **只有这一处**契约）。 */
@@ -2141,9 +2351,14 @@ function main() {
   const versionFailures = [];
   if (!/^0\.\d+$/.test(appVersion)) {
     versionFailures.push(
-      `APP_VERSION = "${appVersion}" 不符合规则：应从 0.1 起、每次交付 +0.1（只有用户明确说"可以发布了"才进 1.x）`,
+      `APP_VERSION = "${appVersion}" 不符合规则：应从 0.1 起、**每次交付 +0.01**` +
+        '（唯一真值来源见 src/ui/logic/version.ts 文件头；只有用户明确说"可以发布了"才进 1.x）',
     );
   }
+  // ★★ 0.41：光比"源码里的版本号格式对不对"是**假校验** —— 改了 `version.ts` 之后
+  //   跑 `node web\build.mjs --check`（旧产物还在）会打印旧版本号 + ✅ + exit 0，
+  //   "产物写着 v0.40、源码是 v0.41"这种事永远查不出来。所以这里**读产物文本比对**。
+  const artifactFailures = checkArtifactVersion(html, appVersion);
 
   console.log('\n--- 4) 产物自检 ---');
   const res = checkHtml(html);
@@ -2162,7 +2377,7 @@ function main() {
   console.log(`   行数     : ${html.split('\n').length.toLocaleString('en-US')}`);
   console.log(`   内联脚本 : ${extractScripts(html).join('\n').length.toLocaleString('en-US')} 字节`);
 
-  const failures = [...res.failures, ...versionFailures];
+  const failures = [...res.failures, ...versionFailures, ...artifactFailures];
   if (!smoke.ok) failures.push(`引导冒烟失败：${smoke.detail}`);
 
   console.log('\n' + banner);
@@ -2179,10 +2394,33 @@ function main() {
   return 1;
 }
 
+/**
+ * 本文件是不是"被直接执行"（而不是被 `ui.test.ts` import）？
+ *
+ * ⚠ Windows 上路径**大小写不敏感**：`node web\BUILD.MJS` 完全合法，而
+ *   `resolve()` 会把实参原样保留成 `…\BUILD.MJS` ⇒ 直接字符串比较会 **false**，
+ *   于是"不打包、不报错、exit 0"（静默什么都不做，实测踩过）。
+ *   `subst` / `junction` 这种"同一文件两个路径"的情况也比不出来，所以两边都过一遍
+ *   `realpath`（拿不到就退回 `resolve`），再按平台决定要不要忽略大小写。
+ */
+function samePath(a, b) {
+  if (a === b) return true;
+  return process.platform === 'win32' && a.toLowerCase() === b.toLowerCase();
+}
+
 const isMain = (() => {
   try {
     const a = process.argv[1];
-    return !!a && resolve(a) === resolve(fileURLToPath(import.meta.url));
+    if (!a) return false;
+    const norm = (p) => {
+      try {
+        return realpathSync(p);
+      } catch {
+        return resolve(p);
+      }
+    };
+    const self = fileURLToPath(import.meta.url);
+    return samePath(norm(a), norm(self));
   } catch {
     return false;
   }

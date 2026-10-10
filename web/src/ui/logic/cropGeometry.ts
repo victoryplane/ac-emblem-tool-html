@@ -88,7 +88,7 @@ export interface WindowBounds {
 /** 滚轮一格的比例（`deltaY < 0` 乘它 = 放大窗口里那块 = 取更小的一块源图）。 */
 export const ZOOM_STEP = 1.15;
 /** 窗口边长的**绝对**下限（源像素）—— 只给退化的 0 尺寸输入兜底，别产生 0/NaN。 */
-export const MIN_WINDOW_PX = 2;
+const MIN_WINDOW_PX = 2;
 
 function clampNum(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -155,7 +155,7 @@ export function windowBoundsFor(srcW: number, srcH: number, target = 128): Windo
  * 两条合起来就是"框里总有内容"，而且**不会**像上一版那样能把图整张拖出框外
  * （上一版拖过头 ⇒ 输出全透明 ⇒ 看着就像"图没了"）。
  */
-export function clampOriginFor(origin: number, size: number, extent: number): number {
+function clampOriginFor(origin: number, size: number, extent: number): number {
   if (!(extent > 0)) return 0;
   if (size <= extent) return clampNum(origin, 0, extent - size);
   return clampNum(origin, extent - size, 0);
@@ -197,6 +197,34 @@ export function zoomWindowAtCenter(
 }
 
 /**
+ * ★ 0.38（用户）：把窗口边长**一步设成** `size` 源像素（取景动作行那个滑条 / 输入框走这条路）。
+ *
+ * 与滚轮的区别只有"步子"：滚轮是"乘一格 `ZOOM_STEP`"，这里是"直接给目标边长"；
+ * **锚点完全一样**（白框中心 —— 框里正对着的那个源图点不动），最后照例夹进 `windowBoundsFor()`。
+ * 用户的原话是"现在的取景框只能用鼠标缩放，精度不够高" ⇒ 这条路的输入是**整数源像素**。
+ */
+export function resizeWindowTo(
+  win: CropWindow,
+  size: number,
+  srcW: number,
+  srcH: number,
+  bounds?: WindowBounds,
+): CropWindow {
+  const b = bounds ?? windowBoundsFor(srcW, srcH);
+  // 非法输入（NaN / ±Inf = 输入框里是半截数字）⇒ 原样夹一遍，不动边长；
+  // 其余（含 0 / 负数）一律夹进 `[min, max]` —— "你要更小" 就给他最小那一档，比默默不动更好懂。
+  if (!Number.isFinite(size)) return clampWindow(win, srcW, srcH, b);
+  const s = clampNum(size, b.min, b.max);
+  const cx = win.x + win.size / 2;
+  const cy = win.y + win.size / 2;
+  return {
+    size: s,
+    x: clampOriginFor(cx - s / 2, s, srcW > 0 ? srcW : 1),
+    y: clampOriginFor(cy - s / 2, s, srcH > 0 ? srcH : 1),
+  };
+}
+
+/**
  * 拖动 = 平移图片（用户在**任何位置**拖都一样，不再分"框内/框外"）。
  *
  * 把图往右拖 `dScreenX` 屏幕像素 ⇒ 窗口在源图上整体**左移** `dScreenX / k`。
@@ -226,7 +254,7 @@ export function windowSourceRect(win: CropWindow): { x0: number; y0: number; x1:
 }
 
 /** 源像素 → 屏幕像素的倍率（`= 框边长 / 窗口边长`）。 */
-export function displayScaleFor(win: CropWindow, frameSize: number): number {
+function displayScaleFor(win: CropWindow, frameSize: number): number {
   return win.size > 0 && frameSize > 0 ? frameSize / win.size : 1;
 }
 
@@ -269,7 +297,16 @@ export function windowToManual(
   };
 }
 
-/** 界面参数 → 窗口（`windowToManual` 的逆；进取景视图时用它把"当前图片"接着显示下去）。 */
+/**
+ * 界面参数 → 窗口（`windowToManual` 的逆；进取景视图时用它把"当前图片"接着显示下去）。
+ *
+ * ★ 0.45（简化普查复核）：`clampWindow()` **没收到 bounds** ⇒ 它按 `windowBoundsFor(srcW, srcH)`
+ *   的默认 `target = 128` 夹取，而这里明明知道 `targetSize`。今天 `targetSize` 恒为 128
+ *   （`defaults.ts` 的 `CORE_DEFAULTS`）所以两者一致；**PS1 的 64** 一上，夹出来的窗口会与
+ *   `hasUncommittedWindow()` 的口径分叉 ⇒ 一进取景视图就"看起来有未提交的改动" ⇒
+ *   收起视图时**静默提交**（`cropView.ts::confirmCrop()`）。
+ *   ⇒ 接 PS1 时把 bounds 一起传下去（`clampWindow(win, srcW, srcH, windowBoundsFor(srcW, srcH, targetSize))`）。
+ */
 export function manualToWindow(params: UiParams, srcW: number, srcH: number, targetSize = 128): CropWindow {
   const scale = effectiveManualScale(params);
   const size = scale > 0 ? targetSize / scale : targetSize;
@@ -314,7 +351,7 @@ export function checkBakeResult(input: BakeCheckInput): BakeCheck {
     errors.push(
       t(
         `烘焙结果 ${input.pixelCount} 像素 ≠ ${target}×${target}（${target * target}）`,
-        `Baked result is ${input.pixelCount} pixels, not ${target}×${target} (${target * target})`,
+        `Baked result is ${input.pixelCount} pixels, not ${target}×${target} (${target * target})`, `ベイク結果は ${input.pixelCount} ピクセル ≠ ${target}×${target}（${target * target}）`, `베이크 결과 ${input.pixelCount} 픽셀 ≠ ${target}×${target}(${target * target})`,
       ),
     );
   }
@@ -323,14 +360,14 @@ export function checkBakeResult(input: BakeCheckInput): BakeCheck {
       errors.push(
         t(
           '白框里一个不透明像素都没有，可是白框盖住的源图是有内容的 —— 取景映射坏了（这是 bug，不是你的操作问题）。',
-          'The box has no opaque pixels, yet the source image it covers does have content - the crop mapping is broken (this is a bug, not something you did).',
+          'The box has no opaque pixels, yet the source image it covers does have content - the crop mapping is broken (this is a bug, not something you did).', '白枠の中に不透明ピクセルが 1 つもありませんが、白枠が覆っている元画像には内容があります —— トリミングのマッピングが壊れています（これはバグで、あなたの操作の問題ではありません）。', '흰색 상자 안에 불투명 픽셀이 하나도 없는데, 흰색 상자가 덮은 원본 이미지에는 내용이 있습니다 —— 자르기 매핑이 깨졌습니다 (버그이며, 사용자의 조작 문제가 아닙니다).',
         ),
       );
     } else {
       warnings.push(
         t(
           '白框里没有不透明像素（选到空白处了）：现在导出会是一张全透明的徽章。',
-          'The box has no opaque pixels (you picked an empty area): exporting now would give a fully transparent emblem.',
+          'The box has no opaque pixels (you picked an empty area): exporting now would give a fully transparent emblem.', '白枠の中に不透明ピクセルがありません（空白部分を選びました）：このまま書き出すと全透明のエンブレムになります。', '흰색 상자 안에 불투명 픽셀이 없습니다 (빈 영역을 선택했습니다): 지금 내보내면 완전히 투명한 엠블럼이 됩니다.',
         ),
       );
     }
@@ -339,7 +376,7 @@ export function checkBakeResult(input: BakeCheckInput): BakeCheck {
     errors.push(
       t(
         `还有 ${input.semiTransparent} 个半透明像素（存档里 alpha 只有 0x00/0x80）`,
-        `${input.semiTransparent} semi-transparent pixels left (the save only has alpha 0x00/0x80)`,
+        `${input.semiTransparent} semi-transparent pixels left (the save only has alpha 0x00/0x80)`, `半透明ピクセルが ${input.semiTransparent} 個残っています（セーブデータの alpha は 0x00/0x80 のみ）`, `반투명 픽셀이 ${input.semiTransparent} 개 남아 있습니다 (세이브의 alpha 는 0x00/0x80 뿐입니다)`,
       ),
     );
   }

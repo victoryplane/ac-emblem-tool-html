@@ -34,6 +34,26 @@ body {
   padding: 10px 12px 14px;
 }
 
+/**
+ * ★ 0.47：日语 / 韩语各自的字体栈。
+ *
+ * 为什么必须有：上面 `body` 的字体栈是**中文优先**（`Microsoft YaHei`），而汉字在
+ * 中日文里字形不同（直 / 骨 / 今 / 海 / 真 …）—— 不换字体的话日文界面会画出**中文字形**；
+ * 韩文则要靠 fallback 去找谚文字体，字重与行高都会跳。
+ *
+ * 判据靠 `<html lang>`（`setLang()` 会按语言写 `zh-CN` / `en` / `ja` / `ko`）⇒ `:lang()` 选择器。
+ * ⚠ 只用**系统自带**字体（这门工具是零安装单文件，不许打包 webfont）：
+ *   Windows 自带 Yu Gothic UI / Meiryo、Malgun Gothic；macOS 自带 Hiragino / Apple SD Gothic Neo。
+ */
+html:lang(ja) body {
+  font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+    "MS PGothic", system-ui, sans-serif;
+}
+
+html:lang(ko) body {
+  font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Nanum Gothic", system-ui, sans-serif;
+}
+
 code { font-family: Consolas, "Courier New", monospace; }
 
 .dim { color: var(--dim); }
@@ -141,6 +161,24 @@ input[type=range] { width: 130px; vertical-align: middle; }
  */
 .lang-pick { margin-left: auto; }
 .lang-pick select { min-width: 96px; }
+
+/*
+ * ★ 0.36（用户）：语言标签**常显双语**（"语言/Language"，中英两态都是这一句）
+ *   ＋ **纯白**，把它从顶栏那一片灰字（`.lbl` = `--dim`）里顶出来。
+ *
+ *   高亮手段**只有三个"字本身"的属性**：颜色纯白 + `font-weight: 600` + 一点点 `letter-spacing`。
+ *   ⚠ 这条规则里**不许**出现 `text-shadow` / `box-shadow` / `filter` / 动画 —— `ui.test.ts` 分节 (p) ⑤b
+ *   直接断言"一条都不许有"（`lang-pick .lbl` 的高亮口径就是"纯白 + 字重"，不加任何特效）。
+ *   ⚠ 也不动 `font-size` / `padding` / `margin` ⇒ 除了"文字本身变长"之外没有任何位移。
+ *   文字变长那一项的实测代价（A/B，同一页面只换标签文字）：顶栏 1050px 视口起与旧标签
+ *   **完全一致**；**1000px** 视口下由 1 行变 2 行（旧标签是 900px 才折行）—— 顶栏本来就是
+ *   `flex-wrap: wrap`，这是接受了的代价（不是 bug，`SPEC.md` 有记）。
+ */
+.lang-pick .lbl {
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
 /* （0.10 删掉了 `.pcsx2-summary`：顶栏那行 PCSX2 摘要按用户要求整块删除，面板本身仍在最下面） */
 
 #card-drop.drop-hot { outline: 2px dashed var(--accent); outline-offset: 2px; }
@@ -446,7 +484,13 @@ input[type=range] { width: 130px; vertical-align: middle; }
   pointer-events: none;
 }
 .crop-frame::after {
-  content: '128×128';
+  /*
+   * ★ 0.41（审查抓到）：角标文字**不再写死** '128×128' —— 目标边长的唯一来源是
+   *   `state.params.targetSize`（`defaults.ts::TARGET_SIZE`），写死的话将来换值（例如 PS1 的
+   *   64×64）这里就变成一句假话。现在读 `#crop-frame` 的 `data-label`，由
+   *   `cropView.ts::layoutCropView()` 按 `params.targetSize` 写进去。
+   */
+  content: attr(data-label);
   position: absolute;
   left: 0;
   top: -18px;
@@ -480,12 +524,53 @@ input[type=range] { width: 130px; vertical-align: middle; }
   white-space: nowrap;
 }
 .crop-readout.at-min { color: var(--warn); }
-/* 取景那行的一句话说明（用户要的：一行就够） */
+/*
+ * 取景那行的一句话说明（用户要的：一行就够）。
+ * ★ 0.38：改成**定宽不压扁**（`flex: 0 0 auto` + `nowrap`）—— 滑条进来之后这行更挤了，
+ *   原来的 `flex: 1 1 220px` 会把句子从中间掰断（实测"（滚轮缩 / 放）"）；现在窄了就**整句**
+ *   折到第二行，读起来还是完整一句话。
+ * ⚠ 别直接删掉它：取景时**页面最下面的状态行是看不到的**（0.12 就是为这个把读数搬上来的），
+ *   这行是"拖图片 / 滚轮"唯一在视野内的说明。
+ */
 .crop-hint {
-  flex: 1 1 220px;
-  min-width: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--dim);
   font-size: 12px;
+}
+
+/*
+ * ★ 0.38（用户）：白框边长滑条 + 输入框（"现在的取景框只能用鼠标缩放，精度不够高"）。
+ *   · 滑条宽度 `clamp(200px, 30vw, 420px)` —— ★ 0.38 第二版（用户："把滑条做长一点"）：
+ *     原来 120–240px 只有 ~120 档像素，不够用。
+ *   ⚠ **必须用 id 选择器**：浏览器**内置样式表**里有 `input[type="range"] { width: 130px }`，
+ *     它的优先级（0,1,1）**高于**类选择器 `.crop-size-range`（0,1,0）⇒ 用类写宽度会被它压掉、
+ *     滑条永远 130px（这一版第一稿就是这么翻车的，实测 `cssWidth: "130px"`）。
+ *     顺带把输入框也写成 id：同一条内置规则里 `input[type=number]` 之类的属性谁先谁后不必再猜。
+ *   · 滑条用 `accent-color` 取主题强调色（Chromium 自带轨道样式，不必手搓）；
+ *     输入框 68px 够放 4 位数（源图长边一般 < 4096）+ `tabular-nums`（数字跳动不抖）。
+ *   ⚠ 两个都 `flex: 0 0 auto`：它们是"定宽控件"，让它俩伸缩会随窗口宽度乱跑。
+ */
+#crop-size-range {
+  flex: 0 0 auto;
+  width: clamp(200px, 30vw, 420px);
+  accent-color: var(--accent);
+}
+#crop-size-num {
+  flex: 0 0 auto;
+  width: 68px;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * ★ 0.38（用户）：〔确定取景〕〔取消〕**右对齐**（用户："确定取景和取消右对齐"）。
+ *   `margin-left: auto` 挂在**第一个**按钮上 ⇒ 它俩连同后面的空白一起被推到行尾；
+ *   窄屏折行时这两个按钮会整体落到第二行、并且仍然贴右边（auto 外边距在折行后照样生效）。
+ *   ⚠ 别改成给 `.crop-actions` 加 `justify-content: space-between`：那会把中间的
+ *   提示与读数拆开（用户要的是"按钮贴右"，不是"整行摊开"）。
+ */
+#btn-crop-ok {
+  margin-left: auto;
 }
 
 /* "已按容器缩放显示：期望 8×（1024px）→ 实际约 3×（384px）" —— 淡色小字 */
@@ -550,41 +635,60 @@ input[type=range] { width: 130px; vertical-align: middle; }
 
 /* ─────────────────────────── 下：8 槽 ─────────────────────────── */
 
-.slot-summary { margin-bottom: 6px; font-size: 12px; }
+/* ★ 0.37：原来是"8 槽摘要行"的位置，现在只放"本作品在卡上还没目录"那条条件警告（没情况时 hidden）。 */
+.slot-note { margin-bottom: 6px; font-size: 12px; }
 
 .slot-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  /* ★ 0.31：最小列宽 150 → 200px；★ 0.37：文字没了，图片占满整格 ⇒ 这个下限继续管着"图片最小多大" */
+  grid-template-columns: repeat(4, minmax(200px, 1fr));
   gap: 8px;
 }
-@media (max-width: 1100px) { .slot-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
+/*
+ * ★ 0.37：窄屏断点从"2 列"改成 **4 列** —— 文字删掉、图片占满整格之后，2 列会让每张图变成
+ *   496px 见方（1100px 视口实测），8 格撑出 3457px 的页面；4 列是 245px 左右，和宽屏一个量级。
+ */
+@media (max-width: 1100px) { .slot-grid { grid-template-columns: repeat(4, minmax(120px, 1fr)); } }
 
+/*
+  ★ 0.37（用户）：8 格改成"**上面 = 槽号**、**下面 = 缩略图**"（用户给的版式："上面是槽（序号），
+  下面红色的部分显示图片（红色部分是位置示意）"）—— 卡片上**除了槽号没有任何文字**。
+  ⇒ 原来是 0.31 的"左图右文"两列（`.slot-text` / `.slot-name` / `.slot-meta` / `.slot-check`），
+  那几条纹样随文字一起删除；图片从"占左列"变成"占满整格"。
+  ⚠ 尺寸纪律：缩略图**不许**在 JS 里写 inline 宽高（会盖掉这里的 CSS）—— 见 `slotsView.ts::thumbNode()`。
+*/
 .slot {
   background: var(--box2);
   border: 1px solid var(--line);
   border-radius: 7px;
-  padding: 7px 8px;
+  padding: 8px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   outline: none;
 }
 .slot:hover { border-color: #46525f; }
 .slot-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .slot-empty { opacity: .78; }
 .slot-no { font-weight: 600; font-size: 12.5px; }
-.slot-name { font-size: 11.5px; word-break: break-all; }
-.slot-meta { font-size: 10.5px; }
-.slot-check { font-size: 11px; }
-.thumb-cv { image-rendering: pixelated; background: #0f1216; border-radius: 3px; display: block; }
+/* 图片：占满整格宽度、正方形（`max-width` 封顶去掉 —— 卡片本身多宽，图画多大） */
+.thumb-cv {
+  image-rendering: pixelated;
+  background: #0f1216;
+  border-radius: 3px;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
 .thumb-empty {
-  width: 96px; height: 96px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; color: #4a5260;
+  font-size: 34px; color: #4a5260;
   background: #14181d;
   border: 1px dashed #363e49;
   border-radius: 4px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
 }
 
 .lower-bottom { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(260px, 1fr); gap: 10px; margin-top: 10px; }

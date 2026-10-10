@@ -12,6 +12,13 @@
 
 import { t } from './logic/i18n.ts';
 
+/**
+ * `el()` 的属性表。
+ * ★ 0.41（审查抓到）：删掉了从来没人用的 `html:`（`innerHTML`）与 `checked` 两个分支 ——
+ *   `html:` 尤其危险：本项目是**零注入**口径（所有文字走 `textContent` / `createTextNode`），
+ *   留着一个"能塞 HTML"的后门迟早会被人用上。`checked` 全项目（含冒烟）没有使用点。
+ *   ⚠ 要加回来请先想清楚：`html:` 等于放弃"不注入"这条纪律。
+ */
 export type Attrs = Record<string, string | number | boolean | null | undefined | EventListener>;
 
 /** `el('div', { class: 'x', onclick: fn }, '文字', child1, child2)` */
@@ -28,13 +35,11 @@ export function el<K extends keyof HTMLElementTagNameMap>(
         node.className = String(v);
       } else if (k === 'text') {
         node.textContent = String(v);
-      } else if (k === 'html') {
-        node.innerHTML = String(v);
       } else if (k.startsWith('on') && typeof v === 'function') {
         node.addEventListener(k.slice(2).toLowerCase(), v as EventListener);
       } else if (k === 'value') {
         (node as HTMLInputElement).value = String(v);
-      } else if (k === 'checked' || k === 'disabled' || k === 'selected') {
+      } else if (k === 'disabled' || k === 'selected') {
         (node as unknown as Record<string, boolean>)[k] = v === true || v === 'true';
       } else {
         node.setAttribute(k, String(v));
@@ -54,7 +59,7 @@ export function clear(node: Element): void {
 
 export function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const n = document.getElementById(id);
-  if (!n) throw new Error(t(`界面缺少必需的挂载点 #${id}（index.html 与 main.ts 不同步）`, `Missing required mount point #${id} (index.html and main.ts are out of sync)`));
+  if (!n) throw new Error(t(`界面缺少必需的挂载点 #${id}（index.html 与 main.ts 不同步）`, `Missing required mount point #${id} (index.html and main.ts are out of sync)`, `UI に必須のマウントポイント #${id} がありません（index.html と main.ts が同期していません）`, `UI에 필수 마운트 지점 #${id}이(가) 없습니다 (index.html과 main.ts가 동기화되지 않음)`));
   return n as T;
 }
 
@@ -65,6 +70,21 @@ export function $<T extends HTMLElement = HTMLElement>(id: string): T {
 export type ToastKind = 'info' | 'ok' | 'warn' | 'error';
 
 let toastHost: HTMLElement | null = null;
+/**
+ * ★ 0.40：屏上还没消失的提示条。
+ *
+ * 它们是 JS 用 `t()` 拼出来的字符串（`toast('ok', t(…), …)`），切语言时**没法重说**
+ * （`toast()` 的入参就是渲染好的文字，30 多个调用点不值得全改成渲染函数）。
+ * 所以规则定成：**切语言就把屏上还没消失的提示条收掉** —— 宁可收掉，也不要留一句旧语言的话
+ * （同样的信息在状态行 / 写入日志里都有；状态行是会按新语言重说的）。
+ */
+const liveToasts = new Set<HTMLElement>();
+
+/** ★ 0.40：收掉所有还挂着的提示条（切语言时由 `relayoutForLang()` 调）。 */
+export function dismissToasts(): void {
+  for (const node of liveToasts) node.remove();
+  liveToasts.clear();
+}
 
 function host(): HTMLElement {
   if (!toastHost) {
@@ -89,11 +109,28 @@ export function toast(kind: ToastKind, title: string, detail?: string, ms?: numb
     el('div', { class: 'toast-title', text: title }),
     detail ? el('div', { class: 'toast-body', text: detail }) : null,
   );
-  const close = el('button', { class: 'toast-x', title: t('关闭', 'Close'), onclick: () => node.remove() }, '×');
+  const close = el(
+    'button',
+    {
+      class: 'toast-x',
+      title: t('关闭', 'Close', '閉じる', '닫기'),
+      onclick: () => {
+        liveToasts.delete(node);
+        node.remove();
+      },
+    },
+    '×',
+  );
   node.appendChild(close);
   host().appendChild(node);
+  liveToasts.add(node); // ★ 0.40：切语言时要把还没消失的收掉（见 `liveToasts`）
   const life = ms ?? (kind === 'error' ? 60_000 : kind === 'warn' ? 20_000 : 6000);
-  if (life > 0) setTimeout(() => node.remove(), life);
+  if (life > 0) {
+    setTimeout(() => {
+      liveToasts.delete(node);
+      node.remove();
+    }, life);
+  }
   node.scrollIntoView?.({ block: 'nearest' });
 }
 
@@ -103,7 +140,7 @@ export function installGlobalErrorHandlers(): void {
     const e = (ev as ErrorEvent).error;
     toast(
       'error',
-      t('界面里冒出一个未捕获的错误', 'An uncaught error surfaced in the UI'),
+      t('界面里冒出一个未捕获的错误', 'An uncaught error surfaced in the UI', 'UI で捕捉されないエラーが発生しました', 'UI에서 처리되지 않은 오류가 발생했습니다'),
       e && e.stack ? String(e.stack).split('\n').slice(0, 4).join('\n') : String(ev.message),
     );
   });
@@ -111,7 +148,7 @@ export function installGlobalErrorHandlers(): void {
     const r = (ev as PromiseRejectionEvent).reason;
     toast(
       'error',
-      t('有个异步操作失败了', 'An async operation failed'),
+      t('有个异步操作失败了', 'An async operation failed', '非同期処理に失敗しました', '비동기 작업이 실패했습니다'),
       r && r.stack ? String(r.stack).split('\n').slice(0, 4).join('\n') : String(r),
     );
   });
@@ -122,6 +159,19 @@ export function installGlobalErrorHandlers(): void {
 // --------------------------------------------------------------------------
 
 let modalWired = false;
+/**
+ * ★ 0.40：记住弹窗的**渲染方式**（不是渲染好的字符串）—— 切语言时要用它重放一遍。
+ *
+ * ⚠ 第一稿存的是 `{title, body}` 字符串，结果重放出来的**还是旧语言**：调用方
+ *   `showModal({ title: t('中文','English'), … })` 是在 `t()` **调用那一刻**就把语言定死了，
+ *   存下来的字符串只有一种语言。所以入口改成收一个**函数**（`() => ({...})`），
+ *   重放时重新 `t()` 一遍才是新语言。
+ *
+ * 为什么必须重放：`#modal-ok` 是带 `data-en` 的静态元素（`applyStaticI18n()` 会按语言刷它），
+ * 而标题 / 正文是 JS 写的（不带 `data-en`）⇒ 不重放就会出现"按钮变英文、正文还是中文"的混搭。
+ * 弹窗开着时鼠标点不到语言下拉，但 **Tab 能走到**（没有 focus trap）、F12 也随时能切。
+ */
+let lastModalRender: (() => ModalContent) | null = null;
 
 /**
  * 弹一个**必须点掉**的对话框（盖住整页，点掉之前下面的东西点不到）。
@@ -140,15 +190,36 @@ let modalWired = false;
  * ⚠ 靠 `hidden` 属性切换（`styles.css` 有 `[hidden] { display: none !important }`），
  *   不写 inline `display`（那会被后面的 class 规则盖掉，0.9 踩过）。
  */
-export function showModal(opts: { title: string; body: string; ok?: string }): void {
-  const host = document.getElementById('modal-host');
+/** 弹窗内容（由调用方给的渲染函数产出，见 `lastModalRender`）。 */
+export interface ModalContent {
+  title: string;
+  body: string;
+  ok?: string;
+}
+
+/** 把弹窗内容写进 DOM（`showModal()` 与切语言时的重放共用一份）。 */
+function fillModal(opts: ModalContent): HTMLElement | null {
   const title = document.getElementById('modal-title');
   const body = document.getElementById('modal-body');
   const ok = document.getElementById('modal-ok');
   if (title) title.textContent = opts.title;
   if (body) body.textContent = opts.body;
+  if (ok) ok.textContent = opts.ok ?? t('知道了', 'Got it', '了解', '확인');
+  return ok;
+}
+
+/**
+ * 弹一个必须点掉的对话框。
+ *
+ * ★ 0.40：入参从"内容对象"改成**渲染函数** —— `showModal(() => ({ title: t(…), body: t(…) }))`。
+ *   这样切语言时能原样重放一遍（`relayoutModalForLang()`），不会出现"按钮英文、正文中文"。
+ *   ⚠ 直接把 `t()` 的结果传进来是不行的：那串文字在调用那一刻就定死语言了。
+ */
+export function showModal(render: () => ModalContent): void {
+  const host = document.getElementById('modal-host');
+  const ok = fillModal(render());
+  lastModalRender = render;
   if (ok) {
-    ok.textContent = opts.ok ?? t('知道了', 'Got it');
     if (!modalWired) {
       ok.addEventListener('click', () => {
         const h = document.getElementById('modal-host');
@@ -162,6 +233,17 @@ export function showModal(opts: { title: string; body: string; ok?: string }): v
   if (host) host.hidden = false;
 }
 
+/**
+ * ★ 0.40：切语言时把**还开着的**弹窗重放一遍（标题 / 正文 / 按钮用同一套新语言）。
+ * 没开着就什么都不做；也别在这里动 `hidden` 或焦点（那是 `showModal()` 的事）。
+ */
+export function relayoutModalForLang(): void {
+  if (!lastModalRender) return;
+  const host = document.getElementById('modal-host');
+  if (!host || host.hidden) return;
+  fillModal(lastModalRender());
+}
+
 
 /** 把异步操作包起来：失败时给人话提示，并把错误继续抛给调用方决定怎么收场。 */
 export async function guard<T>(what: string, fn: () => Promise<T> | T): Promise<T | undefined> {
@@ -170,7 +252,7 @@ export async function guard<T>(what: string, fn: () => Promise<T> | T): Promise<
   } catch (e) {
     const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     // ⚠ `what` 由调用方给：那边已经过 `t()`（见 `main.ts` 的 `guard(t('选择记忆卡', 'Choose memory card'), …)`）
-    toast('error', t(`${what}失败`, `${what} failed`), msg);
+    toast('error', t(`${what}失败`, `${what} failed`, `${what}に失敗`, `${what} 실패`), msg);
     console.error(`[emblem tool] ${what} failed`, e);
     return undefined;
   }

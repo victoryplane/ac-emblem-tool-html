@@ -17,15 +17,33 @@
     python tools/selftest.py                 # 跑全部，打印报告
     python tools/selftest.py --exe <path>    # 指定官方 exe（默认 dist/v1.0.2/acet.exe）
     python tools/selftest.py --keep          # 保留中间产物（默认保留，便于人工复核）
+
+⚠ **本脚本只写 `testdata/_work/`**（git 不跟踪、可随时删）：中间存档、A/B 图都在那里。
+  仓库里那两张被跟踪的 `testdata/sample_*.png` 由 `tools/make_testdata.py` 负责生成
+  —— 这里**刻意不再覆盖它们**（以前每跑一次 selftest 就会把它们改写成"刚生成的 PNG"，
+  于是 `git status` 里永远躺着两个被改动的二进制文件）。
+
+退出码：0 = 全部通过；1 = 有判据失败；**2 = 环境缺东西（找不到官方 exe）⇒ 调用方（如
+  `web/check.mjs`）据此记成"跳过"而不是"失败"**。
+
+⚠ **「官方 exe 在哪」只有这一处真值**（下面的 `DEFAULT_EXE`）：别的地方要判"有没有 exe"
+  请调这个脚本、按退出码 2 处理，不要自己再拼一遍 `dist/v1.0.2/acet.exe`。
 """
 
 from __future__ import annotations
+
+import sys
+
+# ★ 不要写 __pycache__：本脚本 import `acet_format`，默认会在 tools\ 下留一个
+#   `__pycache__\acet_format.cpython-3xx.pyc`。本项目规矩是"跑完判据后仓库干净"
+#   （照 web\test\make_image_fixtures.py 的做法），所以这里显式关掉字节码缓存。
+#   ⚠ 必须在 `import acet_format` **之前**设置。
+sys.dont_write_bytecode = True
 
 import argparse
 import os
 import shutil
 import subprocess
-import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import acet_format as af  # noqa: E402
@@ -253,6 +271,8 @@ def main() -> int:
     print("官方二进制：%s" % exe)
     if not os.path.exists(exe):
         print("找不到官方 exe，无法交叉验证。")
+        print("  ⇒ 本步**跳过**（不是失败）。想跑：把官方发布的 acet.exe 放到上面那个路径，")
+        print("     或者 python tools\\selftest.py --exe <你的 acet.exe>")
         return 2
     print("大小 %d 字节" % os.path.getsize(exe))
 
@@ -266,19 +286,23 @@ def main() -> int:
     print("测试图：A = %d 色，B = %d 色" % (len(img_a.getcolors(1 << 16) or []),
                                           len(img_b.getcolors(1 << 16) or [])))
 
-    # 基础自检（纯本实现）
-    print("\n=== [基础] 本实现内部一致性 ===")
-    r = subprocess.run([sys.executable, os.path.join(HERE, "acet_format.py")],
-                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    record("acet_format.py 自检全通过", r.returncode == 0,
-           r.stdout.decode("utf-8", "replace").strip().splitlines()[-1])
+    # ★ 基础自检（纯本实现）**故意不在本脚本里跑**：
+    #   `python tools\acet_format.py` 是 check.mjs 里一条**独立**的判据，
+    #   而这里再跑一遍只是同一份纯函数自检、同样的输出（重复且拖慢）。
+    #   ⚠ 唯一会因此少掉的信息是"那次输出"；判据本身（退出码）在 check.mjs 里仍然被查。
+    #   （要单独跑：`python tools\acet_format.py`）
 
     for spec in (case_ac3(), case_lr(), case_container()):
         run_case(exe, spec, img_a, img_b)
 
-    # 把 A/B 图留在 testdata 里当样品
-    save_png(img_a, os.path.join(TESTDATA, "sample_A_60colors.png"))
-    save_png(img_b, os.path.join(TESTDATA, "sample_B_40colors.png"))
+    # ★ A/B 图留在 `_work/`（git 不跟踪、可随时删）当"这一次跑出来的样品"。
+    #   ⚠ 以前这里是写回 `testdata/sample_A_60colors.png` / `sample_B_40colors.png` ——
+    #     那两张是**仓库里被跟踪的文件**，于是每跑一次 `node web\check.mjs`
+    #     就会把它们覆盖成"刚生成的 PNG"（`git status` 里永远有改动，而且内容漂不漂
+    #     取决于 Pillow 版本）。要重新生成那两张仓库样品，用 `tools\make_testdata.py`。
+    save_png(img_a, os.path.join(WORK, "sample_A_60colors.png"))
+    save_png(img_b, os.path.join(WORK, "sample_B_40colors.png"))
+    print("\n本次跑出的 A/B 样品图：%s" % WORK)
 
     total = len(RESULTS)
     bad = [r for r in RESULTS if not r[1]]

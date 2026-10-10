@@ -12,8 +12,14 @@
  *
  *   · 跳过注释（`//` 与 `块注释`）；
  *   · 只关心**字符串字面量**（`'…'` / `"…"` / 模板串）里含中日韩字符的那些；
- *   · 如果这个字面量落在某个 `t(...)` 调用的括号里 ⇒ **算已翻译**；
+ *   · 如果这个字面量落在 `SINKS` 里某个包装调用（`t(...)` / `setStatusPair(...)`）的括号里
+ *     ⇒ **算已翻译**（`SINKS` 见下面那段注释）；
  *   · 其余一律报出来（行号 + 片段）。
+ *
+ * ★ 0.44：`auditSource(src, { collect: true })` 换成"把**每一个**字符串字面量都收进来"
+ *   （不管里面有没有中文）。`ui.test.ts` 拿它查另一件事：**用户可见的文字里不许出现 `**强调**`**
+ *   —— 这个项目的所有文案都走 `textContent` / `title`（纯文本，不是 markdown）⇒ `**` 会原样显示成星号。
+ *   ⚠ 必须借这里的词法器：注释里写 `**` 是本项目的文档习惯，正则糊一遍会把注释也算进来。
  *
  * ⚠ 已知的、**允许**的中文残留由 `ALLOW` 列表显式列出（例如给开发看的 `console.error`），
  *   白名单必须写清理由 —— "反正不报错"不算理由。
@@ -32,6 +38,44 @@ const UI = join(WEB, 'src', 'ui');
 const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uff01-\uff60]/;
 
 /**
+ * ★ 0.41：这些关键字**后面**的 `/` 是**正则开头**（不是除号）。
+ *
+ * 为什么需要它：以前扫描器完全不认正则字面量 ⇒ `const re = /'/g;` 里的 `'` 会被当成
+ * 字符串开头，它后面所有引号配对全乱、中文漏翻查不出来（fail-open）。
+ * 判据就是"上一个非空白字符是这个关键字"（`return /re/`、`typeof /re/`…）。
+ */
+const REGEX_KEYWORDS = new Set([
+  'return',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'new',
+  'delete',
+  'void',
+  'case',
+  'do',
+  'else',
+  'yield',
+  'await',
+]);
+
+/**
+ * ★ 0.40：**算作"已翻译"的包装函数** —— 它们的参数就是"中文原文 + 英文"。
+ *
+ *   · `t(zh, en)` —— 动态文案的正主；
+ *   · `setStatusPair(zh, en)` —— `state.ts` 里状态行那个糖：它把**两种语言都留着**，
+ *     切语言时能按新语言重说一遍（所以那两个参数同样是"待翻译原文"，不是漏翻）。
+ *
+ * ★ 0.43：`refusedNote(zh, en, hintLine?)` —— `cardOps.ts` 里"预检拒绝的一句话标签"。
+ *   它与 `t` 同形（前两个参数就是中英原文，内部走 `t(zh + 后缀, en + 后缀)`），第三个参数是
+ *   **布尔**（要不要加"见上方提示行"的指针）。
+ *
+ * ⚠ 往这里加名字要慎重：加进来的函数**必须**真的把两种语言都用到（否则等于开了个后门）。
+ */
+const SINKS = new Set(['t', 'setStatusPair', 'refusedNote']);
+
+/**
  * 允许的中文残留 —— **每条都要写清理由**，"反正不报错"不算理由。
  *
  *   · `logic/i18n.ts` 的 `'中文'`：那是**语言选项自己的名字**（`LANGS`），
@@ -42,8 +86,8 @@ const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uff01-\uff60]/;
  */
 const ALLOW = [
   { file: 'logic/i18n.ts', why: '语言选项自己的名字（LANGS）不翻译' },
-  { file: 'logic/games.ts', why: '作品表数据：英文在同行的 en / noteEn 字段里' },
-  { file: 'logic/defaults.ts', why: '缩放核文案数据：英文在同行的 en 字段里' },
+  { file: 'logic/games.ts', why: '作品表数据：其余语言在同行的 en / ja / ko 与 noteEn / noteJa / noteKo 字段里' },
+  { file: 'logic/defaults.ts', why: '缩放核文案数据：其余语言在同行的 en / ja / ko 字段里' },
 ];
 
 /**
@@ -75,18 +119,30 @@ function listTs(dir) {
 /**
  * 扫一个文件，返回"没被 t() 包住的中文字面量"。
  *
- * 状态机（顺序很重要：注释 → 字符串 → 代码）：
- *   · code：遇 `//` `/*` 进注释；遇引号进字符串；遇 `(` `)` 记括号深度；遇 `t(` 记下"当前深度 = t 的深度"
+ * ## 0.41 修掉的两个"漏翻查不出来"（fail-open）
+ *
+ *   ① **正则字面量**以前完全不认识：`const re = /'/g;` 里的 `'` 被当成字符串开头，
+ *      于是它后面整段引号配对全乱 —— 实测 `auditSource("const re = /'/g;\nconst s = '没翻译的中文';")`
+ *      返回 **0** 处（应为 1）。现在用一个启发式认正则（`/` 前面是 `( , = : [ ! & | ? { } ; return` 之类
+ *      的位置、或行首），整段跳过、内部不参与引号配对。
+ *   ② **模板插值 `${…}`** 以前整段当空白跳过：插值里的中文（`\`${'没翻译'}\``）漏翻查不出来。
+ *      现在把插值里的表达式**按代码继续扫**（递归），中文照旧报出来。
+ *
+ * ## 状态机
+ *
+ *   · code：遇 `//` `/*` 进注释；遇引号进字符串；遇正则字面量跳过；
+ *           遇 `(` `)` 记括号深度；遇 `t(` / `setStatusPair(` 记下"当前深度"
  *   · comment / string：各自记下起始位置，退出时判断要不要报
  */
-export function auditSource(src) {
+export function auditSource(src, outer = {}) {
   const bad = [];
   const n = src.length;
+  /** 当前位置。 */
   let i = 0;
   /** 括号深度（只在 code 状态里数）。 */
-  let depth = 0;
+  let depth = outer.depth ?? 0;
   /** `t(` 调用所在那一层的深度（-1 = 当前不在任何 `t()` 的参数里）。 */
-  let tDepth = -1;
+  let tDepth = outer.tDepth ?? -1;
   /** 刚读到的标识符（用来判断 `(` 前面是不是**独立**的 `t`）。 */
   let word = '';
   /** 上一个标识符（允许 `t (` 这种写法：中间只隔了空白）。 */
@@ -94,6 +150,19 @@ export function auditSource(src) {
 
   const lineOf = (pos) => src.slice(0, pos).split('\n').length;
   const isWordChar = (ch) => /[A-Za-z0-9_$]/.test(ch);
+
+  /** `/` 是**除号**（不是正则开头）吗？——判据：看上一个非空白字符。 */
+  const divisionHere = (pos) => {
+    let k = pos - 1;
+    while (k >= 0 && /\s/.test(src[k])) k -= 1;
+    if (k < 0) return false;
+    const before = src[k];
+    if (')]}'.includes(before)) return true;
+    if (!isWordChar(before)) return false;
+    let s = k;
+    while (s >= 0 && isWordChar(src[s])) s -= 1;
+    return !REGEX_KEYWORDS.has(src.slice(s + 1, k + 1));
+  };
 
   while (i < n) {
     const c = src[i];
@@ -113,6 +182,30 @@ export function auditSource(src) {
       continue;
     }
 
+    // ── 正则字面量（★ 0.41：必须认，否则里面的引号会把后面的配对全带偏）──
+    if (c === '/' && !divisionHere(i)) {
+      let j = i + 1;
+      let inClass = false;
+      while (j < n) {
+        if (src[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (src[j] === '\n') break;
+        if (src[j] === '[') inClass = true;
+        else if (src[j] === ']') inClass = false;
+        else if (src[j] === '/' && !inClass) {
+          j += 1;
+          while (j < n && /[a-z]/i.test(src[j])) j += 1;
+          break;
+        }
+        j += 1;
+      }
+      i = j;
+      word = '';
+      continue;
+    }
+
     // ── 字符串 ──
     if (c === "'" || c === '"' || c === '`') {
       const quote = c;
@@ -125,16 +218,27 @@ export function auditSource(src) {
           j += 2;
           continue;
         }
-        // 模板插值 `${…}`：里面的表达式是**代码**，但它作为整体属于这个字面量
+        // 模板插值 `${…}`：★ 0.41 起**里面的表达式按代码继续扫**（以前整段当空白跳过，
+        //   于是 `\`${cond ? '中文甲' : '中文乙'}\`` 这种漏翻永远查不出来）。
         if (quote === '`' && src[j] === '$' && src[j + 1] === '{') {
           let d = 1;
-          j += 2;
-          while (j < n && d > 0) {
-            if (src[j] === '{') d += 1;
-            else if (src[j] === '}') d -= 1;
-            j += 1;
+          let e = j + 2;
+          while (e < n && d > 0) {
+            if (src[e] === '{') d += 1;
+            else if (src[e] === '}') d -= 1;
+            e += 1;
+          }
+          const body = src.slice(j + 2, Math.max(j + 2, e - 1));
+          // ★ 递归扫表达式，但**继承"是否已经在 t() 参数里"**：`t(\`…${cond ? '甲' : '乙'}\`)`
+          //   里那两个中文是**已翻译**的（属于 t 的实参），不该报；漏报的只是
+          //   "插值里新起的、不在任何 t() 里的"中文。
+          //   ⚠ 括号深度必须**一起传**：`t(\`…${f('甲')}…\`)` 的实参在 depth > tDepth 层。
+          const baseLine = lineOf(j + 2) - 1;
+          for (const hit of auditSource(body, { depth, tDepth, collect: outer.collect })) {
+            bad.push({ ...hit, line: hit.line + baseLine });
           }
           content += ' ';
+          j = e;
           continue;
         }
         if (src[j] === quote) break;
@@ -144,19 +248,28 @@ export function auditSource(src) {
       // ★ 判定"在 t() 里"：`tDepth` 记的是 `t(` **那一层**的深度，
       //   而参数里的字面量在 `tDepth + 1` 层（所以条件是 `depth > tDepth`，不是 `!==`）。
       const inT = tDepth >= 0 && depth > tDepth;
-      if (CJK.test(content) && !inT) {
+      // ★ 0.44：`collect:true` ⇒ 一个不落全收（给 `ui.test.ts` 查文案里的 `**`）
+      if (outer.collect) {
+        bad.push({ line: lineOf(start), text: content.replace(/\s+/g, ' ').trim() });
+      } else if (CJK.test(content) && !inT) {
         bad.push({ line: lineOf(start), text: content.replace(/\s+/g, ' ').trim().slice(0, 90) });
       }
       i = j + 1;
       word = '';
       continue;
     }
+    // ⚠ 0.44：这里原来还**重复了一整块**"字符串"分支（37 行）—— 它与上面那块逐字相同，
+    //   而上面那块末尾无条件 `continue` ⇒ 它**永远执行不到**（死代码，也没有任何测试依赖它）。
+    //   删掉的理由不只是"短一点"：要改字符串处理（例如 0.44 的 `collect`）时，第二块会让人
+    //   以为"还有一处也要改"。词法器只有一处，才是能审计的。
 
     // ── 代码 ──
     if (c === '(') {
-      // `t(` —— 要求 `t` 是**独立标识符**（否则 `format(` / `at(` 之类会被误判成 t 调用）。
+      // `t(` / `setStatusPair(` —— 要求那个名字是**独立标识符**
+      // （否则 `format(` / `at(` / `mySetStatusPair(` 之类会被误判成包装调用）。
       // `word || prevIdent` 是为了容忍 `t (`（中间只隔空白）这种写法。
-      if (word === 't' || (word === '' && prevIdent === 't')) tDepth = depth;
+      const name = word === '' ? prevIdent : word;
+      if (SINKS.has(name)) tDepth = depth;
       depth += 1;
       i += 1;
       word = '';

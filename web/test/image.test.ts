@@ -10,8 +10,9 @@
  * 判据来源（为什么这样测）
  * ==========================================================================
  * 本文件**不**与 Pillow 逐像素对齐 —— `docs\01-项目理解\03-图片处理管线.md` §六
- * 已定案：Pillow 的 LANCZOS 与 MEDIANCUT 细节不可复刻，硬对齐只会得到一份
- * "看起来严谨、其实在比实现细节"的测试。改用 SPEC.md §九 M2 给的**自洽判据**：
+ * 已定案：Pillow 的 LANCZOS 与 MEDIANCUT 属于**实现细节**，各库之间差几个 LSB、
+ * 不保证逐像素一致（Pillow 文档只写 "a high-quality downsampling filter"，没有承诺可复刻）。
+ * 硬对齐只会得到一份"看起来严谨、其实在比实现细节"的测试。改用 SPEC.md §九 M2 给的**自洽判据**：
  *
  *   (a) 几何正确性   —— 单像素 / 3×3 / 非方图在四种取景下的边界断言
  *   (b) ★ 无损性     —— "已是目标尺寸 + ≤255 色 + 无半透明"必须逐像素等价（最重要）
@@ -19,6 +20,8 @@
  *   (d) 确定性       —— 同输入两次，palette / indices / rgba 的 SHA-256 相同
  *   (e) 感知合理性   —— 下采样后分块平均色 vs 源图对应区域（阈值理由见 PERCEPTUAL_*）
  *   (f) 对接         —— 输出喂给 emblem.ts 的 encodeEmblem：18/18 校验 + 读回来逐像素相同
+ *   (g) 面积平均的支撑区 —— 与**本文件独立写的**教科书 box 逐像素对拍（缩小 / 放大 /
+ *       非方形目标都覆盖），外加"全不透明的图放大后不许出现透明像素"这条回归。
  *
  * 另外附带一条**跨语言口径**检查：`prepare_image.py` 的合规统计（它用 Pillow）
  * 与 TS 侧的统计**必须相等** —— 这不是"逐像素对齐"，而是"两边对
@@ -38,7 +41,6 @@ import {
   TARGET_SIZE,
   binarizeAlpha,
   checkCompliance,
-  chooseKernel,
   distinctOpaqueColors,
   fitToTarget,
   imageStats,
@@ -47,8 +49,10 @@ import {
   opaqueCount,
   prepareEmblem,
   quantizeOpaque,
+  selectScaleKernel,
   semiTransparentCount,
   type RgbaImage,
+  type ScaleKernel,
 } from '../src/core/image.ts';
 
 import {
@@ -95,6 +99,24 @@ function eq(actual: unknown, expected: unknown, what: string): void {
 
 function section(title: string): void {
   console.log(`\n--- ${title} ---`);
+}
+
+/**
+ * 测试专用便利版（**本地重写**，不是生产 API）：按 **`contain` 等比取景**的倍率判核。
+ *
+ * 它原来叫 `image.ts::chooseKernel()`，0.20 从核心层删掉了 —— 生产路径一个调用点都没有
+ * （`fitToTarget` 直接调 `selectScaleKernel`），而它只对等比取景成立，留着容易被误用。
+ * 这里保留**同一公式**（`scale = min(目标宽/源宽, 目标高/源高)`，两轴同一个 scale，
+ * 色数口径 `distinctOpaqueColors`）⇒ 下面所有断言的含义与条数一个字不变。
+ */
+function containKernel(
+  rgba: RgbaImage,
+  targetWidth = TARGET_SIZE,
+  targetHeight = targetWidth,
+  colorLimit = 256,
+): ScaleKernel {
+  const scale = Math.min(targetWidth / rgba.width, targetHeight / rgba.height);
+  return selectScaleKernel(scale, scale, distinctOpaqueColors(rgba), colorLimit);
 }
 
 function warn(msg: string): void {
@@ -241,12 +263,13 @@ function meanDiff(a: { r: number; g: number; b: number }, b: { r: number; g: num
 /**
  * ★ 阈值理由（判据 e）：实测值写在这里，阈值 = 实测值 + 余量，不是随手定的数。
  *
- *   · 整幅区域均值差：实测 `photo-noise-300` = **0.03**、`soft-edge-140` = **0.45**、
- *     其余全部 = **0.00**（见探针记录）。理论上这个量是**缩放不变式**（面积平均
- *     保区域加权和），残差只剩 8 bit 取整。⇒ 取 **2.0**：约 4 倍余量，
+ *   · 整幅区域均值差：实测 `photo-noise-300` = **0.004**、`soft-edge-140` = **0.76**、
+ *     `banner-logo` contain/cover = **1.51 / 4.82**、其余全部 = **0.00**（见探针记录）。
+ *     理论上这个量是**缩放不变式**（面积平均保区域加权和），残差只剩 8 bit 取整
+ *     ⇒ 取 **2.0** 是它的 4 倍余量，
  *     而"整体错位一格"或"通道串位"在这个量级上会造成 **>20** 的差异
  *     （照片图相邻块基色差就有 100 左右），所以这个阈值既紧又不脆。
- *   · 逐 8×8 块均值差：实测 `photo-noise-300` max = **1.89**（均值 0.66）。
+ *   · 逐 8×8 块均值差：实测 `photo-noise-300` max = **0.93**。
  *     块越小、取整噪声越大（块内像素少、覆盖权重不等），且它比整幅均值更能
  *     暴露"局部错位"。⇒ 取 **8.0**（约 4 倍余量）。
  *   · 不用 `soft-edge-140` / `banner-logo` 做逐块断言：它们**有半透明边或硬边**，
@@ -262,8 +285,8 @@ const PERCEPTUAL_BLOCK = 8;
  * 整幅均值的阈值分两档，理由（都是实测值）：
  *   · **没有缩放**（`scale == 1`）：输出与源图是同一批像素，理论差 = 只有 8 bit 取整
  *     ⇒ 实测 0.00；取 **0.5**（既紧又不会因为取整翻车）。
- *   · **有缩放**：硬边/半透明图经二值化 + 最近邻抽样后，区域均值会偏离源区域
- *     最多 ~5（实测 `banner-logo` 3.8 / 5.1，`soft-edge-140` 0.45）——
+ *   · **有缩放**：硬边/半透明图经二值化 + 面积平均后，区域均值会偏离源区域
+ *     最多 ~5（实测 `banner-logo` 1.51 / 4.82、`soft-edge-140` 0.76）——
  *     这是"1 bit 透明度 + 4 px 周期图案降采样"的固有代价，不是错位
  *     （错位会到 20~100 量级）。⇒ 取 **8.0**。
  */
@@ -386,7 +409,8 @@ function section1Fixtures(): void {
   }
 
   // 夹具里"smooth 核"与"nearest 核"两条路都必须有样本，否则 (e)/(a) 会形同虚设。
-  // ⚠ 这里按 `chooseKernel` 的三条规则重新对口径（规则见 `image.ts::chooseKernel`）：
+  // ⚠ 这里按 `selectScaleKernel` 的三条规则重新对口径（规则见 `image.ts::selectScaleKernel`）：
+  //   下面的 `containKernel()` 是本文件按 `contain` 倍率重写的小包装（见其注释）。
   //   · photo-noise-300（300×300，非整数倍缩小）⇒ 规则 2 ⇒ smooth ✓
   //   · pixel-art-128（128×128 == 目标）        ⇒ 规则 1 ⇒ nearest ✓
   //   · tiny-3x3 / one-pixel（放大）            ⇒ 规则 3 ⇒ 色数少 ⇒ nearest ✓
@@ -571,7 +595,7 @@ function sectionGeometry(): void {
 
   // ── auto 核判据 ──
   //
-  // ★ 判据原文（`image.ts::selectScaleKernel` / `chooseKernel`，顺序即优先级）：
+  // ★ 判据原文（`image.ts::selectScaleKernel`，顺序即优先级）：
   //     1) 尺寸相同（scale == 1）        → 'nearest'（逐像素复制，不采样）
   //     2) 正在缩小（scale < 1）         → 'smooth'，除非**两轴都是整数倍**
   //                                        （scale 的倒数是整数）时才用 'nearest'
@@ -585,7 +609,7 @@ function sectionGeometry(): void {
   //   · 规则 ② 的"整数倍"判定用"倒数是整数"（`1/scale` 与四舍五入值在 1e-9 内相等），
   //     而不是"源尺寸 % 目标尺寸"：后者在等比取景下会判错（见 100×256 那条）。
   //
-  // ⚠ `chooseKernel()` 的目标尺寸**默认 128×128**（`TARGET_SIZE`），下面显式写出来。
+  // ⚠ `containKernel()` 的目标尺寸**默认 128×128**（`TARGET_SIZE`），下面显式写出来。
   {
     const T = TARGET_SIZE; // 128
 
@@ -613,71 +637,71 @@ function sectionGeometry(): void {
     };
 
     // ── 规则 1：尺寸相同 ⇒ 复制（不做任何采样）──
-    eq(chooseKernel(img(128, 128, 40), T, T), 'nearest',
+    eq(containKernel(img(128, 128, 40), T, T), 'nearest',
       '规则1（尺寸相同）: 128×128 / 40 色 → nearest（逐像素复制）');
-    eq(chooseKernel(img(128, 128, 300), T, T), 'nearest',
+    eq(containKernel(img(128, 128, 300), T, T), 'nearest',
       '规则1（尺寸相同）: 128×128 / 300 色 → nearest（色数多也一样，因为根本不采样）');
     // 真实夹具（128×128）走的就是这一条
-    eq(chooseKernel(get('pixel-art-128'), T, T), 'nearest',
+    eq(containKernel(get('pixel-art-128'), T, T), 'nearest',
       '规则1: 夹具 pixel-art-128（128×128 / 40 色）→ nearest');
-    eq(chooseKernel(get('gradient-128'), T, T), 'nearest',
+    eq(containKernel(get('gradient-128'), T, T), 'nearest',
       '规则1: 夹具 gradient-128（128×128 / 16,384 色）→ nearest（尺寸相同 ⇒ 复制，与色数无关）');
 
     // ── 规则 2 ★ 本次修的核心：缩小时只有"两轴整数倍"才准用最近邻 ──
-    eq(chooseKernel(img(256, 256, 40), T, T), 'nearest',
+    eq(containKernel(img(256, 256, 40), T, T), 'nearest',
       '规则2（2× 整数倍缩小）: 256×256 / 40 色 → nearest（整数倍 nearest 完美保真像素画）');
-    eq(chooseKernel(img(384, 384, 40), T, T), 'nearest',
+    eq(containKernel(img(384, 384, 40), T, T), 'nearest',
       '规则2（3× 整数倍缩小）: 384×384 / 40 色 → nearest');
-    eq(chooseKernel(img(300, 300, 40), T, T), 'smooth',
+    eq(containKernel(img(300, 300, 40), T, T), 'smooth',
       '★ 规则2（非整数倍缩小）: 300×300 / 40 色 → smooth（nearest 会抽样丢行丢列 ⇒ 不均匀边缘）');
-    eq(chooseKernel(img(255, 255, 40), T, T), 'smooth',
+    eq(containKernel(img(255, 255, 40), T, T), 'smooth',
       '规则2（差一格就不是整数倍）: 255×255 / 40 色 → smooth');
-    eq(chooseKernel(img(300, 300, 300), T, T), 'smooth',
+    eq(containKernel(img(300, 300, 300), T, T), 'smooth',
       '规则2（非整数倍缩小 + 多色）: 300×300 / 300 色 → smooth');
-    eq(chooseKernel(img(128, 256, 40), T, T), 'nearest',
+    eq(containKernel(img(128, 256, 40), T, T), 'nearest',
       '★ 规则2（纵向 2× 整数倍缩小、横向 1:1）: 128×256 → 128×128 → nearest'
       + '（1:1 的那一轴根本不采样 ⇒ 不存在丢列；只有被缩的那一轴需要判整数倍）');
-    eq(chooseKernel(img(300, 128, 40), T, T), 'smooth',
+    eq(containKernel(img(300, 128, 40), T, T), 'smooth',
       '★ 规则2（一轴缩放、另一轴 1:1，但缩放的那一轴非整数倍）: 300×128 → 128×128'
       + '（contain 倍率 = min(128/300, 128/128) = 0.4267）→ smooth（会丢列）');
-    eq(chooseKernel(img(100, 256, 40), T, T), 'nearest',
+    eq(containKernel(img(100, 256, 40), T, T), 'nearest',
       '★★ 规则2 的关键分歧点（第一版会判错的那一格）: 100×256 → 128×128'
       + '（contain 倍率 = min(1.28, 0.5) = 0.5）→ nearest'
       + '（横向其实是 1.28× **放大**、纵向是 2× 整数倍缩小 ⇒ 两轴都保真；'
       + '  第一版按"源尺寸 % 目标尺寸"判，100 % 128 ≠ 0 会误判成 smooth）');
-    eq(chooseKernel(img(256, 260, 40), T, T), 'smooth',
+    eq(containKernel(img(256, 260, 40), T, T), 'smooth',
       '规则2（一轴整数倍 + 一轴非整数倍）: 256×260 → 128×128 → smooth（必须两轴都整数倍）');
     // 真实夹具：502×202（两轴都非整数倍）现在必须走 smooth
-    eq(chooseKernel(get('banner-logo-502x202'), T, T), 'smooth',
+    eq(containKernel(get('banner-logo-502x202'), T, T), 'smooth',
       '规则2: 夹具 banner-logo（502×202 / 9 色）→ smooth（缩小且非整数倍）');
-    eq(chooseKernel(get('photo-noise-300'), T, T), 'smooth',
+    eq(containKernel(get('photo-noise-300'), T, T), 'smooth',
       '规则2: 夹具 photo-noise-300（300×300 / 18,741 色）→ smooth');
 
     // ── 规则 3：放大或等比时才看色数 ──
-    eq(chooseKernel(img(100, 100, 300), T, T), 'smooth',
+    eq(containKernel(img(100, 100, 300), T, T), 'smooth',
       '规则3（放大 + 多色）: 100×100 / 300 色 → smooth');
-    eq(chooseKernel(img(100, 100, 40), T, T), 'nearest',
+    eq(containKernel(img(100, 100, 40), T, T), 'nearest',
       '规则3（放大 + 少色）: 100×100 / 40 色 → nearest');
-    eq(chooseKernel(img(64, 64, 32), T, T), 'nearest',
+    eq(containKernel(img(64, 64, 32), T, T), 'nearest',
       '规则3（放大 + 少色）: 64×64 / 32 色 → nearest');
-    eq(chooseKernel(img(64, 64, 300), T, T), 'smooth',
+    eq(containKernel(img(64, 64, 300), T, T), 'smooth',
       '规则3（放大 + 多色）: 64×64 / 300 色 → smooth');
     // ⚠ 关于"等比"样本的一句话（踩过两次，别再重复）：
     //   `contain` 的倍率是 min(...)，所以**只要任一轴大于目标，就是缩小档**（规则②），
     //   根本轮不到规则③。256×64 / 64×256 看着像"横向 1:1、纵向放大"，实际
     //   min(0.5, 2) = 0.5 ⇒ 是 2× 整数倍缩小 ⇒ `nearest`（合规）。真正落到规则③
     //   的只有"两轴都不超过目标"的图（例如下面的 100×100），此时 min ≥ 1。
-    eq(chooseKernel(img(128, 100, 40), T, T), 'nearest',
+    eq(containKernel(img(128, 100, 40), T, T), 'nearest',
       '规则3（等比：横向恰好 1:1、纵向放大 + 少色）: 128×100 → nearest'
       + '（contain 倍率 = min(1, 1.28) = 1 ⇒ 不缩小，落到规则③看色数）');
-    eq(chooseKernel(img(128, 100, 300), T, T), 'nearest',
+    eq(containKernel(img(128, 100, 300), T, T), 'nearest',
       '★ 规则 2/3 的边界（字面歧义，见本文件注释）: 128×100 / 300 色 → nearest'
       + '（"正在缩小"按**实际倍率**判：min(1, 1.28) = 1 ⇒ 没有缩小 ⇒ 走规则③；'
       + '  若按"轴尺寸是否超过目标"判，这里会变成 smooth）');
     // 真实夹具：3×3 / 1×1 都是放大档
-    eq(chooseKernel(get('tiny-3x3'), T, T), 'nearest', '规则3: 夹具 tiny-3x3（3×3 / 9 色）→ nearest');
-    eq(chooseKernel(get('one-pixel'), T, T), 'nearest', '规则3: 夹具 one-pixel（1×1）→ nearest');
-    eq(chooseKernel(get('small-64-with-transparent'), T, T), 'nearest',
+    eq(containKernel(get('tiny-3x3'), T, T), 'nearest', '规则3: 夹具 tiny-3x3（3×3 / 9 色）→ nearest');
+    eq(containKernel(get('one-pixel'), T, T), 'nearest', '规则3: 夹具 one-pixel（1×1）→ nearest');
+    eq(containKernel(get('small-64-with-transparent'), T, T), 'nearest',
       '规则3: 夹具 small-64（64×64 / 32 色，放大）→ nearest');
     // ★ 半透明像素**不算**实色数：40 个不透明色 + 200 个各不相同的半透明像素
     //   ⇒ 色数仍是 40（放大档）⇒ nearest。若把半透明算进去会变成 240，仍是 nearest，
@@ -691,7 +715,7 @@ function sectionGeometry(): void {
       });
       eq(distinctOpaqueColors(semi40), 40, '半透明像素不计入不透明色数（40 个不透明 + 200 个半透明）');
       eq(semiTransparentCount(semi40), 200, '半透明像素计数 = 200');
-      eq(chooseKernel(semi40, T, T), 'nearest',
+      eq(containKernel(semi40, T, T), 'nearest',
         '规则3: 半透明像素不参与色数判据（40 色 ⇒ nearest，与 prepare_image.py 口径一致）');
     }
 
@@ -699,22 +723,22 @@ function sectionGeometry(): void {
     //   尺寸取 100×100（**放大档**，避免被规则 2 抢先命中）。
     eq(distinctOpaqueColors(img(100, 100, 256)), 256, '合成图：正好 256 种不透明色');
     eq(distinctOpaqueColors(img(100, 100, 257)), 257, '合成图：正好 257 种不透明色');
-    eq(chooseKernel(img(100, 100, 256), T, T), 'nearest',
+    eq(containKernel(img(100, 100, 256), T, T), 'nearest',
       "色数边界（放大档）: 256 色 ⇒ 'nearest'（判据是 ≤ 256）");
-    eq(chooseKernel(img(100, 100, 257), T, T), 'smooth',
+    eq(containKernel(img(100, 100, 257), T, T), 'smooth',
       "色数边界（放大档）: 257 色 ⇒ 'smooth'");
     // ★ 同一个 300 色图：缩小档必须 smooth（规则 2 优先于色数），放大档才是规则 3
-    eq(chooseKernel(img(300, 300, 300), T, T), 'smooth',
+    eq(containKernel(img(300, 300, 300), T, T), 'smooth',
       '优先级：300×300 / 300 色缩小 → smooth（规则 2 先命中，色数根本没被看）');
-    eq(chooseKernel(img(100, 100, 300), T, T), 'smooth',
+    eq(containKernel(img(100, 100, 300), T, T), 'smooth',
       '优先级：100×100 / 300 色放大 → smooth（走到规则 3 才看色数）');
 
     // ── 目标尺寸参数化（PS1 的 64×64 那一档）：规则 1/2 必须跟着目标走 ──
-    eq(chooseKernel(img(64, 64, 300), 64, 64), 'nearest',
+    eq(containKernel(img(64, 64, 300), 64, 64), 'nearest',
       '目标 64×64: 源 64×64 ⇒ 规则 1（尺寸相同 ⇒ 复制，即使 300 色）');
-    eq(chooseKernel(img(128, 128, 40), 64, 64), 'nearest',
+    eq(containKernel(img(128, 128, 40), 64, 64), 'nearest',
       '目标 64×64: 源 128×128 ⇒ 规则 2 的整数倍（2×）⇒ nearest');
-    eq(chooseKernel(img(100, 100, 40), 64, 64), 'smooth',
+    eq(containKernel(img(100, 100, 40), 64, 64), 'smooth',
       '目标 64×64: 源 100×100 ⇒ 非整数倍缩小 ⇒ smooth');
 
     // ── 半透明像素不计入色数（口径与 prepare_image.py 一致）──
@@ -754,12 +778,12 @@ function sectionGeometry(): void {
     // ── 手动 kernel 的优先级**永远高于** 'auto' ──
     {
       const shrinkNonInteger = img(300, 300, 40); // 规则 2 本来判 smooth
-      eq(chooseKernel(shrinkNonInteger, T, T), 'smooth', '优先级前置：300×300/40 色 auto ⇒ smooth');
+      eq(containKernel(shrinkNonInteger, T, T), 'smooth', '优先级前置：300×300/40 色 auto ⇒ smooth');
       eq(fitToTarget(shrinkNonInteger, { kernel: 'nearest' }).kernel, 'nearest',
         "手动 kernel='nearest' 不被 'auto' 覆盖（即使 auto 会判 smooth）");
 
       const shrinkInteger = img(256, 256, 40); // 规则 2 本来判 nearest
-      eq(chooseKernel(shrinkInteger, T, T), 'nearest', '优先级前置：256×256/40 色 auto ⇒ nearest');
+      eq(containKernel(shrinkInteger, T, T), 'nearest', '优先级前置：256×256/40 色 auto ⇒ nearest');
       eq(fitToTarget(shrinkInteger, { kernel: 'smooth' }).kernel, 'smooth',
         "手动 kernel='smooth' 不被 'auto' 覆盖（即使 auto 会判 nearest、即使是整数倍）");
       // ⚠ 三条踩过的坑，都写在这里：
@@ -770,7 +794,7 @@ function sectionGeometry(): void {
       //   ③ 所以合成图必须是**铺满**的（现在的 `img()` 就是铺满的）。
       const shrinkMix = img(150, 150, 300);
       eq(distinctOpaqueColors(shrinkMix), 300, 'shrinkMix 合成图：恰好 300 色且整图不透明');
-      eq(chooseKernel(shrinkMix, T, T), 'smooth', '优先级前置：150×150/300 色 auto ⇒ smooth');
+      eq(containKernel(shrinkMix, T, T), 'smooth', '优先级前置：150×150/300 色 auto ⇒ smooth');
       const fSmooth = fitToTarget(shrinkMix, { kernel: 'smooth' });
       const smoothColors = distinctOpaqueColors(
         { data: fSmooth.data, width: fSmooth.width, height: fSmooth.height });
@@ -785,7 +809,7 @@ function sectionGeometry(): void {
         `实到 ${nearestShrinkColors}`);
 
       const upscaleMany = img(100, 100, 300); // 规则 3 本来判 smooth
-      eq(chooseKernel(upscaleMany, T, T), 'smooth', '优先级前置：100×100/300 色 auto ⇒ smooth');
+      eq(containKernel(upscaleMany, T, T), 'smooth', '优先级前置：100×100/300 色 auto ⇒ smooth');
       eq(fitToTarget(upscaleMany, { kernel: 'nearest' }).kernel, 'nearest',
         "手动 kernel='nearest' 不被 'auto' 覆盖（放大档 + 多色）");
       // 手动 nearest 在**放大档**真的生效：输出色数 = 源图色数（不许发明中间色）。
@@ -1079,11 +1103,28 @@ function sectionCompliance(): void {
         if (r.palette[k * 4 + 3] !== PALETTE_ALPHA_OPAQUE) alphaBad += 1;
       }
       eq(alphaBad, 0, `${label}: 实色槽位 alpha = 0x80（PORT-NOTES §二 1 的游戏惯例）`);
-      // 声明用掉的槽位数必须与实际引用的最大索引一致（不许"虚报"）
+      // 声明的"输出色数"必须与**实际引用到的槽位颜色**一致（不许虚报）。
+      // ⚠ 别写成"最大索引 == colorsAfter"：中位切分**允许**两个桶四舍五入后落成同一个 RGB
+      //   ⇒ 槽位号会大于"不同颜色数"（实测 banner-logo/stretch：255 个槽位全被引用、252 种颜色）。
+      //   那不是虚报（不违法格式），只是调色板有点浪费；所以这里钉的是真正的不变式。
       let maxIdx = 0;
       for (let i = 0; i < r.indices.length; i++) if (r.indices[i] > maxIdx) maxIdx = r.indices[i];
-      ok(maxIdx <= r.report.colorsAfter, `${label}: 最大索引 ${maxIdx} ≤ colorsAfter ${r.report.colorsAfter}`);
-      ok(r.report.colorsAfter <= maxIdx, `${label}: colorsAfter 不虚报（每个槽位都被引用过）`);
+      ok(maxIdx <= MAX_OPAQUE_COLORS, `${label}: 最大索引 ${maxIdx} ≤ ${MAX_OPAQUE_COLORS}（调色板边界）`);
+      const usedSlots = new Set<number>();
+      for (let i = 0; i < r.indices.length; i++) if (r.indices[i] !== 0) usedSlots.add(r.indices[i]);
+      const slotColors = new Set<number>();
+      for (const s of usedSlots) {
+        slotColors.add((r.palette[s * 4] << 16) | (r.palette[s * 4 + 1] << 8) | r.palette[s * 4 + 2]);
+      }
+      eq(
+        slotColors.size,
+        r.report.colorsAfter,
+        `${label}: 引用到的 ${usedSlots.size} 个槽位里恰好 ${r.report.colorsAfter} 种不同颜色（不虚报、不重复计）`,
+      );
+      ok(
+        r.report.colorsAfter <= maxIdx,
+        `${label}: colorsAfter ${r.report.colorsAfter} ≤ 最大索引 ${maxIdx}（不同颜色数不可能超过用到的槽位数）`,
+      );
 
       // checkCompliance 必须与手算一致
       const cc = checkCompliance(out, { indices: r.indices });
@@ -1248,13 +1289,90 @@ function testFixedSemantics(): void {
       '[D21] 单个孤立不透明点 + 开收边 ⇒ despeckleRemoved = 1（这条才是"删掉了"）');
   }
 
-  // ── D23：stretch 的 backgroundPixels 不再硬写 0 ──
+  // ── D23：`backgroundPixels` 的口径 = "输出里逐通道等于背景色的像素数" ──
+  //
+  // ★ 这条口径 0.20 才彻底钉住（原来字段文档写"补了多少背景"，而 stretch 根本不补背景
+  //   ⇒ 文档与实现差一半）。三条断言一起把它锁死：
+  //   ① 与背景同色的**源**像素会被数进来（所以它不是"补了几个背景"的因果计数）；
+  //   ② `contain` / `stretch` 两条分支对同一张图给**同一个数**（口径统一，没有分支特例）；
+  //   ③ stretch + nearest 走的是真采样（源 4×4 → 目标 8×8，不是恒等短路），
+  //      并且与**独立写的**参考实现逐像素一致（下面 §stretch 那一节）。
   {
     const bgOnly = { data: new Uint8ClampedArray(2 * 2 * 4), width: 2, height: 2 }; // 全 0 = 默认背景色
     const st = fitToTarget(bgOnly, { targetWidth: 4, targetHeight: 4, mode: 'stretch' });
-    eq(st.backgroundPixels, 16, '[D23] stretch：整幅等于背景色 ⇒ backgroundPixels = 16（原先硬写 0）');
+    eq(st.backgroundPixels, 16, '[D23] stretch：整幅等于背景色 ⇒ backgroundPixels = 16（口径是"像背景色的输出像素数"）');
     const ct = fitToTarget(bgOnly, { targetWidth: 4, targetHeight: 4, mode: 'contain' });
     eq(ct.backgroundPixels, 16, '[D23] contain 同一张图也报 16（两条路口径一致）');
+  }
+
+  // ── 0.20：stretch 这支**真的跑到了** `nearestStretch`（原先那条用例源/目标同尺寸，
+  //    命中"恒等短路"，看起来在测其实什么都没测）──
+  //
+  // 源 4×4 全不透明 + 洋红、目标 8×8、`mode:'stretch'`、**非默认** background：
+  //   · `backgroundPixels` 必须是 0（源里一个背景色像素都没有，stretch 也不补背景）；
+  //   · 输出里不许出现背景色像素（铺满、无越界 ⇒ 一个都不该补）；
+  //   · 逐像素与下面**独立写的**参考实现一致（参考实现按 `Math.round((t+0.5)*s/d-0.5)`
+  //     重写一遍，**不调用被测代码** —— 这是"取样式与 `mapTargetToSource` 同一条"的见证）。
+  {
+    const SRC = 4;
+    const DST = 8;
+    const MAGENTA = [255, 0, 255, 255];
+    const BG = { r: 0, g: 255, b: 0, a: 255 }; // 非默认背景（绿），与源色逐通道都不同
+    const src = makeImage(SRC, SRC, () => MAGENTA);
+    const f = fitToTarget(src, {
+      targetWidth: DST, targetHeight: DST, mode: 'stretch', background: BG,
+    });
+    eq(f.width, DST, '[0.20] stretch 4×4 → 8×8：输出宽 8');
+    eq(f.height, DST, '[0.20] stretch 4×4 → 8×8：输出高 8');
+    ok(!(SRC === DST), '[0.20] 这条用例的源/目标尺寸**必须不同**（同尺寸会命中恒等短路，测不到 nearestStretch）');
+    eq(f.backgroundPixels, 0, '[0.20] stretch + 洋红源 + 绿背景 ⇒ backgroundPixels = 0（一个背景像素都没补）');
+    let bgSeen = 0;
+    for (let y = 0; y < DST; y++) {
+      for (let x = 0; x < DST; x++) if (pxEq(px(f, x, y), [BG.r, BG.g, BG.b, BG.a])) bgSeen += 1;
+    }
+    eq(bgSeen, 0, '[0.20] stretch 的输出里**没有**背景色像素（独立逐像素复核）');
+
+    // ★★ 独立参考实现：只按公式重写，不 import / 不调用 image.ts 的任何取样函数
+    const refIndex = (t: number, s: number, d: number): number => {
+      // 目标像素中心 (t+0.5)/d 映回源图 ⇒ 源坐标中心 (t+0.5)*s/d，取最近源像素 = round(中心-0.5)
+      const c = Math.round(((t + 0.5) * s) / d - 0.5);
+      return Math.min(s - 1, Math.max(0, c));
+    };
+    const ref = new Uint8ClampedArray(DST * DST * 4);
+    for (let ty = 0; ty < DST; ty++) {
+      const sy = refIndex(ty, SRC, DST);
+      for (let tx = 0; tx < DST; tx++) {
+        const sx = refIndex(tx, SRC, DST);
+        const so = (sy * SRC + sx) * 4;
+        const o = (ty * DST + tx) * 4;
+        for (let k = 0; k < 4; k++) ref[o + k] = src.data[so + k];
+      }
+    }
+    eq(firstPixelDiff({ data: f.data, width: f.width, height: f.height }, { data: ref, width: DST, height: DST },
+      '[0.20] stretch+nearest 与独立参考实现：'), null,
+    '[0.20] stretch+nearest 逐像素等于参考实现 `round((t+0.5)*s/d-0.5)`');
+
+    // 参考实现自己也要自证"它真的在采样、而且取的是哪一个"：4→8 ⇒ 每相邻两列取同一个源像素
+    // （0,0,1,1,2,2,3,3）；把序列钉住，免得公式被悄悄换成别的取样式。
+    // ⚠ 4→8 这组尺寸下 `round(中心-0.5)` 与 `floor(中心)` 恰好给出**同一个**序列 ——
+    //   所以这条断言**不能**单独证明用的是 round；真正的见证是"它 != 恒等映射"
+    //   （源 4×4 → 目标 8×8，恒等短路在这种尺寸下不可能发生），以及 `nearestStretch`
+    //   的注释 + `mapTargetToSource` 用的那条公式（两者在源码层面同式）。
+    const refRow = [];
+    for (let tx = 0; tx < DST; tx++) refRow.push(refIndex(tx, SRC, DST));
+    eq(refRow.join(','), '0,0,1,1,2,2,3,3',
+      '[0.20] 参考实现的取样式：4→8 ⇒ 源下标 0,0,1,1,2,2,3,3（相邻两列取同一个源像素）');
+
+    // ── 对照：**与背景同色**的源像素会被数进来（证明这不是"补了几个背景"的因果计数）──
+    //   源换成"整幅 = 背景色"，stretch 到 8×8：一个背景都没补，但计数 = 64。
+    //   这就是字段文档 0.20 改成"输出里像背景色的像素数"的原因；别改成"stretch 恒为 0"，
+    //   否则这条与上一条 contain 的断言会互相打架（同一张图两条分支给出不同的数）。
+    const bgSrc = makeImage(SRC, SRC, () => [BG.r, BG.g, BG.b, BG.a]);
+    const fBg = fitToTarget(bgSrc, {
+      targetWidth: DST, targetHeight: DST, mode: 'stretch', background: BG,
+    });
+    eq(fBg.backgroundPixels, DST * DST,
+      '[0.20] 源整幅等于背景色 ⇒ 计数 = 64（源像素被数进来；stretch 本身不补背景）');
   }
 }
 
@@ -1607,6 +1725,110 @@ function realHeaderTail(): Uint8Array {
 }
 
 // --------------------------------------------------------------------------
+// 面积平均（smooth）的支撑区：独立参考实现对拍 + 放大档不许出透明像素
+// --------------------------------------------------------------------------
+
+function transparentCount(img: RgbaImage): number {
+  let n = 0;
+  for (let i = 0; i < img.width * img.height; i++) if (img.data[i * 4 + 3] === 0) n += 1;
+  return n;
+}
+
+/**
+ * **独立的**面积平均参考实现（教科书 box）—— 只用来对拍，不抄被测代码：
+ *   · 支撑区 = `[c - half, c + half]`；
+ *   · 与它有**正面积**交集的源像素 = `floor(a) … ceil(b) - 1`；
+ *   · 权重 = 交集长度；源图外的部分**不补背景色**（只在支撑区完全落在图外时才是背景）。
+ */
+function refBox(
+  src: ArrayLike<number>, sw: number, sh: number, dw: number, dh: number,
+  scale: number, offsetX: number, offsetY: number,
+): Uint8ClampedArray {
+  const inv = 1 / scale;
+  const half = 0.5 * inv;
+  const out = new Uint8ClampedArray(dw * dh * 4);
+  const span = (c: number, n: number): [number, number] => {
+    const s0 = Math.max(0, Math.floor(c - half));
+    const s1 = Math.min(n - 1, Math.ceil(c + half) - 1);
+    return [s0, s1];
+  };
+  for (let ty = 0; ty < dh; ty++) {
+    const cy = (ty + 0.5 - offsetY) * inv;
+    const [y0, y1] = span(cy, sh);
+    for (let tx = 0; tx < dw; tx++) {
+      const o = (ty * dw + tx) * 4;
+      const cx = (tx + 0.5 - offsetX) * inv;
+      const [x0, x1] = span(cx, sw);
+      if (y1 < y0 || x1 < x0) continue; // 全透明（背景）
+      let r = 0; let g = 0; let b = 0; let a = 0; let ws = 0;
+      for (let sy = y0; sy <= y1; sy++) {
+        const wy = Math.min(cy + half, sy + 1) - Math.max(cy - half, sy);
+        if (!(wy > 0)) continue;
+        for (let sx = x0; sx <= x1; sx++) {
+          const wx = Math.min(cx + half, sx + 1) - Math.max(cx - half, sx);
+          if (!(wx > 0)) continue;
+          const w = wx * wy;
+          const so = (sy * sw + sx) * 4;
+          r += src[so] * w; g += src[so + 1] * w; b += src[so + 2] * w; a += src[so + 3] * w;
+          ws += w;
+        }
+      }
+      if (!(ws > 0)) continue;
+      out[o] = Math.round(r / ws); out[o + 1] = Math.round(g / ws);
+      out[o + 2] = Math.round(b / ws); out[o + 3] = Math.round(a / ws);
+    }
+  }
+  return out;
+}
+
+/** 造一张合成图（`makeImage` 的简写版：只给一个"取色"函数）。 */
+const synth = (w: number, h: number, fn: (x: number, y: number) => [number, number, number]): RgbaImage =>
+  makeImage(w, h, (x, y) => { const c = fn(x, y); return [c[0], c[1], c[2], 255]; });
+
+function testAreaAverageSupport(): void {
+  section('★ 面积平均的支撑区：与独立写的教科书 box 逐像素对拍 + 放大档不许出透明像素');
+
+  // ── ① 支撑区必须覆盖"被部分覆盖"的像素：全不透明的图放大后**不许**出现透明像素 ──
+  //   来由：下限写成 `ceil(a)` 会把那个像素整块丢掉，而放大时它是支撑区里唯一的一个
+  //   ⇒ 支撑区算成空 ⇒ 整片走"补背景"（全不透明的输入会变成大片透明）。
+  {
+    const opaque64 = synth(64, 64, (x, y) => [(x * 4) % 256, (y * 4) % 256, 128]);
+    const up2 = fitToTarget(opaque64, { mode: 'contain', kernel: 'smooth' });
+    eq(transparentCount({ data: up2.data, width: 128, height: 128 }), 0,
+      '★★ 64×64 全不透明 → 128×128（2× 放大）用面积平均：**一个透明像素都不许有**');
+
+    const opaque3 = synth(3, 3, (x, y) => [x * 90, y * 90, 40]);
+    const up43 = fitToTarget(opaque3, { mode: 'contain', kernel: 'smooth' });
+    eq(transparentCount({ data: up43.data, width: 128, height: 128 }), 0,
+      '★★ 3×3 全不透明 → 128×128（42.7× 放大）用面积平均：同样不许出现透明像素');
+  }
+  // ── ② 对拍：与**本文件独立写的**教科书 box 逐像素相同（面积平均的定义）──
+  for (const name of ['photo-noise-300', 'soft-edge-140', 'small-64-with-transparent', 'banner-logo-502x202']) {
+    const f = get(name);
+    const fit = fitToTarget(f, { mode: 'contain', kernel: 'smooth' });
+    const ref = refBox(f.data, f.width, f.height, 128, 128, fit.transform.scale, fit.transform.offsetX, fit.transform.offsetY);
+    const diff = firstPixelDiff(
+      { data: fit.data, width: 128, height: 128 },
+      { data: ref, width: 128, height: 128 },
+      `${name} smooth vs 教科书 box：`,
+    );
+    ok(diff === null, `★★ ${name}：面积平均与独立参考实现**逐像素相同**`, diff ?? '');
+  }
+  // ── ③ 缩小档同样对拍（倍率 < 1：支撑区更宽，权重表更复杂）──
+  for (const [name, tw, th] of [['photo-noise-300', 32, 32], ['banner-logo-502x202', 64, 48]] as const) {
+    const f = get(name);
+    const fit = fitToTarget(f, { mode: 'contain', kernel: 'smooth', targetWidth: tw, targetHeight: th });
+    const ref = refBox(f.data, f.width, f.height, tw, th, fit.transform.scale, fit.transform.offsetX, fit.transform.offsetY);
+    const diff = firstPixelDiff(
+      { data: fit.data, width: tw, height: th },
+      { data: ref, width: tw, height: th },
+      `${name} ${tw}×${th} smooth vs 教科书 box：`,
+    );
+    ok(diff === null, `★★ ${name} → ${tw}×${th}：非方形目标也逐像素相同`, diff ?? '');
+  }
+}
+
+// --------------------------------------------------------------------------
 // 主流程
 // --------------------------------------------------------------------------
 
@@ -1624,6 +1846,7 @@ function main(): number {
   sectionBridge();
   testFixedSemantics();
   testExternalEditorRoundTrip();
+  testAreaAverageSupport();
 
   if (warnings.length > 0) {
     console.log(`\n⚠ ${warnings.length} 条警告（不影响通过/失败，但值得看一眼）：`);

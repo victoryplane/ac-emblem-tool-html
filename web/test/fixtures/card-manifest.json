@@ -3924,7 +3924,6 @@
    "fileName": "data4",
    "fileLength": 17440,
    "fileDataSHA256": "8491513858202951a70574402f42117d303d64da9f5559e318c1289d4c3e73a9",
-   "fileDataPattern": "bytes(range(256)) repeated and truncated to 17440 (first 64 B = 00..3F)",
    "changedPageCount": 39,
    "changedPages": [
     {
@@ -4605,7 +4604,6 @@
    "fileName": "data7",
    "fileLength": 17440,
    "fileDataSHA256": "8491513858202951a70574402f42117d303d64da9f5559e318c1289d4c3e73a9",
-   "fileDataPattern": "bytes(range(256)) repeated and truncated to 17440 (first 64 B = 00..3F)",
    "changedPageCount": 40,
    "changedPages": [
     {
@@ -4900,7 +4898,6 @@
      "page": 2934,
      "dataAllFF": false,
      "spareHex": "07126d777f7f777f7f777f7f00000000",
-     "spareHexSpaced": "07 12 6d 77 7f 7f 77 7f 7f 77 7f 7f 00 00 00 00",
      "spareIsComputedECC": true,
      "spareIsVirginFFFF": false,
      "modeAllFF": false
@@ -4909,7 +4906,6 @@
      "page": 2935,
      "dataAllFF": true,
      "spareHex": "777f7f777f7f777f7f777f7f00000000",
-     "spareHexSpaced": "77 7f 7f 77 7f 7f 77 7f 7f 77 7f 7f 00 00 00 00",
      "spareIsComputedECC": true,
      "spareIsVirginFFFF": false,
      "modeAllFF": true

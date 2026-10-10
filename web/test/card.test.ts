@@ -159,7 +159,6 @@ interface ManifestExperiment {
     page: number;
     dataAllFF: boolean;
     spareHex: string;
-    spareHexSpaced: string;
     spareIsComputedECC: boolean;
     spareIsVirginFFFF: boolean;
     modeAllFF: boolean;
@@ -326,8 +325,16 @@ function testReadCards(): void {
       [card.allocOffset, card.allocEnd, card.rootdir, card.ifc[0]],
       [mc.allocOffset, mc.allocEnd, mc.rootdir, mc.ifc0],
     );
+    // ★ 0.20：原先是 `mc.ifc0 === 8 ? 32 : 32` —— 恒等三目，两边同一个数，等于什么都没测。
+    //   正确口径：FAT 块数 = ceil(总簇数 / 每块 256 项)；`ind[]` 里"非 0xFFFFFFFF"的项数就是它
+    //   （实测 4 张真卡都是 8192 簇 ⇒ 32 个 FAT 块，簇号 9..40）。
     eq(`${mc.name}: ind[] 非空项数`, card.ind.filter((x) => x !== 0xffffffff).length,
-      mc.ifc0 === 8 ? 32 : 32);
+      Math.ceil(card.clusters / 256));
+    // 间接 FAT（绝对簇 8）与 32 个 FAT 块（9..40）之后，`ind[]` 其余项必须是 0xFFFFFFFF
+    //   （"未使用"的**唯一**合法写法 —— 见 `card.ts::readFat` 的注释：0 会被当成合法 FAT 块）。
+    eq(`${mc.name}: ind[] 里只有前 ${Math.ceil(card.clusters / 256)} 项是 FAT 块`,
+      card.ind.filter((x) => x !== 0xffffffff).join(','),
+      Array.from({ length: Math.ceil(card.clusters / 256) }, (_, i) => mc.ifc0 + 1 + i).join(','));
 
     // 根目录项数（取自 `.` 项的 length）+ 根目录条目逐项
     eq(`${mc.name}: dirCount(rootdir)`, card.dirCount(card.rootdir), mc.rootDotLength);
@@ -366,7 +373,11 @@ function testReadCards(): void {
         files.map((s) => [s.name, s.length, s.cluster]),
         md.files.map((f) => [f.name, f.length, f.cluster]),
       );
-      eq(`${mc.name}/${md.name}: 全部 index`, subs.map((s) => s.index), subs.map((s) => s.index));
+      // ★ 0.20：原先是 `eq(…, subs.map((s) => s.index), subs.map((s) => s.index))` ——
+      //   两边同一个表达式，恒真。改成与**夹具**记录的项号列表比对：`.` / `..` 必须是 0 / 1，
+      //   其余每一项必须落在 manifest 里那个文件的 index 上（顺序也要一致）。
+      eq(`${mc.name}/${md.name}: 全部 index`,
+        subs.map((s) => s.index), [0, 1, ...md.files.map((f) => f.index)]);
 
       for (const mf of md.files) {
         const s = files.find((f) => f.name === mf.name);
@@ -521,8 +532,7 @@ function testOffsetAndBoundaries(): void {
   eq('卡总页数 = 整卡字节 / 528', card.npages, CARD_SIZE_8MB / STRIDE);
   eq('卡总页数', card.npages, 16384);
   check('数据区末端之后还剩 32 页（= 16 簇备用区，进不去）',
-    card.npages - (lastPage1 + 1) === 32, `剩 ${card.npages - lastPage1 - 1} 页`);
-  eq('allocateClusters 的硬边界是 allocEnd-4', card.allocEnd - 4, 8131);
+    card.npages - (lastPage1 + 1) === 32, `剩 ${card.npages - lastPage1 - 1} 页`);  eq('allocateClusters 的硬边界是 allocEnd-4', card.allocEnd - 4, 8131);
   // 越界簇的页号必须仍然落在卡内但不是合法数据簇
   check('allocEnd-4 这一簇之后的簇已越过分配上限', card.allocEnd - 3 > card.allocEnd - 4);
 
@@ -694,7 +704,39 @@ function runExperiment(e: ManifestExperiment): void {
     check(`[${e.label}] 链内有空槽 ⇒ **不扩簇**（dirExtensionClusters 必须为空）`,
       res.dirExtensionClusters.length === 0,
       `dirExtensionClusters = ${JSON.stringify(res.dirExtensionClusters)}`);
-    eq(`[${e.label}] 新 dirent 落进链内既有空槽的页`, res.touchedPages.includes(e.direntPage), true);
+    check(`[${e.label}] 新 dirent 落进链内既有空槽的页`,
+      res.touchedPages.includes(e.direntPage), `touchedPages 里没有 ${e.direntPage}`);
+  }
+
+  // ---- ★ 0.20：扩目录簇与数据簇**不许撞页** ----
+  //   这条钉的是 `createFileInDir` 第 4 步的占用集合。原先它复用第 1 步的快照：
+  //     · 数据簇那条腿是对的（`allocateClusters()` 就地把 18 个数据簇补进了那个集合）；
+  //     · 系统区那条腿（`ifc[0]` / `ind[]`）是第 1 步抄的，而第 3 步 `writeFatChain()`
+  //       刚动过那些 FAT 页 ⇒ 潜在失效（本卡踩不到：FAT 块是绝对簇 9..40、分配器从 43 起扫）。
+  //   0.20 改成"重新收集 + 把数据簇并回去"（两者都要，缺前者会丢系统区的刷新，
+  //   缺后者会把刚分配的 18 个簇当空闲 ⇒ 重新分配回 1408、直接覆盖数据）。
+  //   实测：这一步对两张证据卡都是**行为中性**的（扩目录簇仍是 1426，与数据簇零撞页）。
+  {
+    const dataPages = new Set<number>();
+    for (const cl of e.dataClusters) {
+      dataPages.add(card.dataPage(cl, 0));
+      dataPages.add(card.dataPage(cl, 1));
+    }
+    const sysPages = new Set<number>();
+    for (const fc of card.ind) {
+      if (fc === 0xffffffff) continue;
+      sysPages.add(card.sysPage(fc, 0));
+      sysPages.add(card.sysPage(fc, 1));
+    }
+    let clash = 0;
+    for (const cl of res.dirExtensionClusters) {
+      for (const k of [0, 1]) {
+        const p = card.dataPage(cl, k);
+        if (dataPages.has(p) || sysPages.has(p)) clash += 1;
+      }
+    }
+    check(`[${e.label}] 扩目录簇的页不与数据簇/FAT 块撞页`, clash === 0,
+      `撞了 ${clash} 页（扩簇 ${JSON.stringify(res.dirExtensionClusters)}）`);
   }
 
   // ---- 变化页集合 & 每页 SHA-256 ----
@@ -880,6 +922,86 @@ function testWriteExperiments(): void {
   check('扩簇那条：链内没有空槽（声明项数 == 槽数）',
     extend.dirBefore.declaredCount === extend.dirBefore.chain.length * 2,
     `声明 ${extend.dirBefore.declaredCount} 项 / ${extend.dirBefore.chain.length * 2} 槽`);
+}
+
+/**
+ * ★ 0.20：**真卡字节**上跑一次"目录链全满 ⇒ 新建文件（18 簇 + 扩目录簇）"，只读源卡。
+ *
+ * 为什么单独加这一节（`card.test.ts` 里已经有一条 D 实验在比 Python 夹具）：
+ *   D 实验比的是"与 Python 逐字节相同"，**一旦 Python 侧也错就一起错**；
+ *   而且它比的是"写前/写后的页集合"，不直接回答"我读回来的东西对不对"。
+ *   这一节只用真卡字节 + 独立断言，回答三个功能问题：
+ *     ① 目录里**读得回**新文件，且 `length` 就是传进去的长度；
+ *     ② 18 个数据簇与扩出来的目录簇**没有共同页**（撞页会把数据或 dirent 踩掉 ——
+ *        `createFileInDir` 第 4 步占用集合那条腿上曾经报过这个症状）；
+ *     ③ 18 个数据簇里的内容**逐字节等于**传进去的 17440 字节。
+ *
+ * 内容用 `(i*7+3) & 0xFF` 这种非平凡图案（不是全 0）：全 0 时"没写进去"和"写进去了"
+ * 读出来一样，等于测不出来。源卡**只读**（`cardBytes()` 走缓存、`new Card()` 拿副本）。
+ */
+function testCreateFileRealCard(): void {
+  section('★ 0.20 真卡判据：目录链全满 ⇒ 新建 17440 B 文件（只读源卡）');
+  if (!HAVE_EVIDENCE) {
+    skipEvidence('真卡判据：新建 17440 B 文件');
+    return;
+  }
+  const CARD = 'Mcd001_embdata2.ps2';
+  const DIR = 'BISLPS-25462EMB';
+  const NAME = 'data3';
+  const src = cardBytes(CARD).slice(); // 副本：绝不改源卡字节
+
+  const payload = new Uint8Array(17440);
+  for (let i = 0; i < payload.length; i++) payload[i] = (i * 7 + 3) & 0xff;
+  eq(`[真卡] payload 长度`, payload.length, 17440);
+  eq(`[真卡] payload 需要簇数`, Math.ceil(payload.length / 1024), 18);
+
+  const card = new Card(src);
+  const before = card.listDir(DIR).map((e) => e.name);
+  eq(`[真卡] 写前目录里没有 ${NAME}`, before.includes(NAME), false);
+
+  const res = card.createFileInDir(DIR, NAME, payload);
+  eq(`[真卡] 新建文件用到 18 个数据簇`, res.clusters.length, 18);
+
+  // ① 读得回、长度正确
+  const ent = card.listDir(DIR).find((e) => e.name === NAME);
+  check(`[真卡] 回读得到 ${NAME}`, !!ent);
+  if (ent) {
+    eq(`[真卡] ${NAME} 的 length`, ent.length, 17440);
+    const chain = card.chain(ent.cluster, 4096);
+    eq(`[真卡] ${NAME} 的簇链长度`, chain.length, 18);
+    eq(`[真卡] ${NAME} 的首簇`, ent.cluster, res.firstCluster);
+
+    // ③ 内容逐字节一致
+    const got = card.readFile(ent.cluster, ent.length);
+    eq(`[真卡] ${NAME} 读回长度`, got.length, 17440);
+    let firstDiff = -1;
+    for (let i = 0; i < Math.min(got.length, payload.length); i++) {
+      if (got[i] !== payload[i]) { firstDiff = i; break; }
+    }
+    check(`[真卡] ${NAME} 内容逐字节等于传进去的字节`, firstDiff < 0 && got.length === payload.length,
+      firstDiff < 0 ? `长度 ${got.length} ≠ ${payload.length}` : `首个不同字节 @${firstDiff}：${got[firstDiff]} vs ${payload[firstDiff]}`);
+
+    // ② 数据簇与扩目录簇**零共同页**
+    const dataPages = new Set<number>();
+    for (const cl of res.clusters) {
+      dataPages.add(card.dataPage(cl, 0));
+      dataPages.add(card.dataPage(cl, 1));
+    }
+    const extPages = res.dirExtensionClusters.flatMap((cl) => [card.dataPage(cl, 0), card.dataPage(cl, 1)]);
+    const common = extPages.filter((p) => dataPages.has(p));
+    eq(`[真卡] 扩目录簇 ${JSON.stringify(res.dirExtensionClusters)} 与 18 个数据簇的共同页`, common, []);
+    eq(`[真卡] 扩目录簇页数`, extPages.length, res.dirExtensionClusters.length * 2);
+
+    // 数据簇的两页都必须 eccOk（撞页/半写会在这里露出来）
+    const badEcc: number[] = [];
+    for (const p of dataPages) if (!card.eccOk(p)) badEcc.push(p);
+    eq(`[真卡] 18 个数据簇的 36 页 ECC 全部正确`, badEcc, []);
+  }
+
+  // 源卡字节仍未改动
+  eq(`[真卡] 源卡文件字节数`, cardBytes(CARD).length, src.length);
+  eq(`[真卡] 源卡首 16 字节未被改动`,
+    hex(cardBytes(CARD).subarray(0, 16)), hex(new Uint8Array(readFileSync(join(EVIDENCE, CARD))).subarray(0, 16)));
 }
 
 /**
@@ -1169,6 +1291,7 @@ function main(): void {
   testChainAcrossFatBlocks();
   testOffsetAndBoundaries();
   testWriteExperiments();
+  testCreateFileRealCard();
   testCorruptCardSafety();
   if (process.argv.includes('--badhandle')) testBadHandleTrap();
 

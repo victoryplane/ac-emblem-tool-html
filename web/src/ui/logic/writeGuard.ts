@@ -94,20 +94,20 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
     reasons.push(
       t(
         `回读长度 ${facts.readback.length} ≠ 期望 ${facts.expected.length} 字节（写进去的东西没完整落下来）`,
-        `Read-back length ${facts.readback.length} != expected ${facts.expected.length} bytes (what we wrote did not land completely)`,
+        `Read-back length ${facts.readback.length} != expected ${facts.expected.length} bytes (what we wrote did not land completely)`, `読み戻し長 ${facts.readback.length} ≠ 期待値 ${facts.expected.length} バイト（書き込んだ内容が完全には定着していません）`, `다시 읽은 길이 ${facts.readback.length} ≠ 기대값 ${facts.expected.length}바이트(쓴 내용이 완전히 기록되지 않았습니다)`,
       ),
     );
   } else if (diffCount > 0) {
     reasons.push(
       t(
-        `回读与期望**不一致**：${diffCount} 个字节不同，首个差异在 ${hex(firstDiffOffset)}` +
+        `回读与期望不一致：${diffCount} 个字节不同，首个差异在 ${hex(firstDiffOffset)}` +
           `（期望 ${hex(facts.expected[firstDiffOffset])}，实到 ${hex(facts.readback[firstDiffOffset])}）`,
         `Read-back does not match what was expected: ${diffCount} bytes differ, first at ${hex(firstDiffOffset)}` +
-          ` (expected ${hex(facts.expected[firstDiffOffset])}, got ${hex(facts.readback[firstDiffOffset])})`,
+          ` (expected ${hex(facts.expected[firstDiffOffset])}, got ${hex(facts.readback[firstDiffOffset])})`, `読み戻しが期待と一致しません：${diffCount} バイトが異なり、最初の相違は ${hex(firstDiffOffset)}（期待 ${hex(facts.expected[firstDiffOffset])}、実際 ${hex(facts.readback[firstDiffOffset])}）`, `다시 읽은 값이 기대와 다릅니다: ${diffCount}바이트가 다르며, 첫 차이는 ${hex(firstDiffOffset)}(기대 ${hex(facts.expected[firstDiffOffset])}, 실제 ${hex(facts.readback[firstDiffOffset])})`,
       ),
     );
   } else {
-    passed.push(t(`逐字节比对一致（${facts.readback.length} 字节）`, `Byte-for-byte identical (${facts.readback.length} bytes)`));
+    passed.push(t(`逐字节比对一致（${facts.readback.length} 字节）`, `Byte-for-byte identical (${facts.readback.length} bytes)`, `バイト単位の比較で一致（${facts.readback.length} バイト）`, `바이트 단위 비교 일치(${facts.readback.length}바이트)`));
   }
 
   // ── ② 18 段校验独立复核 ──
@@ -119,19 +119,19 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
           .map((s) =>
             t(
               `${s.name}@${hex(s.offset)} 实到 ${hex(s.got)} 期望 ${hex(s.expect)}`,
-              `${s.name}@${hex(s.offset)} got ${hex(s.got)}, expected ${hex(s.expect)}`,
+              `${s.name}@${hex(s.offset)} got ${hex(s.got)}, expected ${hex(s.expect)}`, `${s.name}@${hex(s.offset)} 実測 ${hex(s.got)} 期待 ${hex(s.expect)}`, `${s.name}@${hex(s.offset)} 실제 ${hex(s.got)} 기대 ${hex(s.expect)}`,
             ),
           )
-          .join(t('；', '; '))
-      : t('（没有明细）', '(no details)');
+          .join(t('；', '; ', '；', '; '))
+      : t('（没有明细）', '(no details)', '（明細なし）', '(세부 내역 없음)');
     reasons.push(
       t(
-        `18 段校验**不通过**：${bad.length} 段出错 —— ${detail}`,
-        `18-segment checksum FAILED: ${bad.length} segment(s) wrong - ${detail}`,
+        `18 段校验不通过：${bad.length} 段出错 —— ${detail}`,
+        `18-segment checksum FAILED: ${bad.length} segment(s) wrong - ${detail}`, `18 セグメントのチェックサム不合格：${bad.length} セグメントでエラー —— ${detail}`, `18개 세그먼트 체크섬 불합격: ${bad.length}개 세그먼트 오류 —— ${detail}`,
       ),
     );
   } else {
-    passed.push(t('18 段校验 18/18', '18/18 checksums'));
+    passed.push(t('18 段校验 18/18', '18/18 checksums', '18 セグメントのチェックサム 18/18', '18개 세그먼트 체크섬 18/18'));
   }
 
   // ── ③ ECC 正确性 ──
@@ -142,11 +142,11 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
         `ECC 坏页 ${facts.badEccPages.length} 个（绝对页 ${list}${facts.badEccPages.length > 12 ? ' …' : ''}）` +
           ' —— 备用区与数据不自洽',
         `${facts.badEccPages.length} bad ECC page(s) (absolute pages ${list}${facts.badEccPages.length > 12 ? ' ...' : ''})` +
-          ' - the spare area and the data do not agree',
+          ' - the spare area and the data do not agree', `ECC 不良ページ ${facts.badEccPages.length} 個（絶対ページ ${list}${facts.badEccPages.length > 12 ? ' …' : ''}） —— スペアエリアとデータが一致しません`, `ECC 불량 페이지 ${facts.badEccPages.length}개(절대 페이지 ${list}${facts.badEccPages.length > 12 ? ' …' : ''}) —— 스페어 영역과 데이터가 일치하지 않습니다`,
       ),
     );
   } else {
-    passed.push(t('改动页 ECC 全对', 'ECC correct on all changed pages'));
+    passed.push(t('改动页 ECC 全对', 'ECC correct on all changed pages', '変更ページの ECC はすべて正しい', '변경된 페이지의 ECC 모두 정상'));
   }
 
   // ── ④ 图像合规（SPEC.md §八 3）──
@@ -154,11 +154,11 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
     reasons.push(
       t(
         `图像不合规：${facts.compliance.issues.join('；')}`,
-        `Image is not compliant: ${facts.compliance.issues.join('; ')}`,
+        `Image is not compliant: ${facts.compliance.issues.join('; ')}`, `画像が不適合：${facts.compliance.issues.join('；')}`, `이미지가 부적합: ${facts.compliance.issues.join('; ')}`,
       ),
     );
   } else if (facts.compliance && facts.compliance.ok) {
-    passed.push(t('图像合规（128×128 / 实色 ≤255 / 半透明 0）', 'Image is compliant (128×128 / <=255 colors / 0 semi-transparent)'));
+    passed.push(t('图像合规（128×128 / 实色 ≤255 / 半透明 0）', 'Image is compliant (128×128 / <=255 colors / 0 semi-transparent)', '画像は適合（128×128 / 実色 ≤255 / 半透明 0）', '이미지 적합(128×128 / 실색 ≤255 / 반투명 0)'));
   }
 
   return {
@@ -181,7 +181,7 @@ const QUIT_PCSX2_WARNING_ZH = '请先完全退出 PCSX2';
 
 /** 这句硬提示的**当前语言**版本（落盘确认框里用）。 */
 export function quitPcsx2Warning(): string {
-  return t(QUIT_PCSX2_WARNING_ZH, 'Fully exit PCSX2 first');
+  return t(QUIT_PCSX2_WARNING_ZH, 'Fully exit PCSX2 first', `PCSX2 を先に完全に終了してください`, `PCSX2를 먼저 완전히 종료하세요`);
 }
 
 /**
@@ -201,22 +201,22 @@ export function confirmWriteMessage(opts: {
   changes: readonly string[];
 }): string {
   const head = opts.overwrite
-    ? t(`即将**直接覆盖** ${opts.fileName}`, `About to OVERWRITE ${opts.fileName}`)
+    ? t(`即将直接覆盖 ${opts.fileName}`, `About to OVERWRITE ${opts.fileName}`, `${opts.fileName} をこれから直接上書きします`, `${opts.fileName}을(를) 곧바로 덮어씁니다`)
     : t(
-        `即将**下载**改好的卡（文件名 ${opts.fileName}）；下载后请自己拷回 memcards\\`,
-        `About to DOWNLOAD the modified card (file name ${opts.fileName}); copy it back into memcards\\ yourself afterwards`,
+        `即将下载改好的卡（文件名 ${opts.fileName}）；下载后请自己拷回 memcards\\`,
+        `About to DOWNLOAD the modified card (file name ${opts.fileName}); copy it back into memcards\\ yourself afterwards`, `修正したカードをこれからダウンロードします（ファイル名 ${opts.fileName}）。⇒ ダウンロード後はご自身で memcards\\ にコピーし戻してください`, `수정한 카드를 곧 다운로드합니다(파일 이름 ${opts.fileName}). 다운로드 후에는 직접 memcards\\에 다시 복사하세요`,
       );
   return [
     head,
     '',
     ...opts.changes.map((c) => '· ' + c),
     '',
-    t(`★ ${QUIT_PCSX2_WARNING}（关窗口，不是 reset）。`, `★ ${quitPcsx2Warning()} (close the window, not a reset).`),
+    t(`★ ${QUIT_PCSX2_WARNING}（关窗口，不是 reset）。`, `★ ${quitPcsx2Warning()} (close the window, not a reset).`, `★ ${quitPcsx2Warning()}（ウィンドウを閉じる。reset ではありません）。`, `★ ${quitPcsx2Warning()}(창을 닫는 것이며 reset이 아닙니다).`),
     t(
       '  理由：PCSX2 还在运行时，它退出时会用手里的旧卡把文件写回去，你的改动会被覆盖。',
-      '  Why: while PCSX2 is running it keeps its own copy of the card and writes it back on exit, overwriting your changes.',
+      '  Why: while PCSX2 is running it keeps its own copy of the card and writes it back on exit, overwriting your changes.', '  理由：PCSX2 の実行中は、終了時に手持ちの古いカードでファイルを書き戻すため、あなたの変更が上書きされてしまいます。', '  이유: PCSX2가 실행 중이면 종료할 때 가지고 있던 옛 카드로 파일을 다시 쓰기 때문에, 당신의 변경이 덮어써집니다.',
     ),
     '',
-    t('确认继续？', 'Continue?'),
+    t('确认继续？', 'Continue?', '続行しますか？', '계속하시겠습니까?'),
   ].join('\n');
 }

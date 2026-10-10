@@ -131,8 +131,14 @@ export const TRAILING = 11;
 // `破損ファイル`。所以本实现按真实公式写，并保证那 10 字节尾巴要么是游戏写下的真值、
 // 要么（空白块）补成 `01 00*9`。
 //
-// ⚠ FINAL_CHECK_OFF / DANGLING 这两个名字保留，但语义是**上游的（错的）**写法，
-//    只给 `verifyChecksumsUpstream()` 做逐行对照用。
+// ⚠ FINAL_CHECK_OFF / DANGLING 这两个名字保留，但语义是**上游的（错的）**写法。
+//   ⚠ 0.20 更正（原先这段注释说"只给 `verifyChecksumsUpstream()` 做逐行对照用"，与实现不符）：
+//     · `verifyChecksumsUpstream()` **用的不是 `DANGLING`**，而是 `FINAL_ALPHA_POS`
+//       （上游把末段校验写在 alpha 那一格；`prevCheck + dangling` 只是**代数上等于**它，
+//        见 `core.test.ts` 里那条 `prevCheck + dangling === FINAL_ALPHA_POS` 的断言）；
+//     · `DANGLING` / `DANGLING_LR` 现在**只有测试在用**（两条常量值与上述恒等式），
+//       生产路径的末段长度一律走 `FINAL_DATA_LEN`。
+//   保留它们是因为"上游那个 53/21"是文档与 `_selftest` 报告的对照点 —— 别删（测试依赖）。
 export const FINAL_CHECK_OFF = SAVE_SIZE - TRAILING - 1; // 0x4434（= palette[255].alpha）
 export const FINAL_CHECK_OFF_LR = LR_SAVE_SIZE - TRAILING - 1; // 0x4414（= palette[255].alpha）
 
@@ -289,24 +295,10 @@ export function unpackColor(c: number): [number, number, number, number] {
  *     · 注入：新建的调色板槽号 → [写进像素字节的值]
  *   ⚠ 别"想当然"写成"一个正向 + 一个反向"：那会让非 LR 的索引整体错位
  *     （本移植第一版就是这么错的：lut[8] 算成 0，结果 usedPaletteSlots 只有 64 个）。
- *   `scramblePalette()` 保留为**同一个置换**的别名，只为让调用点读起来有方向感；
- *   两者**互为同一个函数**，不是互逆的两个函数（下面有断言钉住这一点）。
+ *   ⚠ 0.20：原先那个"方向性别名" `scramblePalette()`（与它逐字相同）已删 ——
+ *     它是同一个置换、生产路径零调用点，留着只会让人再问一次"到底哪个是逆"。
  */
 export function unscramblePalette(index: number): number {
-  const group = Math.floor((index % 32) / 8);
-  if (group === 1) return index + 8;
-  if (group === 2) return index - 8;
-  return index;
-}
-
-/**
- * 与 `unscramblePalette()` **完全相同**的置换（自逆）。
- *
- * ⚠ 名字是"方向性"的写法（"把槽号打乱成物理索引"），**不是**逆置换：
- *   自逆函数满足 `scramble(x) === unscramble(x)`。
- *   真要有逆置换，那就是它自己 —— 见 `invertPalettePermutation()`（仅供对照/自检）。
- */
-export function scramblePalette(index: number): number {
   const group = Math.floor((index % 32) / 8);
   if (group === 1) return index + 8;
   if (group === 2) return index - 8;
@@ -323,23 +315,52 @@ export function invertPalettePermutation(lut: Uint8Array): Uint8Array {
   return inv;
 }
 
-/** 256 项置换表（上游/Python 只有这一张表，两个方向共用）。 */
+/**
+ * 256 项置换表（上游/Python 只有这一张表）。
+ *
+ * ★★ 0.20 合并：原先还有一份"逐字相同"的 `scramblePalette()` 与 `SCRAMBLE_LUT`，
+ *   注释说"为了读起来有方向感" —— 但两者是**同一个自逆置换**
+ *   （`scramble(x) === unscramble(x)`，见 `invertPalettePermutation` 的断言），
+ *   而且 `scramblePalette` / `SCRAMBLE_LUT` **在生产路径一个调用点都没有**
+ *   （只有测试在用，测试里也顺手断言了"两者逐项相同"）⇒ 收成这一份。
+ *   想表达"注入方向"的调用点，直接写 `UNSCRAMBLE_LUT[slot]` 并看本行的说明即可 ——
+ *   换成一个只有方向感、没有语义差别的别名，只会让"它到底是不是逆置换"再被问一次。
+ */
 export const UNSCRAMBLE_LUT: Uint8Array = (() => {
   const t = new Uint8Array(256);
   for (let i = 0; i < 256; i++) t[i] = unscramblePalette(i);
   return t;
 })();
 
-/** 与 UNSCRAMBLE_LUT 逐项相同的别名表（见 scramblePalette 的说明）。 */
-export const SCRAMBLE_LUT: Uint8Array = (() => {
-  const t = new Uint8Array(256);
-  for (let i = 0; i < 256; i++) t[i] = scramblePalette(i);
-  return t;
-})();
-
-/** 是否按 Last Raven 布局解析（上游只看文件大小）。 */
+/**
+ * 是否按 Last Raven 布局解析（上游只看文件大小）。
+ *
+ * ⚠ 判据是**恰好等于** `LR_SAVE_SIZE`（0x4420），比它短/长都不算 —— 这是公开口径，
+ *   别改成"≤"：`container`（比 0x4420 长）与各种畸形缓冲都靠它区分。
+ */
 export function isLrSave(bytes: Uint8Array): boolean {
   return bytes.length === LR_SAVE_SIZE;
+}
+
+/**
+ * `applyChecksums` 用的**布局判据**（仅在"写校验"这条路上替代 `isLrSave`）。
+ *
+ * 为什么需要它：`isLrSave()` 是**恰好相等**，于是一份 `LR_SAVE_SIZE - 1` 的缓冲会被
+ * 当成"非 LR 的短缓冲" ⇒ 末段 alpha 位置取 0x4434 ⇒ 立刻抛 `缓冲区太短`
+ * （实测：`applyChecksums(new Uint8Array(0x441F))` 抛在 `writeByteInPlace`）。
+ * 但 Python 参考实现在这里**不会抛**：它按 `is_lr = len(save) == LR_SAVE_SIZE` 判，
+ * 用的却是**切片赋值**（`z[alpha:] = bytes(size - alpha)`）⇒ 17439 字节的缓冲会被
+ * 一路补成 17440 且 18/18。也就是说这条路上真正该用的判据是
+ * "**差最后那几个字节**（< `FINAL_DATA_LEN.true` = 21）⇒ 意图显然是 LR 块"，
+ * 而不是"必须已经完整"。
+ *
+ * 边界：`len >= LR_SAVE_SIZE - 1` 才算 —— 与 `LR_SAVE_SIZE - 2` 的行为对照见
+ * `core.test.ts`（前者必须补成 0x4420 且 18/18，后者必须抛）。
+ * `len > LR_SAVE_SIZE`（容器）**不受影响**，仍按非 LR 处理。
+ */
+function layoutIsLr(bytes: Uint8Array): boolean {
+  if (isLrSave(bytes)) return true;
+  return bytes.length < LR_SAVE_SIZE && bytes.length >= LR_SAVE_SIZE - 1;
 }
 
 // --------------------------------------------------------------------------
@@ -620,13 +641,26 @@ export function verifyChecksumsUpstream(bytes: Uint8Array): VerifyResult {
  *   所以这里的语义改成与它逐条对齐：
  *     · `palette[255].alpha` 与 18 个校验字节都是**单下标写** ⇒ 缓冲区不够就**抛**；
  *     · 只有"校验之后那 10 字节"走**切片赋值**（`set`）⇒ 那一段允许扩容（与 Python 一致）。
- *   于是 `0x443F`（差 1 字节）能像 Python 一样补成 17472 且 18/18；`0x441F` 会像 Python 一样抛。
+ *   于是 `0x443F`（差 1 字节）能像 Python 一样补成 17472 且 18/18。
+ *   ⚠ 下面 0.20 把 LR 那侧的边界也补齐了：`0x441F`（= LR 差 1 字节）**不再抛**，而是补成
+ *     0x4420 且 18/18（Python 同结果）；真正该抛的边界下移到 `0x441E`。
+ *
+ * ★★ 0.20 修正（两处，都与"短缓冲"有关）：
+ *   ① **布局判据**从 `isLrSave()`（"必须恰好 0x4420"）改成 `layoutIsLr()`（"差最后 1 字节也算 LR"）。
+ *      原先 `LR_SAVE_SIZE - 1` 的缓冲会被当成"非 LR 的短缓冲" ⇒ 末段 alpha 位置取 0x4434
+ *      ⇒ `writeByteInPlace()` 直接抛。Python 参考实现在这里**不会**抛（它按 `len == 0x4420`
+ *      判，但用的是**切片赋值**，17439 字节会被补成 17440 且 18/18）。
+ *   ② **扩容目标**从"尾巴最后一格"（`trailEnd - 1`）改成
+ *      `max(trailEnd - 1, base + 末段校验位)`，并在扩容后**重新算一遍 `base`**。
+ *      现状下这两句都是"把不变式写清楚"（`ensureWritable` 是同下标扩长、所有校验位本来就
+ *      ≤ `trailEnd - 1`），但它们把"18 个校验位都装得下"这件事从**推断**变成了**保证** ——
+ *      以后谁动了 `ensureWritable` 的语义（例如把块搬到 0），这里不会静默写坏数据。
  *
  * ⚠ 返回值：扩容时数组会换底层（`ensureWritable`），**调用方必须接收返回值**。
  */
 export function applyChecksums(save: Uint8Array): Uint8Array {
-  const isLr = isLrSave(save);
-  const base = blockBase(save);
+  const isLr = layoutIsLr(save);
+  let base = blockBase(save);
   const segs = segmentLayout(isLr);
 
   // 1) + 2) 先把末段里的「非校验字节」安置好，再统一算校验
@@ -634,7 +668,25 @@ export function applyChecksums(save: Uint8Array): Uint8Array {
   save = writeByteInPlace(save, alphaPos, PALETTE_ALPHA_OPAQUE);
   const trailPos = alphaPos + 2; // 校验字节之后的 10 字节
   const trailEnd = trailPos + FINAL_TRAILER.length;
-  save = ensureWritable(save, trailEnd - 1); // ← 这一段在 Python 里是切片赋值 ⇒ 允许扩容
+  // 扩容目标见函数注释：尾巴最后一格 **与** 最后一个校验位（末段的 checkPos）里取大者。
+  // ⚠ 这里**必须**用 `segs[segs.length - 1].checkPos`，不能用常量拼 —— 布局变动时要跟着变。
+  const lastCheckAbs = base + segs[segs.length - 1].checkPos;
+  const grown = ensureWritable(save, Math.max(trailEnd - 1, lastCheckAbs)); // ← Python 里是切片赋值 ⇒ 允许扩容
+  if (grown !== save) {
+    // ★ 扩容过（返回的是新数组）⇒ 把 `base` 重新算一遍再往下用。
+    //   `ensureWritable()` 是"**同下标**扩长"（`grown.set(b, 0)`，块的位置不变），所以重算出来的
+    //   `base` 与扩容前**必然相同**（`base > 0` 的容器也照旧）；这里重算纯粹是为了不让
+    //   "扩容前算的偏移"跨过扩容那道坎继续用 —— 一旦 `ensureWritable` 将来改成"把块搬到 0"，
+    //   这一段会自己跟上，而不是继续用过期偏移写坏数据。
+    save = grown;
+    base = blockBase(save);
+    if (base + segs[segs.length - 1].checkPos >= save.length) {
+      throw new EmblemFormatError(
+        `applyChecksums: 扩容后仍装不下最后一个校验位（块起点 0x${base.toString(16)}、` +
+          `长度 ${save.length}）—— 内部错误`,
+      );
+    }
+  }
   // ★ 那 10 字节是**游戏写下的字段**（上游最初的手工逆向里就是从源存档原样抄的），
   //   所以「有真值就保留」；只有从空白块造（全零）时才补上游戏那种 `01 00*9`。
   let anyNonZero = false;
@@ -646,7 +698,9 @@ export function applyChecksums(save: Uint8Array): Uint8Array {
   }
   if (!anyNonZero) save.set(FINAL_TRAILER, trailPos);
 
-  // 3) 逐段写校验（末段的数据区间包含刚写好的 alpha）
+  // 3) 逐段写校验（末段的数据区间包含刚写好的 alpha）。
+  //   ⚠ `absStart` / `absCheck` 在循环**内部**按当前 `base` 算（别提到循环外）——
+  //     上面那次扩容会改 `base`，提出来就又会用错偏移。
   for (const seg of segs) {
     const absStart = base + seg.start;
     const absCheck = base + seg.checkPos;
@@ -770,7 +824,7 @@ export function extractImage(save: Uint8Array, alphaMode: AlphaMode = 'acet'): U
  * 规则：
  *   * alpha !== 0xFF 的像素一律当作全透明（写调色板 0 号项 = 全 0）；
  *   * 调色板按"首次出现顺序"分配，所以颜色数 > 255 就会溢出；
- *   * 非 LR 的最后要按 scramblePalette 重排索引。
+ *   * 非 LR 的最后要按 `UNSCRAMBLE_LUT` 重排索引（该置换自逆，与"取出方向"共用一张表）。
  *
  * `strict=true`（默认）时颜色数超限**报错**；`strict=false` 复刻上游的**静默截断**。
  */
@@ -917,6 +971,31 @@ export function makeBlankSave(
   headerTail: Uint8Array | null = null,
   lrHeader: Uint8Array | null = null,
 ): Uint8Array {
+  return blankSaveWithBackend(isLr, baseOffset, withHeader, headerTail, lrHeader, true);
+}
+
+/**
+ * `makeBlankSave()` 的实现体；`applyChecksumsAtEnd=false` 时**不**算校验（只给 `encodeEmblem` 用）。
+ *
+ * ★ 为什么需要这个开关：`makeBlankSave()` 公开语义是"给我一份**自洽**的空白块"
+ *   （测试直接断言 `verifyChecksums(save).ok === true` / 尾巴 `01 00*9` / 也满足上游写法
+ *   —— 那些断言都依赖这一步），所以它必须继续算。
+ *   但 `encodeEmblem()` 的流程是 `makeBlankSave → injectImage → fillUnusedPalette → applyChecksums`：
+ *   最后那次会把 18 段**全部**重算 ⇒ 中间这一次的产物**立刻作废**（白跑一遍 17472 字节）。
+ *   `encodeEmblem` 改调这个开关为 false 的版本即可省掉它 ——
+ *   **最终字节一个都不变**（`core.test.ts` 里 20+ 个真实样本的 `reencodedSha256` 与 Python
+ *   参考实现逐字节相同，就是这次改动的硬判据）。
+ *   ⚠ 被跳过的只有"算校验"这一件事：alpha（0x4434）与那 10 字节尾巴都由最后的
+ *     `applyChecksums()` 统一写好（`injectImage` / `fillUnusedPalette` 都不会写尾巴那一段）。
+ */
+function blankSaveWithBackend(
+  isLr: boolean,
+  baseOffset: number,
+  withHeader: boolean,
+  headerTail: Uint8Array | null,
+  lrHeader: Uint8Array | null,
+  applyChecksumsAtEnd: boolean,
+): Uint8Array {
   // ★ 0.19（D25）：`baseOffset` 必须是整数。原先 `new Uint8Array(17473.5)` 会被静默截断成 17473
   //   ⇒ 造出一个长度"多 1 字节"的块，`saveKind()` 于是判成 `container`（Python 在这里抛 TypeError）。
   if (!Number.isInteger(baseOffset) || baseOffset < 0) {
@@ -949,7 +1028,7 @@ export function makeBlankSave(
       }
     }
   }
-  applyChecksums(save);
+  if (applyChecksumsAtEnd) applyChecksums(save);
   return save;
 }
 
@@ -959,10 +1038,31 @@ export function makeBlankSave(
  * 创建新徽章时**必须**用它（或查 `KNOWN_HEADER_TAIL`）填进空白块 —— 否则写出来的块
  * 与游戏自己的产物不是逐字节相同。**不要猜值**：它是作品级常量。
  * （"游戏是否真的校验这 9 字节"记为 [待复测]，见上方注释；照抄真实存档的做法不变。）
+ *
+ * ★★ 0.20 修正（形态校验）：本函数只管**非 LR** 的 9 字节作品常量 —— LR 块头是另外 4 字节
+ *   （`lrHeaderFromSave()`），偏移与长度都不一样。原先它对任何输入都直接
+ *   `subarray(base + 0x14, base + 0x14 + 9)`：
+ *     · 喂 LR 存档（0x4420）⇒ `base = 0`、**静默返回图像里的 9 个字节**（看着像"作品常量"，
+ *       其实完全是别的数据）—— 与全模块"越界/形态不符就抛 `EmblemFormatError`"的纪律不符；
+ *     · 喂 0 字节缓冲 ⇒ 返回**空数组**（`subarray` 越界会自己夹取），同样静默。
+ *   现在这两种都显式抛错，错误信息里点名"**这是非 LR 的东西**"。
  */
 export function headerTailFromSave(save: Uint8Array): Uint8Array {
+  if (isLrSave(save)) {
+    throw new EmblemFormatError(
+      `headerTailFromSave: 这是 LR 存档（${save.length} 字节），没有非 LR 的 ${HEADER_TAIL_LEN} 字节作品常量` +
+        '（0x14..0x1C）—— LR 的块头是 4 字节 `00 44 00 00`，请用 lrHeaderFromSave()',
+    );
+  }
   const base = blockBase(save);
   const o = base + HEADER_TAIL_OFF;
+  if (o < 0 || o + HEADER_TAIL_LEN > save.length) {
+    throw new EmblemFormatError(
+      `headerTailFromSave: 缓冲区装不下 0x${HEADER_TAIL_OFF.toString(16)}..0x${
+        (HEADER_TAIL_OFF + HEADER_TAIL_LEN - 1).toString(16)} 这 ${HEADER_TAIL_LEN} 字节` +
+        `（块起点 0x${base.toString(16)}、长度 ${save.length}）—— 这不是一份非 LR 的徽章存档`,
+    );
+  }
   // ★ 0.19（D24）：**必须显式复制**。`save.slice()` 在 `save` 是 Node `Buffer` 时返回的是
   //   **视图**（`Buffer.prototype.slice` 与 `Uint8Array.prototype.slice` 语义相反）⇒
   //   调用方改返回值会改到"源存档"。`new Uint8Array(subarray)` 对两种类型都是逐元素复制。
@@ -1033,6 +1133,12 @@ export function fillUnusedPalette(
  *     ★ 实机已确认**不是硬性必需**（不填也正常读取），填它只是让输出与游戏产物同形）。
  *
  * `headerTail` 从同作品的真实存档里读（`headerTailFromSave()`），**不要猜**。
+ *
+ * ★ 0.20：`makeBlankSave()` 那一步**不算校验**（`blankSaveWithBackend(…, false)`）。
+ *   理由：`makeBlankSave()` 内部会 `applyChecksums()`，而这里紧接着的 `injectImage()` /
+ *   `fillUnusedPalette()` 必然把 18 段里的 17 段都改掉 ⇒ 那一次校验**立刻作废**，
+ *   最后 `applyChecksums()` 还要把 18 段全部重算一遍。省掉它的**最终字节完全不变**
+ *   （`core.test.ts` 用 20+ 个真实样本的 `reencodedSha256` 与 Python 参考实现逐字节对拍）。
  */
 export function encodeEmblem(image: Uint8Array, options: EncodeEmblemOptions = {}): Uint8Array {
   const isLr = options.isLr ?? false;
@@ -1040,7 +1146,8 @@ export function encodeEmblem(image: Uint8Array, options: EncodeEmblemOptions = {
   const fillUnused = options.fillUnused ?? true;
   const lrHeader = options.lrHeader ?? null;
 
-  let save = makeBlankSave(isLr, 0, true, headerTail, lrHeader);
+  // ⚠ 最后一个 `false` = "先别算校验"（见上面那段说明）；最终校验在 return 那一行统一写。
+  let save = blankSaveWithBackend(isLr, 0, true, headerTail, lrHeader, false);
   save = injectImage(save, image);
   if (fillUnused) fillUnusedPalette(save);
   return applyChecksums(save);

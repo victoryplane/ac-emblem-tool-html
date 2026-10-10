@@ -17,7 +17,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title data-en="PS2 Armored Core · Emblem Tool">PS2 装甲核心 · 徽章工具</title>
+<title data-en="PS2 Armored Core · Emblem Tool" data-ja="PS2 アーマード・コア · エンブレムツール" data-ko="PS2 아머드 코어 · 엠블럼 도구">PS2 装甲核心 · 徽章工具</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -25,7 +25,7 @@
 <!-- ══════════════════════ 顶栏 ══════════════════════ -->
 <header class="topbar">
   <div class="brand">
-    <span class="brand-title" data-en="PS2 Armored Core · Emblem Tool">PS2 装甲核心 · 徽章工具</span>
+    <span class="brand-title" data-en="PS2 Armored Core · Emblem Tool" data-ja="PS2 アーマード・コア · エンブレムツール" data-ko="PS2 아머드 코어 · 엠블럼 도구">PS2 装甲核心 · 徽章工具</span>
     <!--
       版本号：这里只放一个**占位符**，构建时由 build.mjs 从 src/ui/logic/version.ts
       的 APP_VERSION 替换成真值（main.ts 里还有一次 JS 兜底赋值，开发期直接开 shell 也对）。
@@ -34,10 +34,17 @@
     <span class="brand-sub" id="app-version" data-app-version="v?">v?</span>
   </div>
 
-  <div class="topbar-block" id="card-drop" title="把 .ps2 记忆卡拖到这里（Chrome 下能拿到写句柄 ⇒ 保存时可直接覆盖原文件）" data-en-title="Drop a .ps2 memory card here (Chrome grants a write handle, so saving can overwrite the original file)">
-    <span class="lbl" data-en="Memory card">记忆卡</span>
+  <div class="topbar-block" id="card-drop" title="把 .ps2 记忆卡拖到这里（Chrome / Edge 下能拿到写句柄 ⇒ 保存时可直接覆盖原文件）" data-en-title="Drop a .ps2 memory card here (Chrome/Edge grants a write handle, so saving can overwrite the original file)" data-ja-title="ここに .ps2 メモリーカードをドロップ（Chrome/Edge は書き込みハンドルを渡すので、保存で元のファイルを上書きできます）" data-ko-title="여기에 .ps2 메모리 카드를 떨어뜨리세요 (Chrome/Edge 는 쓰기 핸들을 주므로 저장 시 원본 파일을 덮어쓸 수 있습니다)">
+    <span class="lbl" data-en="Memory card" data-ja="メモリーカード" data-ko="메모리 카드">记忆卡</span>
     <span id="card-info" class="card-info"><span class="dim">未选择记忆卡</span></span>
-    <button id="btn-card-open" class="primary" data-en="Choose memory card (can overwrite)">选择记忆卡（可覆盖保存）</button>
+    <!--
+      ★ 0.30（用户）：按钮文字**去掉了那个后缀**（那几个字嫌多余；原话与判据见 ui.test.ts 分节 (r)）。
+        ⚠ 这条判据是"产物里一个都不许有" ⇒ **这里绝不能把那几个字抄回来**（注释会进产物）。
+        同时点它时选择框要**尽量开在 `Documents\PCSX2\memcards`**（`main.ts::memcardsStartIn()`）——
+        ⚠ 网页不许指定任意路径，`startIn` 只能给"已知文件夹"或一个**目录句柄**，
+        所以是"选过 PCSX2 目录就直接开在 memcards，否则开在文档"这两档（`title` 里写着这件事）。
+    -->
+    <button id="btn-card-open" class="primary" title="选择框开在「文档」；若你已点过〔选择 PCSX2 目录〕，则直接开在 PCSX2\memcards" data-en="Choose memory card" data-ja="メモリーカードを選択" data-ko="메모리 카드 선택" data-en-title="The picker opens in Documents; if you have already picked the PCSX2 folder, it opens straight in PCSX2\memcards" data-ja-title="選択ダイアログは DOCUMENTS で開きます。PCSX2 フォルダを選択済みの場合は PCSX2\memcards で直接開きます" data-ko-title="선택 창은 DOCUMENTS 에서 열립니다. PCSX2 폴더를 이미 선택했다면 PCSX2\memcards 에서 바로 열립니다">选择记忆卡</button>
     <!--
       ★ 2026-10-05（0.10）：〔拖入 / 只读选择〕那个按钮**已按用户要求删除**（"没用"）。
         路径没丢，只是不再占一个按钮：
@@ -50,10 +57,10 @@
   </div>
 
   <div class="topbar-block">
-    <span class="lbl" data-en="Game">作品</span>
+    <span class="lbl" data-en="Game" data-ja="ゲーム" data-ko="게임">作品</span>
     <select id="game-select"></select>
     <span id="custom-serial-row" style="display:none">
-      <input type="text" id="custom-serial" placeholder="盘序列号，如 SLUS-20435" data-en-placeholder="Disc serial, e.g. SLUS-20435" size="18">
+      <input type="text" id="custom-serial" placeholder="盘序列号，如 SLUS-20435" data-en-placeholder="Disc serial, e.g. SLUS-20435" data-ja-placeholder="ディスクのシリアル、例：SLUS-20435" data-ko-placeholder="디스크 시리얼, 예: SLUS-20435" size="18">
     </span>
     <!-- ⚠ 只用来放"⚠ 未验证"这类提醒；已验证的作品在这里**什么都不显示**（0.10 用户要求删掉那行"✅ 有实机证据 …"） -->
     <span id="game-note" class="game-note"></span>
@@ -73,7 +80,19 @@
       · `margin-left:auto` 把它顶到最右（与 #btn-pcsx2-toggle 同一手法）。
   -->
   <div class="topbar-block lang-pick">
-    <span class="lbl" data-en="Language">语言</span>
+    <!--
+      ★ 0.36（用户）：这个标签**写死多语**，四种界面语言下都是同一句 ——
+        用户原话："无论使用那个语言，这个文本都显示双语，而且要改成纯白色"；
+        ★ 0.47 加日/韩语时用户拍板"写死的双语改成 4 语，行宽不是问题" ⇒
+        现在是 `语言/Language/言語/언어`（四种语言各自的"语言"一词，顺序 = 下拉里的顺序）。
+      ⚠ 所以它**绝不能**带 `data-en` / `data-ja` / `data-ko`：带了就会被 `applyStaticI18n()`
+        换成单语（中文态显示"语言"、英文态显示"Language"…），正好是要避免的那件事。
+        它是**唯一**一个不参与翻译的静态标签，`ui.test.ts` 分节 (p) 直接钉住这一点
+        （含"index.html 里带 data-en 的元素仍然 ≥25"那条总闸门 —— 它的存在就是为了
+        防止"整块文字漏翻"，本标签是**有意**的例外，注释在此写明）。
+      样式（纯白 + 600 字重，不加任何阴影 / 滤镜）在 styles.css 的 `.lang-pick .lbl`。
+    -->
+    <span class="lbl" id="lang-label">语言/Language/言語/언어</span>
     <select id="lang-select"></select>
   </div>
 </header>
@@ -93,13 +112,13 @@
 <main class="upper">
   <section class="card pane-image">
     <div class="image-toolbar">
-      <button id="btn-image-open" class="primary" data-en="Choose / paste image">选择 / 粘贴图片</button>
+      <button id="btn-image-open" class="primary" data-en="Choose / paste image" data-ja="画像を選択／貼り付け" data-ko="이미지 선택 / 붙여넣기">选择 / 粘贴图片</button>
       <input type="file" id="image-input" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.ico,.avif,.svg" hidden>
       <!-- ★ 0.27（用户）：按钮文字里的省略号全部去掉（〔取景…〕→〔取景〕、〔另存为…〕→〔另存为〕）。
            理由与出处：SPEC.md §四 —— 〔取景〕早就不开对话框了，`…` 是过期的惯例；
            用户选的是"一个都不留"。⚠ 别加回来：`ui.test.ts` 分节 (o) 有闸门。 -->
-      <button id="btn-crop" data-en="Crop">取景</button>
-      <span class="lbl" data-en="Preview zoom">预览倍率</span>
+      <button id="btn-crop" data-en="Crop" data-ja="トリミング" data-ko="자르기">取景</button>
+      <span class="lbl" data-en="Preview zoom" data-ja="プレビュー倍率" data-ko="미리보기 배율">预览倍率</span>
       <select id="preview-zoom"></select>
       <span id="original-badge" class="orig-badge"></span>
     </div>
@@ -121,15 +140,31 @@
     </div>
     <div id="preview-zoom-note" class="zoom-note-host"></div>
     <div class="row crop-actions" id="crop-actions" hidden>
-      <span class="crop-hint" data-en="Drag the image so the part you want sits inside the white box (scroll to zoom)">拖动图片，把要用的部分放进白框里（滚轮缩放）</span>
+      <!--
+        ★ 0.38（用户）：**白框边长可以精确调** —— 滑条 + 输入框（单位 = 源像素，整数）。
+          用户原话："在图中红方块位置放一个缩放条，用于控制白框取景的大小，边上再加一个输入框，
+          可以实时看到目前取景框的大小，也可以修改大小""现在的取景框只能用鼠标缩放，精度不够高"。
+          两个控件共用 `cropView.ts::setCropWindowSize()`；输入框在**聚焦期间不会被回写**
+          （否则敲"1"想输 180 会先被夹成 128、把字吃掉）。
+        ⚠ 这**不是**参数面板里那三格「取景数值（倍率 / X / Y）」—— 那三格早先按用户要求删掉了
+          （`ui.test.ts` 有闸门钉住 `#manual-scale` / `#manual-x` / `#manual-y` 不许长回来）；
+          这里是取景动作行里"白框多大"的**直接**控制，两件事不一样。
+      -->
+      <span class="lbl" data-en="Box size" data-ja="白枠サイズ" data-ko="흰색 상자 크기">白框边长</span>
+      <input type="range" id="crop-size-range" class="crop-size-range" min="128" max="128" step="1" value="128"
+             data-en-aria-label="Crop box size (source pixels)" data-ja-aria-label="白枠のサイズ（元画像のピクセル）" data-ko-aria-label="흰색 상자 크기(원본 픽셀)">
+      <input type="number" id="crop-size-num" class="crop-size-num" min="128" max="128" step="1" value="128"
+             data-en-aria-label="Crop box size (source pixels)" data-ja-aria-label="白枠のサイズ（元画像のピクセル）" data-ko-aria-label="흰색 상자 크기(원본 픽셀)">
+      <span class="lbl" data-en="src px" data-ja="元px" data-ko="원본 px">源像素</span>
+      <span class="crop-hint" data-en="Drag the image so the part you want sits inside the white box (scroll to zoom)" data-ja="画像をドラッグして、使いたい部分を白枠の中に入れます（スクロールで拡大縮小）" data-ko="이미지를 드래그해 원하는 부분을 흰색 상자 안에 넣으세요 (스크롤로 확대·축소)">拖动图片，把要用的部分放进白框里（滚轮缩放）</span>
       <!--
         ★ 0.12：随拖动/滚轮**实时更新**的读数（白框 = 源图哪一块、倍率、有没有到最小）。
         ⚠ 为什么要有它：原来这些只写在 `#status` 里，而状态行在**页面最下面**（8 槽那一块），
           取景时根本看不到（用户："ok了，然后状态行在哪"）。这条就在白框正下方。
       -->
       <span id="crop-readout" class="crop-readout"></span>
-      <button id="btn-crop-ok" class="primary" data-en="Apply crop">确定取景</button>
-      <button id="btn-crop-cancel" data-en="Cancel">取消</button>
+      <button id="btn-crop-ok" class="primary" data-en="Apply crop" data-ja="トリミングを確定" data-ko="자르기 적용">确定取景</button>
+      <button id="btn-crop-cancel" data-en="Cancel" data-ja="キャンセル" data-ko="취소">取消</button>
     </div>
   </section>
 
@@ -145,7 +180,7 @@
   -->
   <aside class="card pane-params">
     <div class="pane-head">
-      <span class="pane-title" data-en="Parameters">参数</span>
+      <span class="pane-title" data-en="Parameters" data-ja="パラメータ" data-ko="매개변수">参数</span>
       <!-- ★ 0.23：原来这里还有一句副标题「两格：缩放核 / alpha 阈值」——
            参数栏收窄到 220px 之后它把标题挤成了竖排的"参 数"，而且下面两格的标签本来就写着
            "缩放核 / alpha 阈值"，属于重复的说明性文字 ⇒ 整句删掉（用户一贯要求：界面上不放说明性长句）。 -->
@@ -162,7 +197,7 @@
           取景视图的入口仍是左上的〔取景〕；下面「取景数值」那段说明里也写着怎么调。
       -->
       <div class="field">
-        <label for="kernel" data-en="Scaling kernel">缩放核</label>
+        <label for="kernel" data-en="Scaling kernel" data-ja="補間方式" data-ko="보간 방식">缩放核</label>
         <select id="kernel"></select>
         <!-- ★ 0.18：原来下面还有一句「默认「自动判断」：源=目标→原样；整数倍缩小→最近邻；…」，
              按用户要求删掉（"这几句话也删掉"）。规则本身没变 —— `core/image.ts::chooseKernel()`
@@ -170,10 +205,10 @@
       </div>
 
       <div class="field">
-        <label for="alpha-threshold" data-en="Alpha threshold">alpha 阈值</label>
+        <label for="alpha-threshold" data-en="Alpha threshold" data-ja="アルファしきい値" data-ko="알파 임계값">alpha 阈值</label>
         <input type="range" id="alpha-threshold" min="1" max="254" step="1">
         <input type="number" id="alpha-threshold-num" min="1" max="254" step="1" class="num">
-        <div class="hint" data-en="Default 128. Semi-transparent pixels are snapped to fully transparent / fully opaque here.">默认 128。半透明像素在这一步被归成"全透明 / 全不透明"。</div>
+        <div class="hint" data-en="Default 128. Semi-transparent pixels are snapped to fully transparent / fully opaque here." data-ja="既定値は 128。半透明ピクセルはここで完全透明／完全不透明に振り分けられます。" data-ko="기본값 128. 반투명 픽셀은 여기서 완전 투명 / 완전 불투명으로 정리됩니다.">默认 128。半透明像素在这一步被归成"全透明 / 全不透明"。</div>
       </div>
 
       <!--
@@ -206,23 +241,31 @@
 <!-- ══════════════════════ 【下】8 个槽位 ══════════════════════ -->
 <section class="card lower">
   <div class="pane-head">
-    <span class="pane-title" data-en="8 emblem slots">8 个徽章槽</span>
-    <!-- ★ 0.18：原来这里还有一句「LR = data0..7；SL/NX/AC3/… = E00..E07；空的显示「＋新建」」，
-         按用户要求删掉。文件名规则本身没变（每个槽卡片上照样写着实际目录\文件）。 -->
+    <span class="pane-title" data-en="8 emblem slots" data-ja="エンブレム 8 スロット" data-ko="엠블럼 슬롯 8 개">8 个徽章槽</span>
+    <!-- ★ 0.18：原来这里还有一句「LR = data0..7；SL/NX/AC3/… = E00..E07；空的怎么显示」，
+         按用户要求删掉。文件名规则本身没变（每个槽在卡上对应哪个目录，见 SPEC.md §四）。 -->
   </div>
-  <div id="slot-summary" class="slot-summary dim"></div>
+  <!--
+    ★ 0.37（用户）：这里原来那行 **8 槽摘要整句删除**（用户："这2段文本也删除"）。
+      现在这个位子只剩一条**条件警告** —— 只有"真会让人误会"的时候才显示：
+      本作品在卡上一个目录都没有、而卡上其实有别的作品的徽章目录（`slotsView.ts::renderSlots()`）。
+      没有这种情况时整行 `hidden`（`[hidden] { display: none !important }`）。
+      ⚠ 别再往这里写"占用了几个 / 卡上还有哪些作品"那种摘要：`ui.test.ts` 分节 (v) 钉着
+        "产物里这几串文案一个都不许再有"。
+  -->
+  <div id="slot-note" class="slot-note" hidden></div>
   <div id="slot-grid" class="slot-grid"></div>
 
   <div class="lower-bottom">
     <div class="actions">
-      <button id="btn-write" class="primary big" data-en="Write to selected slot">写入选中槽</button>
-      <button id="btn-export-png" data-en="Export PNG">导出 PNG</button>
-      <button id="btn-delete" data-en="Delete slot">删除槽</button>
+      <button id="btn-write" class="primary big" data-en="Write to selected slot" data-ja="選択中のスロットに書き込み" data-ko="선택한 슬롯에 쓰기">写入选中槽</button>
+      <button id="btn-export-png" data-en="Export PNG" data-ja="PNG 書き出し" data-ko="PNG 내보내기">导出 PNG</button>
+      <button id="btn-delete" data-en="Delete slot" data-ja="スロットを削除" data-ko="슬롯 삭제">删除槽</button>
       <!-- ★ 0.26（用户）：〔导出整卡〕改名〔另存为〕= "另存一张记忆卡"（走 showSaveFilePicker，
            拿不到对话框时退化成下载）。★ 0.27：文字里的省略号去掉（理由见工具条那段注释）。 -->
-      <button id="btn-save-as" data-en="Save card as">另存为</button>
-      <button id="btn-debug" class="quiet" data-en="Inspect directory (debug)">看目录项（调试）</button>
-      <span id="busy" class="busy" style="display:none" data-en="⏳ Working…">⏳ 正在处理…</span>
+      <button id="btn-save-as" data-en="Save card as" data-ja="名前を付けて保存" data-ko="다른 이름으로 저장">另存为</button>
+      <button id="btn-debug" class="quiet" data-en="Inspect directory (debug)" data-ja="ディレクトリを検査（デバッグ）" data-ko="디렉터리 검사(디버그)">看目录项（调试）</button>
+      <span id="busy" class="busy" style="display:none" data-en="⏳ Working…" data-ja="⏳ 処理中…" data-ko="⏳ 작업 중…">⏳ 正在处理…</span>
     </div>
     <div class="hintblock">
       <div id="write-hint" class="write-hint"></div>
@@ -250,8 +293,8 @@
 -->
 <section class="card pcsx2-bar">
   <div class="pane-head">
-    <span class="pane-title" data-en="PCSX2 check">PCSX2 自检</span>
-    <span class="dim" data-en="Confirm which card the game actually reads — global and per-game settings can differ">确认游戏实际会读哪张卡，避免全局设置与独立设置不同导致的记忆卡读取问题</span>
+    <span class="pane-title" data-en="PCSX2 check" data-ja="PCSX2 チェック" data-ko="PCSX2 점검">PCSX2 自检</span>
+    <span class="dim" data-en="Confirm which card the game actually reads — global and per-game settings can differ" data-ja="ゲームが実際に読み込むカードを確認 —— グローバル設定とゲームごとの設定は異なることがあります" data-ko="게임이 실제로 읽는 카드를 확인 —— 전역 설정과 게임별 설정이 다를 수 있습니다">确认游戏实际会读哪张卡，避免全局设置与独立设置不同导致的记忆卡读取问题</span>
     <!-- ★ 0.24（用户）："展开按钮改成其他几个按钮也用的蓝色，不然不够显眼" ⇒ `quiet` → `primary`
          （`button.primary` = `#2f4a68` 蓝底，与〔选择记忆卡〕〔选择 PCSX2 目录〕〔写入选中槽〕同一个蓝）。
          ⚠ 它是**面板头一行里唯一的操作**，用低调的透明按钮确实找不到；判据在 `ui.test.ts` 分节 k2。 -->
@@ -260,12 +303,12 @@
 
   <div id="pcsx2-panel" hidden>
     <div class="row">
-      <button id="btn-pcsx2-dir" class="primary" data-en="Choose PCSX2 folder (one click, remembered)">选择 PCSX2 目录（一次点击，之后自动记住）</button>
-      <button id="btn-pcsx2-input" data-en="Pick folder via input (fallback)">用目录输入框选（兜底方式）</button>
-      <button id="btn-pcsx2-clear" data-en="Clear">清空</button>
+      <button id="btn-pcsx2-dir" class="primary" data-en="Choose PCSX2 folder (one click, remembered)" data-ja="PCSX2 フォルダを選択（ワンクリック、次回も記憶）" data-ko="PCSX2 폴더 선택 (클릭 한 번, 다음에도 기억)">选择 PCSX2 目录（一次点击，之后自动记住）</button>
+      <button id="btn-pcsx2-input" data-en="Pick folder via input (fallback)" data-ja="フォルダを選択（代替方式）" data-ko="폴더 선택 (대체 방식)">用目录输入框选（兜底方式）</button>
+      <button id="btn-pcsx2-clear" data-en="Clear" data-ja="クリア" data-ko="지우기">清空</button>
       <!-- 兜底路径：没有 showDirectoryPicker（或它抛 SecurityError）时用这个；不依赖 File System Access API -->
       <input type="file" id="pcsx2-dir-input" webkitdirectory multiple hidden>
-      <span id="pcsx2-drop" class="dropzone-inline" data-en="You can also drop inis\PCSX2.ini, gamesettings\*.ini, logs\emulog.txt (or the whole PCSX2 folder) here">也可以把 inis\PCSX2.ini、gamesettings\*.ini、logs\emulog.txt（或整个 PCSX2 目录）拖到这里</span>
+      <span id="pcsx2-drop" class="dropzone-inline" data-en="You can also drop inis\PCSX2.ini, gamesettings\*.ini, logs\emulog.txt (or the whole PCSX2 folder) here" data-ja="ここに inis\PCSX2.ini、gamesettings\*.ini、logs\emulog.txt（または PCSX2 フォルダ全体）をドロップすることもできます" data-ko="여기에 inis\PCSX2.ini, gamesettings\*.ini, logs\emulog.txt (또는 PCSX2 폴더 전체)를 떨어뜨려도 됩니다">也可以把 inis\PCSX2.ini、gamesettings\*.ini、logs\emulog.txt（或整个 PCSX2 目录）拖到这里</span>
     </div>
 
     <div id="pcsx2-default-dir" class="pcsx2-default"></div>
@@ -286,7 +329,7 @@
   <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-title" id="modal-title"></div>
     <div class="modal-body" id="modal-body"></div>
-    <div class="modal-actions"><button class="primary" id="modal-ok" data-en="Got it">知道了</button></div>
+    <div class="modal-actions"><button class="primary" id="modal-ok" data-en="Got it" data-ja="了解" data-ko="확인">知道了</button></div>
   </div>
 </div>
 

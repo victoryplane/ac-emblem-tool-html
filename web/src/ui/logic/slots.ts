@@ -100,7 +100,7 @@ function isDotName(name: string): boolean {
 }
 
 /** 目录名像不像"徽章存档目录"：`E##` 结尾（SL/NX/… 每槽一个目录）或 `EMB` 结尾（LR）。 */
-export function isEmblemDirName(name: string): boolean {
+function isEmblemDirName(name: string): boolean {
   const upper = name.toUpperCase();
   return /E\d\d$/.test(upper) || upper.endsWith('EMB');
 }
@@ -132,7 +132,7 @@ export function filterDirsForGame(
   const excluded: SlotDirLike[] = [];
   for (const d of dirs) {
     // 只考虑"像徽章目录的"（`E##` / `EMB`）。其它目录（`Mcd001`、`icon.sys` 之类）
-    // 既不算本作品、也不算"卡上还有其它作品"—— 把它们列进摘要行只会误导用户。
+    // 既不算本作品、也不算"别的作品"—— 混进来只会把统计与警告说错。
     if (!isEmblemDirName(d.name)) continue;
     if (!want) {
       included.push(d);
@@ -154,7 +154,7 @@ export function filterDirsForGame(
  *   2. 目录名以 `E##` 结尾 ⇒ 每个目录就是**一个**槽；槽号取自目录名的 `E##`。
  *      目录里那个"与目录同名"的文件才是徽章；找不到就用目录里最长的非 dot 文件兜底。
  *   3. 其它目录**不**参与（不按名字猜）。
- *   4. 空槽（`occupied: false`）也要出现在结果里 —— SPEC.md §四"空的显示 ＋新建"。
+ *   4. 空槽（`occupied: false`）也要出现在结果里 —— 界面上就是一个大「＋」（SPEC.md §四）。
  *
  * ⚠ 判据与 `card.ts::isEmblemArchiveDirName()` 一致（按名字：`E\d\d$` / `EMB$`）；这里再判一次，
  *   因为调用方可能把根目录**全部**条目都传进来。
@@ -256,100 +256,30 @@ export function buildGameSlotModel(
 }
 
 /**
- * 把一串目录名压成一行好读的文字：连续的同前缀 `E##` 目录会合并。
+ * 过滤后"本作品一个目录都没有"时给用户的那句话（打开卡与切作品都要说）。
  *
- *   `['BISLPS-25338E00','BISLPS-25338E01','BISLPS-25338E02','BISLPS-25169E00','BISLPS-25169E01']`
- *   → `` `BISLPS-25338E00…E02、BISLPS-25169E00、BISLPS-25169E01` ``
+ * ★ 0.37（用户）：原来这句话里还带一句"见 8 槽摘要行" —— 那行摘要（占用与空槽数、当前作品的
+ *   目录名、卡上其它作品的清单）已按用户要求**整句删除**（`slotsView.ts` 里现在只剩一条条件警告），
+ *   所以这里改成直接说"卡上有 N 个别的作品的徽章目录（切作品就能看到）"。
  *
- * ★ 为什么要"压缩"而不是直接 `join('、')`：这张卡上可能有 8+8+8+8 个 `E##` 目录，
- *   不压的话摘要行会变成几百字的一坨，用户根本读不出来"卡上还有哪些作品"。
- *   压缩只在**同前缀且槽号连续**时发生，绝不合并不同作品 —— 每个作品的目录名一定出现一次。
+ * ★ 0.43（用户："我觉得这部分的提示过于重复了"）：压成**一句能照做的**（"⇒ 先在游戏里存一个
+ *   徽章"），后面只挂一个短尾巴（卡上还有几个别的作品的目录 / 或"这张卡上什么都没有"）。
+ *   原来它是"没有目录 —— 卡上有 N 个别的作品的目录 —— 想存就先存一个徽章"的三段式，
+ *   而同一件事还会在 8 槽上方那条常驻警告、打开卡时的 toast、切作品的状态行各说一遍。
+ *   ⚠ 这个函数必须能**按当前语言重算**（切语言时 `setStatus(text, redo)` 会再调一次），
+ *     所以它不收语言参数、也不缓存字符串。
  */
-export function compressDirNames(names: readonly string[]): string {
-  /** 前缀（大写）→ { 原始大小写前缀, { 槽号 → 原始目录名 } }，并记住前缀出现顺序。 */
-  const groups = new Map<string, { base: string; members: Map<number, string> }>();
-  const order: string[] = [];
-  const others: string[] = [];
-  for (const n of names) {
-    const m = /^(.*)E(\d\d)$/.exec(n.toUpperCase());
-    if (!m) {
-      others.push(n);
-      continue;
-    }
-    const key = m[1];
-    if (!groups.has(key)) {
-      groups.set(key, { base: n.slice(0, n.length - 3), members: new Map() });
-      order.push(key);
-    }
-    groups.get(key)!.members.set(Number(m[2]), n);
-  }
-  const parts: string[] = [];
-  for (const key of order) {
-    const g = groups.get(key)!;
-    const idx = [...g.members.keys()].sort((a, b) => a - b);
-    // 连续的槽号合并成 `起始…末尾`；不连续就一个个列（绝不合并不同作品）
-    const runs: Array<[number, number]> = [];
-    for (const i of idx) {
-      const last = runs[runs.length - 1];
-      if (last && i === last[1] + 1) last[1] = i;
-      else runs.push([i, i]);
-    }
-    for (const [a, b] of runs) {
-      const pad = (v: number): string => String(v).padStart(2, '0');
-      parts.push(a === b ? g.members.get(a)! : `${g.base}E${pad(a)}…E${pad(b)}`);
-    }
-  }
-  return [...parts, ...others].join('、');
-}
-
-/** 空槽统计（界面状态行用）。 */
-export function slotSummary(model: SlotModel): { occupied: number; empty: number; total: number } {
-  let occupied = 0;
-  for (const s of model.slots) if (s.occupied) occupied += 1;
-  return { occupied, empty: SLOT_COUNT - occupied, total: SLOT_COUNT };
-}
-
-/**
- * ★ 8 槽摘要行的**唯一**文案来源（界面直接用它，测试直接断言它）。
- *
- * 形如：
- * ```
- * 占用 5 / 8　空 3　（本作品目录：BISLPS-25462EMB）　卡上还有其它作品：BISLPS-25338E00…E04、BISLPS-25169E00、BISLPS-25169E01（切作品查看）
- * ```
- *
- * ★ "卡上还有其它作品"这一句是**硬要求**：过滤之后必须让用户看见"被隐藏了什么"，
- *   否则他会以为卡里没东西（这正是这次修的那个问题的另一半）。
- */
-export function slotSummaryText(model: SlotModel | null): string {
-  if (!model) return t('还没有打开记忆卡', 'No memory card loaded yet');
-  const s = slotSummary(model);
-  const mine = model.dirNames.length
-    ? model.dirNames.join('、')
-    : t('（卡上没有这个作品的目录 ⇒ 8 个槽都是空的）', '(the card has no folder for this game - all 8 slots are empty)');
-  let text = t(
-    `占用 ${s.occupied} / ${s.total}　空 ${s.empty}　（本作品目录：${mine}）`,
-    `Used ${s.occupied} / ${s.total}   Empty ${s.empty}   (this game's folders: ${mine})`,
-  );
-  if (model.excludedDirNames.length) {
-    text += t(
-      `　卡上还有其它作品：${compressDirNames(model.excludedDirNames)}（切作品查看）`,
-      `   Other games on this card: ${compressDirNames(model.excludedDirNames)} (switch game to view)`,
-    );
-  }
-  return text;
-}
-
-/** 过滤后"本作品一个目录都没有"时给用户的那句话（打开卡与切作品都要说）。 */
 export function noDirForGameText(serial: string | null, excludedCount: number): string {
-  const what = serial ? t(`这个作品（${serial}）`, `this game (${serial})`) : t('当前作品', 'the selected game');
+  const what = serial ? t(`这个作品（${serial}）`, `this game (${serial})`, `この作品（${serial}）`, `이 작품(${serial})`) : t('当前作品', 'the selected game', '現在の作品', '현재 작품');
   const tail = excludedCount
     ? t(
-        `卡上有 ${excludedCount} 个**别的作品**的徽章目录（见 8 槽摘要行，切作品就能看到）。`,
-        `The card has emblem folders for ${excludedCount} other games (see the slot summary line - switch game to see them).`,
+        // ⚠ 状态行是**纯文本** ⇒ 这里不许写 `**别的作品**`（会原样显示成星号）
+        `　卡上还有 ${excludedCount} 个别的作品的徽章目录（切作品查看）。`,
+        ` The card also holds emblem folders for ${excludedCount} other games (switch game to view them).`, `　カード上にはまだ ${excludedCount} 個の別タイトルのエンブレムフォルダがあります（タイトルを切り替えて表示）。`, `　카드에는 아직 ${excludedCount}개 다른 타이틀의 엠블럼 폴더가 있습니다(타이틀을 전환해 확인).`,
       )
-    : t('这张卡上没有任何徽章目录（E## / EMB）。', 'This card has no emblem folders at all (E## / EMB).');
+    : t('　这张卡上没有任何徽章目录。', ' This card has no emblem folders at all.', '　このカードにはエンブレムフォルダが 1 つもありません。', '　이 카드에는 엠블럼 폴더가 하나도 없습니다.');
   return t(
-    `卡上没有${what}的徽章目录 —— ${tail}想往这个作品里存，请先在游戏里存一个徽章（让游戏把目录建出来）。`,
-    `The card has no emblem folder for ${what} - ${tail} To put an emblem in this game, first save one emblem in the game itself (so the game creates the folder).`,
+    `${what}在卡上还没有徽章目录 ⇒ 先在游戏里存一个徽章（让游戏把目录建出来），再回来写。${tail}`,
+    `${what} has no emblem folder on the card yet, so save one emblem in the game first (that is what creates the folder), then come back.${tail}`, `${what}のエンブレムフォルダはまだカード上にありません ⇒ まずゲーム内でエンブレムを 1 つ保存して（それでフォルダが作られます）、それから戻って書き込んでください。${tail}`, `${what}의 엠블럼 폴더가 아직 카드에 없습니다 ⇒ 먼저 게임에서 엠블럼을 하나 저장해 (그래야 폴더가 만들어집니다) 다시 돌아와서 쓰세요.${tail}`,
   );
 }

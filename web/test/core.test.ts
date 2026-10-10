@@ -24,6 +24,7 @@ import {
   DANGLING,
   DANGLING_LR,
   EMBLEM_HEADER,
+  EmblemFormatError,
   FINAL_ALPHA_POS,
   FINAL_CHECK_OFF,
   FINAL_CHECK_OFF_LR,
@@ -41,7 +42,6 @@ import {
   PALETTE_ALPHA_OPAQUE,
   PALETTE_SIZE,
   SAVE_SIZE,
-  SCRAMBLE_LUT,
   SEED,
   SEED_LR,
   UNSCRAMBLE_LUT,
@@ -63,7 +63,6 @@ import {
   offsetIndex,
   packColor,
   saveKind,
-  scramblePalette,
   segmentLayout,
   unpackColor,
   unscramblePalette,
@@ -100,6 +99,25 @@ function eq(actual: unknown, expected: unknown, what: string): void {
 
 function section(title: string): void {
   console.log(`\n--- ${title} ---`);
+}
+
+/**
+ * 断言 `fn()` 会抛错（与 `ui.test.ts::throws` 同一个骨架：只记"抛了/没抛"一条）。
+ *
+ * ⚠ 返回捕获到的错误消息（没抛时是 ''），好让调用方补一条"抛的是哪种错"的断言 ——
+ *   "抛了个 TypeError"和"抛了 `EmblemFormatError`"不是一回事。
+ */
+function throws(fn: () => unknown, what: string): string {
+  let threw = false;
+  let msg = '';
+  try {
+    fn();
+  } catch (e) {
+    threw = true;
+    msg = e instanceof Error ? e.message : String(e);
+  }
+  ok(threw, what, `期望抛错，但没有（返回了 ${msg || '正常值'}）`);
+  return msg;
 }
 
 function readFile(p: string): Uint8Array {
@@ -394,21 +412,25 @@ function testOffsetIndex(): void {
 function testPalettePermutation(): void {
   section('调色板乱序置换及其逆');
   // 32 项为一组：交换中间两组 8 项 [0..7][8..15][16..23][24..31] → [0..7][16..23][8..15][24..31]
-  eq(scramblePalette(0), 0, 'scramble(0)');
-  eq(scramblePalette(7), 7, 'scramble(7)');
-  eq(scramblePalette(8), 16, '★ scramble(8) = 16（槽 8 → 物理 16）');
-  eq(scramblePalette(15), 23, 'scramble(15) = 23');
-  eq(scramblePalette(16), 8, '★ scramble(16) = 8');
-  eq(scramblePalette(23), 15, 'scramble(23) = 15');
-  eq(scramblePalette(24), 24, 'scramble(24)');
-  eq(scramblePalette(31), 31, 'scramble(31)');
-  eq(scramblePalette(32), 32, 'scramble(32)（下一组）');
-  eq(scramblePalette(255), 255, 'scramble(255)');
+  // ⚠ 0.20：这里原先调的是 `scramblePalette()` —— 它与 `unscramblePalette()` **逐字相同**
+  //   （同一个自逆置换），而且生产路径零调用点 ⇒ 核心层已把它删掉，测试统一用剩下这个名字。
+  eq(unscramblePalette(0), 0, 'unscramble(0)');
+  eq(unscramblePalette(7), 7, 'unscramble(7)');
+  eq(unscramblePalette(8), 16, '★ unscramble(8) = 16（槽 8 → 物理 16）');
+  eq(unscramblePalette(15), 23, 'unscramble(15) = 23');
+  eq(unscramblePalette(16), 8, '★ unscramble(16) = 8');
+  eq(unscramblePalette(23), 15, 'unscramble(23) = 15');
+  eq(unscramblePalette(24), 24, 'unscramble(24)');
+  eq(unscramblePalette(31), 31, 'unscramble(31)');
+  eq(unscramblePalette(32), 32, 'unscramble(32)（下一组）');
+  eq(unscramblePalette(255), 255, 'unscramble(255)');
 
-  // ★★ 关键：这个置换**自逆**（上游只有一个函数名，两个方向共用）
+  // ★★ 关键：这个置换**自逆**（上游只有一个函数名，两个方向共用同一张表）
   for (let i = 0; i < 256; i++) {
-    ok(unscramblePalette(scramblePalette(i)) === i, `置换自逆：p(p(${i})) === ${i}`);
-    ok(scramblePalette(i) === unscramblePalette(i), `scramble(${i}) === unscramble(${i})（同一个置换）`);
+    ok(unscramblePalette(unscramblePalette(i)) === i, `置换自逆：p(p(${i})) === ${i}`);
+    // 同一轮里把"表与函数逐项一致"也钉住（0.20 合并掉了那个逐字相同的方向性别名之后，
+    // 这条成了"两个方向确实共用一张表"的唯一逐项见证 —— 别删）
+    ok(UNSCRAMBLE_LUT[i] === unscramblePalette(i), `LUT[${i}] === unscramble(${i})`);
   }
   // 与 Python 参考实现的 LUT 逐项一致（前 24 项是从 Python 抄下来的定值）
   eq(toHex(UNSCRAMBLE_LUT.slice(0, 24)), '0001020304050607101112131415161708090a0b0c0d0e0f',
@@ -419,13 +441,12 @@ function testPalettePermutation(): void {
   let lutOk = true;
   for (let i = 0; i < 256; i++) {
     if (UNSCRAMBLE_LUT[i] !== unscramblePalette(i)) lutOk = false;
-    if (SCRAMBLE_LUT[i] !== scramblePalette(i)) lutOk = false;
   }
-  ok(lutOk, 'SCRAMBLE_LUT / UNSCRAMBLE_LUT 与函数一致');
+  ok(lutOk, 'UNSCRAMBLE_LUT 与 unscramblePalette 逐项一致');
   // 置换是 256 项上的双射
   const seen = new Set<number>();
-  for (let i = 0; i < 256; i++) seen.add(scramblePalette(i));
-  eq(seen.size, 256, 'scramble 是 256 项上的双射');
+  for (let i = 0; i < 256; i++) seen.add(unscramblePalette(i));
+  eq(seen.size, 256, 'unscramble 是 256 项上的双射');
   // 真·逆表 == 自己（自逆的证明）
   const inv = invertPalettePermutation(UNSCRAMBLE_LUT);
   eq(toHex(inv), toHex(UNSCRAMBLE_LUT), '★ 真·逆表与自身逐项相同 ⇒ 置换自逆');
@@ -514,7 +535,9 @@ function testTailRules(): void {
   b[checkPos + 2] = 0x00;
   b[checkPos + 3] = 0x99;
   applyChecksums(b);
-  eq(toHex(b.slice(checkPos + 1, checkPos + 11)), '37009900000000000000'.slice(0, 20), '尾巴有真值 ⇒ 保留');
+  // ★ 0.20：原先是 `'37009900000000000000'.slice(0, 20)` —— 对一个本来就 20 字符的常量做
+  //   恒等切片，读起来像"还有别的长度分支"，其实什么都不是。直接写常量。
+  eq(toHex(b.slice(checkPos + 1, checkPos + 11)), '37009900000000000000', '尾巴有真值 ⇒ 保留');
   eq(verifyChecksums(b).ok, true, '尾巴保留时校验仍自洽（末段校验只吃 alpha 及之前的数据）');
   // ★ 此时"上游写法"也必须成立（尾部 X 01 00*9 让两式恒等；改尾巴会破坏它，这里改的是真值）
   // 上游写法吃的是"数据 + 校验之后的全部尾巴"，所以只要尾巴不是 01 00*9，两式就不等价 ——
@@ -651,6 +674,54 @@ function testInjectionEdgeCases(): void {
   eq(truncatedToSlot0, 64, '★ 256 色 strict=false：64 个像素的索引被截断成槽 0（静默串色）');
   eq(sha256(extractImage(spilled, 'acet')) === sha256(spilledSrc), false,
     '★ 因此往返不一致 —— 这就是上游 256 色的失败方式');
+
+  // ── ★ 0.20 新增：槽 256 的调色板项**写到哪儿**、以及它随后被 `applyChecksums` 覆盖 ──
+  //
+  // 背景（`emblem.ts::injectImage` 的 writePalette 注释里也记着）：非 LR 的槽 256 占 4 个字节，
+  // 按 `offsetIndex(IMAGE_OFFSET + NUM_PIXELS + 256*4 + ch, 0)` 算出来的**物理**位置是
+  // 0x4435..0x4438 —— 其中 **0x4435 正好是末段校验字节那一格**（`FINAL_CHECK_POS.false`）。
+  // 所以"静默串色"不只是颜色错：它还**写花了一个校验字节**；而末段校验随后必须把它算回来。
+  {
+    const io = IMAGE_OFFSET;
+    const slot256 = [0, 1, 2, 3].map((ch) => offsetIndex(io + NUM_PIXELS + 256 * 4 + ch, 0));
+    eq(slot256.join(','), '17461,17462,17463,17464',
+      '★ 槽 256 的物理位置 = 0x4435..0x4438（十进制 17461..17464）');
+    eq(slot256[0], FINAL_CHECK_POS.false, '★ 其中第一格 0x4435 **就是**末段校验字节那一格');
+
+    // ① `mkImg(256)` 的调色板按"首次出现顺序"分配 ⇒ 槽 256 拿到源颜色 k=51（`(0x33,0,0,0x80)`）。
+    //    写入发生在 `injectImage()` 内部，所以这里直接看它落下的字节。
+    eq(toHex(slot256.map((p) => spilled[p])), '33000080',
+      '★ 槽 256 写入的 4 字节 = 33 00 00 80（源颜色 k=51，alpha 游戏惯例 0x80）');
+    eq(spilled[FINAL_CHECK_POS.false], 0x33,
+      '★ 因此 0x4435（末段校验字节）此刻是**被槽 256 写花的 0x33**，不是校验值');
+
+    // ② `applyChecksums()` 会把 0x4435 覆盖成**末段校验值**。
+    //    ⚠ 末段数据区间的右端是 `FINAL_CHECK_POS.false`（0x4435，**含** 0x4434 那个 alpha）
+    //      —— 别写成 `FINAL_ALPHA_POS.false`（那会少算 1 字节，自算出来的校验值全错）。
+    const recomputed = Uint8Array.from(spilled);
+    applyChecksums(recomputed);
+    const wantFinal = computeChecksum(
+      recomputed.subarray(FINAL_SEG_OFF, FINAL_CHECK_POS.false), FINAL_DATA_LEN.false, 0);
+    eq(recomputed[FINAL_CHECK_POS.false], wantFinal,
+      '★ applyChecksums 把 0x4435 写成末段校验值');
+    // ⚠ 这里有个**巧合**必须点出来：本夹具算出来的末段校验值恰好也是 **0x33**，
+    //    与槽 256 串进来的那个字节**数值相同**。所以"改没改"这条判据在本夹具上**看不出来** ——
+    //    要证明"是被覆盖而不是恰好没动"，得把那一格改成别的值再看：
+    eq(recomputed[FINAL_CHECK_POS.false], 0x33,
+      '★ （巧合）本夹具的末段校验值 = 0x33 = 槽 256 串进来的字节，所以下面要另造一格来证明"覆盖"');
+    const forced = Uint8Array.from(recomputed);
+    forced[FINAL_CHECK_POS.false] = 0x99; // 改成一格假值（0x4435 **不在**校验数据区间里 ⇒ 不影响期望值）
+    eq(computeChecksum(forced.subarray(FINAL_SEG_OFF, FINAL_CHECK_POS.false), FINAL_DATA_LEN.false, 0),
+      wantFinal, '（前置）改 0x4435 不改变末段校验的输入');
+    applyChecksums(forced);
+    eq(forced[FINAL_CHECK_POS.false], wantFinal,
+      '★ 被写成 0x99 的 0x4435 被 applyChecksums **覆盖**回校验值（这就是"覆盖"的直接见证）');
+    eq(verifyChecksums(recomputed).ok, true, '★ 覆盖之后 18/18 校验自洽');
+    eq(toHex([recomputed[slot256[1]], recomputed[slot256[2]], recomputed[slot256[3]]]), '000080',
+      '★ 0x4436..0x4438 不在校验位置上 ⇒ 槽 256 串进去的 00 00 80 原样留着（校验掩盖不了它们）');
+    eq(sha256(extractImage(recomputed, 'acet')), sha256(extractImage(spilled, 'acet')),
+      '★ 重算校验不改变图像（串色是**写入**造成的，不是校验造成的）');
+  }
 
   // alpha 不是 0xFF 的像素一律透明
   const img2 = new Uint8Array(NUM_PIXELS * 4);
@@ -1034,8 +1105,16 @@ function testRealSaveReconstruction(): void {
  *     Python 只有**切片赋值**才扩容（`b[0x4432:0x4434] = …`），**单下标越界抛 IndexError**
  *     （实测 Python 3.12：`bytearray(4)[0x4434]=1` → IndexError）。
  *     所以 `0x443F`（比 0x4440 差 1 字节）应当像 Python 那样补成 17472 且 18/18；
- *     而 `0x441F` 应当像 Python 一样**抛**，不许"凭空造出一个看起来合法的块"。
+ *     比末段 alpha 还短的缓冲不许"凭空造出一个看起来合法的块"。
  *     另外 `injectImage()` 必须把扩容后的数组**交回调用方**（原先丢弃返回值 ⇒ 校验全没写进去）。
+ *
+ *     ⚠ **0.20 改动**：抛出点从 `0x441F` 挪到 `0x441E`。理由不是"放宽"，而是
+ *       `0x441F = LR_SAVE_SIZE - 1`，而 LR 那份**差 1 字节**的缓冲在 Python 里是
+ *       **切片赋值补得起来的**（`z[0x4414:] = …` ⇒ 补成 0x4420 且 18/18）。
+ *       0.20 把 `applyChecksums` 的布局判据从"必须恰好 0x4420"改成"**差最后那几个字节**也算 LR"
+ *       （见 `emblem.ts::layoutIsLr`）就是为了对齐这条 —— 于是同一个 0x441F 不可能既
+ *       "按 LR 补齐"又"必须抛"。边界因此整体下移一格：0x441F 补、0x441E 抛。
+ *       非 LR 那侧的边界（0x443F 补）一个字没动。
  *
  *   · **D25**：域外参数不许静默降级：`makeBlankSave(false, 1.5)` 原先会被
  *     `new Uint8Array(17473.5)` 截断成 17473 字节、`saveKind()` 变成 `container`；
@@ -1053,17 +1132,31 @@ function testGrowthAndDomainSemantics(): void {
     eq(verifyChecksums(out).ok, true, '[D22] 补完的块 18/18');
   }
 
-  // ── D22：0x441F（比末段 alpha 还短）⇒ 必须抛（Python 是 IndexError）──
+  // ── ★ 0.20 新增：**LR** 的扩容边界（原先只测了非 LR 那一侧）──
+  //   LR 的末段在 0x4400、alpha 在 0x4414、校验字节在 0x4415 —— 0x441F 差 1 字节，
+  //   按 Python 的切片赋值语义必须补成 0x4420 且 18/18；0x441E 差 2 字节（连末段 alpha
+  //   都装不下）⇒ 必须抛，不许凭空造块。判据见 `emblem.ts::layoutIsLr`。
+  {
+    const short = new Uint8Array(LR_SAVE_SIZE - 1); // 0x441F = 17439
+    eq(isLrSave(short), false, '[0.20] 0x441F **不是**完整的 LR 存档（isLrSave 仍是"恰好相等"）');
+    const out = applyChecksums(short);
+    eq(out.length, LR_SAVE_SIZE, '[0.20] applyChecksums(0x441F)：返回值补到 0x4420（LR）');
+    eq(short.length, LR_SAVE_SIZE - 1, '[0.20] 调用方那份没有被就地扩容');
+    eq(verifyChecksums(out).ok, true, '[0.20] LR 补完的块 18/18');
+    eq(verifyChecksumsUpstream(out).ok, true, '[0.20] LR 补完的块同时满足上游写法（尾部恒等式）');
+  }
+
+  // ── D22（0.20 边界下移）：0x441E（比 LR 末段 alpha 还短）⇒ 必须抛 ──
   {
     let threw = false;
     let msg = '';
     try {
-      applyChecksums(new Uint8Array(0x441f));
+      applyChecksums(new Uint8Array(LR_SAVE_SIZE - 2)); // 0x441E
     } catch (e) {
       threw = true;
       msg = e instanceof Error ? e.message : String(e);
     }
-    eq(threw, true, `[D22] applyChecksums(0x441F) 必须抛（不许凭空造块）${msg ? `：${msg}` : ''}`);
+    eq(threw, true, `[D22] applyChecksums(0x441E) 必须抛（不许凭空造块）${msg ? `：${msg}` : ''}`);
   }
 
   // ── D22：injectImage 把扩容后的数组交回调用方 ──
@@ -1110,6 +1203,39 @@ function testGrowthAndDomainSemantics(): void {
     const before = blk[HEADER_TAIL_OFF];
     tail[0] = before ^ 0xff;
     eq(blk[HEADER_TAIL_OFF], before, '[D24] headerTailFromSave 返回的是拷贝（改它不影响源存档）');
+  }
+
+  // ── ★ 0.20 新增：`headerTailFromSave()` 必须校验**形态**（原先静默返回垃圾 / 空数组）──
+  //
+  // 这条对应一个实测过的静默失败：喂一份 LR 存档（0x4420）时 `blockBase()` 给 0，
+  // 于是函数把"0x14..0x1C"当成作品常量返回 —— 那是**图像数据里的 9 个字节**，
+  // 看着很像一个合法的 9 字节作品常量，谁都发现不了。喂 0 字节缓冲则返回空数组
+  // （`subarray` 越界自己夹取）。两者都与"越界/形态不符就抛 `EmblemFormatError`"的纪律不符。
+  {
+    // ① LR 存档（用夹具里那份真实的 LR 块）⇒ 必须抛，而且错误信息要点名"LR"
+    const lrBytes = readFile(join(FIXTURES, 'blocks', 'Mcd001_LRtest2__BISLPS-25462EMB__data0.raw'));
+    eq(lrBytes.length, LR_SAVE_SIZE, '[0.20] 夹具里的 LR 块是 0x4420 字节');
+    eq(isLrSave(lrBytes), true, '[0.20] isLrSave(那份 LR 块) = true');
+    const msgLr = throws(() => headerTailFromSave(lrBytes),
+      '[0.20] headerTailFromSave(LR 存档) 必须抛（原先静默返回图像里的 9 字节）');
+    ok(msgLr.includes('LR') && msgLr.includes('非 LR'),
+      '[0.20] 抛出的错误信息要说清"这是非 LR 的东西"', `实到：${msgLr}`);
+    // 而且必须是本模块的 EmblemFormatError（不是"顺手抛了个别的错"）
+    let kind = '';
+    try { headerTailFromSave(lrBytes); } catch (e) { kind = e instanceof EmblemFormatError ? 'EmblemFormatError' : String(e); }
+    eq(kind, 'EmblemFormatError', '[0.20] 抛的是 EmblemFormatError');
+
+    // ② 0 字节缓冲 ⇒ 必须抛（原先返回空数组）
+    const msgEmpty = throws(() => headerTailFromSave(new Uint8Array(0)),
+      '[0.20] headerTailFromSave(0 字节) 必须抛（原先返回空数组）');
+    ok(msgEmpty.length > 0, '[0.20] 0 字节那条也要带错误信息', `实到：${msgEmpty}`);
+
+    // ③ 长度不够装那 9 字节（0x1C = 28 < 0x14 + 9 = 29 = 0x1D）⇒ 必须抛
+    throws(() => headerTailFromSave(new Uint8Array(0x1c)),
+      '[0.20] headerTailFromSave(0x1C 字节) 必须抛（装不下 0x14..0x1C 这 9 字节）');
+    // 刚好够（0x14 + 9 = 0x1D）⇒ 不抛；这一条钉住"边界是 0x1D 而不是随便一个数"
+    eq(toHex(headerTailFromSave(new Uint8Array(0x1d))), '000000000000000000',
+      '[0.20] headerTailFromSave(0x1D 字节) 刚好装得下 ⇒ 返回 9 个 0（不抛）');
   }
 }
 

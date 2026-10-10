@@ -59,7 +59,7 @@ export async function decodeImageFile(file: Blob, name: string): Promise<{ data:
           'PSD / TIFF / 多页 RAW 请先导出 PNG。',
         `Cannot decode this image (${name}): ${e instanceof Error ? e.message : String(e)}\n` +
           'Supported: PNG / JPEG / WebP / GIF (first frame) / BMP / ICO / AVIF / SVG. ' +
-          'For PSD / TIFF / multi-page RAW, export a PNG first.',
+          'For PSD / TIFF / multi-page RAW, export a PNG first.', `この画像を開けません（${name}）：${e instanceof Error ? e.message : String(e)}\\n対応：PNG / JPEG / WebP / GIF（先頭フレーム）/ BMP / ICO / AVIF / SVG。PSD / TIFF / 複数ページ RAW は先に PNG で書き出してください。`, `이 이미지를 열 수 없습니다(${name}): ${e instanceof Error ? e.message : String(e)}\\n지원: PNG / JPEG / WebP / GIF(첫 프레임) / BMP / ICO / AVIF / SVG. PSD / TIFF / 여러 페이지 RAW 는 먼저 PNG로 내보내세요.`,
       ),
     );
   }
@@ -121,7 +121,7 @@ export function recompute(): { ok: boolean; error: string | null } {
   setPrepared(result, null);
 
   if (!result.report.compliance.ok) {
-    return { ok: false, error: result.report.compliance.issues.join(t('；', '; ')) };
+    return { ok: false, error: result.report.compliance.issues.join(t('；', '; ', '；', '; ')) };
   }
   return { ok: true, error: null };
 }
@@ -148,7 +148,7 @@ export function recompute(): { ok: boolean; error: string | null } {
  */
 export function recheckFinal(): { ok: boolean; issues: string[] } {
   const p = state.prepared;
-  if (!p) return { ok: false, issues: [t('还没有可写入的图像', 'There is no image ready to write yet')] };
+  if (!p) return { ok: false, issues: [t('还没有可写入的图像', 'There is no image ready to write yet', 'まだ書き込みできる画像がありません', '아직 기록할 이미지가 없습니다')] };
   const c = checkCompliance({ data: p.rgba, width: p.width, height: p.height }, { indices: p.indices });
   return { ok: c.ok, issues: c.issues };
 }
@@ -165,7 +165,7 @@ interface ViewRefs {
 let views: ViewRefs | null = null;
 
 /** 建/取"当前图片"画布（只在容器里还没有时建一次）。 */
-export function ensureViews(): ViewRefs {
+function ensureViews(): ViewRefs {
   if (views && views.preview.isConnected) return views;
   const host = $('view-preview');
   clear(host);
@@ -225,7 +225,7 @@ function updateZoomNote(id: string, requested: number, actualPx: number, shrunk:
       class: 'zoom-note',
       text: t(
       `已按容器缩放显示：期望 ${requested}×（${requested * 128}px）→ 实际约 ${actual}×（${actualPx}px）`,
-      `Scaled to fit the container: wanted ${requested}×（${requested * 128}px）→ actually about ${actual}×（${actualPx}px）`,
+      `Scaled to fit the container: wanted ${requested}× (${requested * 128}px) → actually about ${actual}× (${actualPx}px)`, `コンテナに合わせて拡大縮小して表示：期待 ${requested}×（${requested * 128}px）→ 実際は約 ${actual}×（${actualPx}px）`, `컨테이너에 맞춰 확대·축소해 표시: 기대 ${requested}×(${requested * 128}px) → 실제 약 ${actual}×(${actualPx}px)`,
     ),
     }),
   );
@@ -275,7 +275,16 @@ export function refreshImage(): void {
   renderOriginalBadge();
 }
 
-function renderOriginalBadge(): void {
+/**
+ * 顶部那条"文件名 · 尺寸"。
+ *
+ * ★ 0.40（审查抓到）：这条**以前从不重画**（只有 `refreshImage()` 调它，而切语言走的是更轻的
+ *   `renderImageViews()`），而且文字来自 `state.source.name` —— 剪贴板那条路在**导入那一刻**
+ *   就把 `t('剪贴板图片', …)` 的结果存进了 state ⇒ 切语言后那行永远是旧语言。
+ *   现在：state 里只存**语言无关**的东西（原文件名 / `clipboard` 标记），翻译在这一步做，
+ *   切语言时由 `relayoutForLang()` 调本函数重画（所以它要 export）。
+ */
+export function renderOriginalBadge(): void {
   const host = $('original-badge');
   clear(host);
   const src = state.source;
@@ -289,7 +298,8 @@ function renderOriginalBadge(): void {
   // ★ 2026-10-05（0.9）：用户要求删掉后面的"实色 N · 半透明 N"（"没用"）。
   //   这里只留"文件名 · 尺寸"。（0.17 起连"实时统计"那块也删了 ⇒ 原图色数/半透明像素数
   //   在界面上不再显示；要看就 F12：`EmblemToolCore.ui.state.prepared.report`。）
-  host.appendChild(el('span', { text: `${src.name} · ${src.width}×${src.height}` }));
+  const label = src.clipboard ? t(`剪贴板 · ${src.name || 'image'}`, `Clipboard · ${src.name || 'image'}`, `クリップボード · ${src.name || 'image'}`, `클립보드 · ${src.name || 'image'}`) : src.name;
+  host.appendChild(el('span', { text: `${label} · ${src.width}×${src.height}` }));
 }
 
 // --------------------------------------------------------------------------

@@ -41,6 +41,14 @@ export interface GameEntry {
   note: string;
   /** 那句话的英文（0.28）。 */
   noteEn: string;
+  /** ★ 0.47：日语（作品名保留英文，只翻地区后缀）。 */
+  ja: string;
+  /** ★ 0.47：韩语。 */
+  ko: string;
+  /** ★ 0.47：日语的 `note`。 */
+  noteJa: string;
+  /** ★ 0.47：韩语的 `note`。 */
+  noteKo: string;
 }
 
 /** 允许出现在自定义序列号里的系列码（Redump / PCSX2 wiki 口径，见文档 §六）。 */
@@ -54,72 +62,102 @@ export const GAMES: readonly GameEntry[] = [
     id: 'sl-us',
     label: 'Silent Line 美版',
     en: 'Silent Line (US)',
+  ja: 'Silent Line 北米版',
+  ko: 'Silent Line 북미판',
     hasSerial: true,
     serial: 'SLUS-20644',
     form: 'per-slot',
     verified: true,
     note: '真实样本 BASLUS-20644E02（公开存档库）+ 实机验证；作品常量已在 KNOWN_HEADER_TAIL 里。',
     noteEn: 'Real sample BASLUS-20644E02 (public save archive) + verified on hardware; the game constant is in KNOWN_HEADER_TAIL.',
+  noteJa: '実サンプル BASLUS-20644E02（公開セーブアーカイブ）+ 実機で確認済み。作品定数は KNOWN_HEADER_TAIL にあります。',
+  noteKo: '실제 샘플 BASLUS-20644E02 (공개 세이브 아카이브) + 실기에서 확인됨. 작품 상수는 KNOWN_HEADER_TAIL 에 있습니다.',
   },
   {
     id: 'sl-jp',
     label: 'Silent Line 日版',
     en: 'Silent Line (JP)',
+  ja: 'Silent Line 日本版',
+  ko: 'Silent Line 일본판',
     hasSerial: true,
     serial: 'SLPS-25169',
     form: 'per-slot',
     verified: true,
     note: 'BISLPS-25169E## 有实机验证样本；作品常量已在 KNOWN_HEADER_TAIL 里。',
     noteEn: 'BISLPS-25169E## samples verified on hardware; the game constant is in KNOWN_HEADER_TAIL.',
+  noteJa: 'BISLPS-25169E## に実機で確認済みのサンプルがあります。作品定数は KNOWN_HEADER_TAIL にあります。',
+  noteKo: 'BISLPS-25169E## 에 실기에서 확인된 샘플이 있습니다. 작품 상수는 KNOWN_HEADER_TAIL 에 있습니다.',
   },
   {
     id: 'nx-jp',
     label: 'Nexus 日版',
     en: 'Nexus (JP)',
+  ja: 'Nexus 日本版',
+  ko: 'Nexus 일본판',
     hasSerial: true,
     serial: 'SLPS-25338',
     form: 'per-slot',
     verified: true,
     note: 'BISLPS-25338E## 有实机验证样本（E00..E04）。',
     noteEn: 'BISLPS-25338E## samples verified on hardware (E00..E04).',
+  noteJa: 'BISLPS-25338E## に実機で確認済みのサンプルがあります（E00..E04）。',
+  noteKo: 'BISLPS-25338E## 에 실기에서 확인된 샘플이 있습니다 (E00..E04).',
   },
   {
     id: 'lr-jp',
     label: 'Last Raven 日版',
     en: 'Last Raven (JP)',
+  ja: 'Last Raven 日本版',
+  ko: 'Last Raven 일본판',
     hasSerial: true,
     serial: 'SLPS-25462',
     form: 'lr-archive',
     verified: true,
     note: 'BISLPS-25462EMB\\data0..7，含"新建槽"实机验证。',
     noteEn: 'BISLPS-25462EMB\\data0..7, including a hardware-verified "create new slot".',
+  noteJa: 'BISLPS-25462EMB\\data0..7、「新規スロット作成」の実機確認を含みます。',
+  noteKo: 'BISLPS-25462EMB\\data0..7, "새 슬롯 만들기" 실기 확인 포함.',
   },
   {
     id: 'ac3',
     label: 'AC3',
     en: 'AC3',
+  ja: 'AC3',
+  ko: 'AC3',
     hasSerial: true,
     serial: 'SLUS-20435',
     form: 'per-slot',
     verified: false,
-    note: '⚠ 未验证：目录名规则相同，但本项目手上**没有** AC3 的 E## 真实样本。',
+    note: '⚠ 未验证：目录名规则相同，但本项目手上没有 AC3 的 E## 真实样本。',
     noteEn: '⚠ Unverified: same naming rules, but this project has no real AC3 E## sample.',
+  noteJa: '⚠ 未検証：ディレクトリ名の規則は同じですが、本プロジェクトには AC3 の E## 実サンプルがありません。',
+  noteKo: '⚠ 미검증: 디렉터리 이름 규칙은 같지만, 이 프로젝트에는 AC3 의 E## 실제 샘플이 없습니다.',
   },
   {
     id: 'ac2',
     label: 'AC2',
     en: 'AC2',
+  ja: 'AC2',
+  ko: 'AC2',
     hasSerial: true,
     serial: 'SLUS-20014',
     form: 'per-slot',
     verified: false,
     note: '⚠ 未验证：没有真实徽章样本。',
     noteEn: '⚠ Unverified: no real emblem sample.',
+  noteJa: '⚠ 未検証：実サンプルのエンブレムがありません。',
+  noteKo: '⚠ 미검증: 실제 엠블럼 샘플이 없습니다.',
+  noteJa: '⚠ 未検証：実サンプルのエンブレムがありません。',
+  noteKo: '⚠ 미검증: 실제 엠블럼 샘플이 없습니다.',
+  noteJa: '⚠ 未検証：実サンプルのエンブレムがありません。',
+  noteKo: '⚠ 미검증: 실제 엠블럼 샘플이 없습니다.',
   },
   {
     id: 'ac2aa',
     label: 'AC2: Another Age',
     en: 'AC2: Another Age',
+  ja: 'AC2: Another Age',
+  ko: 'AC2: Another Age',
     hasSerial: true,
     serial: 'SLUS-20249',
     form: 'per-slot',
@@ -131,6 +169,8 @@ export const GAMES: readonly GameEntry[] = [
     id: 'nb',
     label: 'Nine Breaker',
     en: 'Nine Breaker',
+  ja: 'Nine Breaker',
+  ko: 'Nine Breaker',
     hasSerial: true,
     serial: 'SLUS-21200',
     form: 'per-slot',
@@ -142,12 +182,16 @@ export const GAMES: readonly GameEntry[] = [
     id: 'custom',
     label: '自定义（手填盘序列号）',
     en: 'Custom (type disc serial)',
+  ja: 'カスタム（ディスクのシリアルを入力）',
+  ko: '사용자 지정 (디스크 시리얼 입력)',
     hasSerial: false,
     serial: '',
     form: 'per-slot',
     verified: false,
     note: '给上面没有的作品兜底：手填盘序列号（如 SLES-51399）。⚠ 前缀与规则照抄不一定对，属未验证用法。',
     noteEn: 'Fallback for titles not listed above: type the disc serial (e.g. SLES-51399). ⚠ The prefix and rules are copied, not verified.',
+  noteJa: '上にない作品向けのフォールバック：ディスクのシリアルを手入力します（例：SLES-51399）。⚠ プレフィックスと規則は流用したもので、正しいとは限らず未検証の使い方です。',
+  noteKo: '위에 없는 작품을 위한 대체: 디스크 시리얼을 직접 입력합니다 (예: SLES-51399). ⚠ 접두사와 규칙은 그대로 옮겨 온 것이라 반드시 맞지는 않으며 미검증 사용법입니다.',
   },
 ];
 
@@ -181,7 +225,7 @@ export interface ParsedSerial {
  */
 export function parseSerial(input: string): ParsedSerial | { error: string } {
   let s = String(input == null ? '' : input).trim().toUpperCase();
-  if (!s) return { error: t('盘序列号不能为空', 'The disc serial cannot be empty') };
+  if (!s) return { error: t('盘序列号不能为空', 'The disc serial cannot be empty', 'ディスクのシリアルは空にできません', '디스크 시리얼은 비워 둘 수 없습니다') };
   s = s.replace(/\s+/g, '');
 
   let prefix = '';
@@ -199,7 +243,7 @@ export function parseSerial(input: string): ParsedSerial | { error: string } {
     return {
       error: t(
         `系列码 "${kind || s}" 不认识（应为 ${SERIAL_KINDS.join(' / ')} 之一）`,
-        `Unknown publisher code "${kind || s}" (expected one of ${SERIAL_KINDS.join(' / ')})`,
+        `Unknown publisher code "${kind || s}" (expected one of ${SERIAL_KINDS.join(' / ')})`, `出版社コード "${kind || s}" を認識できません（${SERIAL_KINDS.join(' / ')} のいずれかである必要があります）`, `퍼블리셔 코드 "${kind || s}" 를 알 수 없습니다 (${SERIAL_KINDS.join(' / ')} 중 하나여야 합니다)`,
       ),
     };
   }
@@ -209,7 +253,7 @@ export function parseSerial(input: string): ParsedSerial | { error: string } {
     return {
       error: t(
         `序号部分 "${rest}" 不合法（应为 3~5 位数字，如 SLPS-25169）`,
-        `Invalid number part "${rest}" (expected 3-5 digits, e.g. SLPS-25169)`,
+        `Invalid number part "${rest}" (expected 3-5 digits, e.g. SLPS-25169)`, `番号部分 "${rest}" が不正です（3〜5 桁の数字、例：SLPS-25169）`, `번호 부분 "${rest}" 이(가) 올바르지 않습니다 (3~5 자리 숫자, 예: SLPS-25169)`,
       ),
     };
   }
@@ -236,7 +280,7 @@ export interface GameContext {
 
 export function resolveGame(id: string, customSerial = ''): GameContext | { error: string } {
   const entry = findGame(id);
-  if (!entry) return { error: t(`未知作品 id: ${id}`, `Unknown game id: ${id}`) };
+  if (!entry) return { error: t(`未知作品 id: ${id}`, `Unknown game id: ${id}`, `不明な作品 id：${id}`, `알 수 없는 작품 id: ${id}`) };
 
   if (entry.id === 'custom') {
     const p = parseSerial(customSerial);
@@ -247,7 +291,7 @@ export function resolveGame(id: string, customSerial = ''): GameContext | { erro
     return {
       error: t(
         `作品 ${entry.label} 没有盘序列号依据，请改用「自定义」并手填`,
-        `No disc serial is known for ${entry.en} - switch to "Custom" and type it in`,
+        `No disc serial is known for ${entry.en} - switch to "Custom" and type it in`, `${entry.en} にはディスクのシリアルの情報がありません。「カスタム」に切り替えて手入力してください`, `${entry.en} 에는 디스크 시리얼 정보가 없습니다. "사용자 지정"으로 바꿔 직접 입력하세요`,
       ),
     };
   }
@@ -266,7 +310,7 @@ export function resolveGame(id: string, customSerial = ''): GameContext | { erro
 /** `E00`..`E07`（每槽一个独立存档目录的形态）。 */
 export function slotDirSuffix(slotIndex: number): string {
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 99) {
-    throw new Error(t(`槽位下标非法：${slotIndex}（应为 0..99）`, `Invalid slot index: ${slotIndex} (expected 0..99)`));
+    throw new Error(t(`槽位下标非法：${slotIndex}（应为 0..99）`, `Invalid slot index: ${slotIndex} (expected 0..99)`, `スロット番号が不正です：${slotIndex}（0..99 である必要があります）`, `슬롯 인덱스가 올바르지 않습니다: ${slotIndex} (0..99 여야 합니다)`));
   }
   return `E${String(slotIndex).padStart(2, '0')}`;
 }
@@ -334,7 +378,7 @@ export function resolveHeaderTail(
     error:
       `作品常量（非 LR 块头 0x14..0x1C 那 9 字节）没有依据：` +
         `盘序列号 ${serial} 不在已知表里，卡上也没有同作品的真实存档可以照抄。\n` +
-        '★ 这 9 字节是**作品级常量**，猜错会让写出来的块与游戏产物逐字节不同 —— 所以这里拒绝写入。\n' +
+        '★ 这 9 字节是作品级常量，猜错会让写出来的块与游戏产物逐字节不同 —— 所以这里拒绝写入。\n' +
         '解决办法：先往这个作品里存一个徽章（让卡上出现一个同作品的真实存档），再回来写。' +
         '\n---\n' +
         `No basis for the game constant (those 9 bytes at 0x14..0x1C in non-LR blocks): ` +

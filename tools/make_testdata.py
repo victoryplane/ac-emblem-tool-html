@@ -20,6 +20,12 @@ from __future__ import annotations
 import os
 import sys
 
+# ★ 不要写 __pycache__：本脚本 import `acet_format` / `selftest`，默认会在 tools\ 下留
+#   `__pycache__\*.pyc`。本项目规矩是"跑完判据后仓库干净"（照
+#   web\test\make_image_fixtures.py 的做法），所以这里显式关掉字节码缓存。
+#   ⚠ 必须在下面那些 import **之前**设置。
+sys.dont_write_bytecode = True
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import acet_format as af          # noqa: E402
 from selftest import make_pattern, rgba_bytes, save_png  # noqa: E402

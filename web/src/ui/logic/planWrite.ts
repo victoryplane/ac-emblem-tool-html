@@ -34,8 +34,22 @@ export interface WritePlan {
   target: WriteTarget | null;
   /** 一条提醒（不是拒绝理由），没有则 null。 */
   warning: string | null;
-  /** 拒绝理由；可以写时是 null。 */
+  /**
+   * 拒绝理由（**一行**，写给用户看：为什么写不了 + 怎么办）。
+   * ★ 0.43（用户："这部分提示过于重复了"）：原来是两三行的长句，而同一件事还会出现在日志、toast、
+   *   状态行里 ⇒ 现在只留**一句能照做的**；机制解释挪到 `errorDetail`（界面上做 hover 提示）。
+   */
   error: string | null;
+  /**
+   * ★ 0.43：拒绝理由的**机制解释**（"为什么卡层不能直接建目录"这种）。
+   * 它不帮用户"怎么办"，所以不占正文位置 —— 界面把它放进 `title`（鼠标停一下才看）。
+   */
+  errorDetail?: string | null;
+  /**
+   * ★ 0.43：拒绝理由的**一句话标签**（形如 `缺作品目录`）。
+   * 状态行与 toast 用它（"写入被拒绝：缺作品目录（见上方提示行）"），不再复述正文。
+   */
+  errorShort?: string | null;
 }
 
 export interface PlanInput {
@@ -51,9 +65,15 @@ export interface PlanInput {
   emblemFileInDir?: (dirName: string) => string | null;
 }
 
-/** 只有拒绝理由、没有目标的返回（四个分支共用）。 */
-function rejected(error: string): WritePlan {
-  return { target: null, warning: null, error };
+/**
+ * 只有拒绝理由、没有目标的返回（四个分支共用）。
+ *
+ * @param error 一行正文（为什么写不了 + 怎么办）
+ * @param short 一句话标签（`errorShort`，给状态行 / toast 用）
+ * @param detail 机制解释（`errorDetail`，界面做 hover）
+ */
+function rejected(error: string, short: string | null = null, detail: string | null = null): WritePlan {
+  return { target: null, warning: null, error, errorShort: short, errorDetail: detail };
 }
 
 /**
@@ -70,10 +90,15 @@ function rejected(error: string): WritePlan {
  */
 export function planWriteTargetIn(input: PlanInput): WritePlan {
   const { model, ctx, slotIndex } = input;
-  if (!model) return rejected(t('还没有打开记忆卡', 'No memory card loaded yet'));
+  if (!model) return rejected(t('还没有打开记忆卡', 'No memory card loaded yet', 'まだメモリーカードを開いていません', '아직 메모리 카드를 열지 않았습니다'));
 
   const slot = model.slots[slotIndex];
-  if (!slot) return rejected(t(`槽位 ${slotIndex + 1} 不存在`, `Slot ${slotIndex + 1} does not exist`));
+  if (!slot) {
+    return rejected(
+      t(`槽位 ${slotIndex + 1} 不存在`, `Slot ${slotIndex + 1} does not exist`, `スロット ${slotIndex + 1} は存在しません`, `슬롯 ${slotIndex + 1}이(가) 존재하지 않습니다`),
+      t('槽位不存在', 'no such slot', 'スロットが存在しません', '슬롯이 존재하지 않습니다'),
+    );
+  }
 
   // ① 槽里已经有东西 ⇒ 覆盖它（原地覆盖就是"写进它那条簇链"）
   if (slot.occupied && slot.fileName) {
@@ -95,23 +120,32 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
   if (!model.dirNames.some((d) => d.toUpperCase() === dirName.toUpperCase())) {
     const onCardButOtherGame = input.cardDirNames.map((n) => n.toUpperCase()).includes(dirName.toUpperCase());
     const isLr = ctx.entry.form === 'lr-archive';
+    // ★ 0.43：正文压成**一行**（"为什么写不了 + 怎么办"），机制解释进 `errorDetail`（hover 才看）。
+    //   ⚠ 正文与 hover 都是**纯文本**（`textContent` / `title`）⇒ 不许写 `**强调**`
+    //     （那会原样显示成星号，用户看到的是一堆 `**`）。
     return rejected(
       t(
-        `槽位 ${slotIndex + 1}：卡上没有目录 ${dirName}，而卡层**只会在已有目录里新建文件**、不会新建目录。\n` +
+        `槽位 ${slotIndex + 1}：卡上没有目录 ${dirName} —— ` +
           (onCardButOtherGame
-            ? '  ⇒ 卡上**有**这个目录名，但它不属于当前作品（或不是当前作品的序列号）—— 请确认下拉框选的作品对不对。'
-            : isLr
-              ? '  ⇒ 请先在游戏里为这个作品**存一个徽章**（进一次徽章画面，让 LR 自己把 EMB 目录建出来），再回来写。'
-              : '  ⇒ 非 LR 的每个槽是一个**完整存档目录**（除徽章还有 icon.sys 与图标文件），' +
-                '只建目录会写出游戏不认的半成品。请先在游戏里为这个作品**存一个徽章**。'),
-        `Slot ${slotIndex + 1}: the card has no folder ${dirName}, and the card layer only creates files inside existing folders - it does not create folders.\n` +
+            ? '卡上有这个目录名，但它不属于当前作品（或序列号不对），请确认下拉框选的作品对不对。'
+            : '先在游戏里为这个作品存一个徽章（进一次徽章画面，让它把目录建出来），再回来写。'),
+        `Slot ${slotIndex + 1}: the card has no folder ${dirName} - ` +
           (onCardButOtherGame
-            ? '  => The card does have a folder with this name, but it does not belong to the selected game (or the serial does not match) - please check the game dropdown.'
-            : isLr
-              ? '  => Save one emblem in that game first (open the emblem screen once so LR creates the EMB folder itself), then come back.'
-              : '  => Each non-LR slot is a complete save folder (it also holds icon.sys and icon files), ' +
-                'so creating only the folder would produce something the game will not accept. Save one emblem in that game first.'),
+            ? 'the card does have a folder with this name, but it does not belong to the selected game (or the serial does not match); check the game dropdown.'
+            : 'save one emblem in that game first (open the emblem screen once so the game creates the folder), then come back.'), `スロット ${slotIndex + 1}：カード上にフォルダ ${dirName} がありません —— ${onCardButOtherGame ? 'カード上にこのフォルダ名はありますが、現在のタイトルのものではありません（またはシリアルが違います）。タイトルの選択を確認してください。' : '先にそのタイトルでエンブレムを 1 つ保存し（エンブレム画面を一度開いてフォルダを作らせます）、それから戻って書き込んでください。'}`, `슬롯 ${slotIndex + 1}: 카드에 폴더 ${dirName} 이(가) 없습니다 —— ${onCardButOtherGame ? '카드에 이 폴더 이름은 있지만 현재 타이틀의 것이 아닙니다(또는 시리얼이 다릅니다). 타이틀 선택을 확인하세요.' : '먼저 그 타이틀에서 엠블럼을 하나 저장하고(엠블럼 화면을 한 번 열어 폴더를 만들게 합니다), 돌아와서 쓰세요.'}`,
       ),
+      t('缺作品目录', "this game's folder is missing", 'タイトルのフォルダがありません', '타이틀 폴더가 없습니다'),
+      isLr
+        ? t(
+            '卡层只会在已有目录里新建文件，不会新建目录；LR 的 EMB 目录是游戏在第一次存徽章时建出来的。',
+            'The card layer only creates files inside existing folders - it never creates a folder; the LR EMB folder is created by the game the first time you save an emblem.', 'カード層は既存のフォルダの中にファイルを作るだけで、フォルダは新規作成しません。LR の EMB フォルダは、初めてエンブレムを保存したときにゲームが作成したものです。', '카드 계층은 기존 폴더 안에 파일만 만들 뿐, 폴더를 새로 만들지는 않습니다. LR의 EMB 폴더는 처음 엠블럼을 저장할 때 게임이 만든 것입니다.',
+          )
+        : t(
+            '卡层只会在已有目录里新建文件，不会新建目录；非 LR 的每个槽是一个完整存档目录' +
+              '（除徽章还有 icon.sys 与图标文件），只建目录会写出游戏不认的半成品。',
+            'The card layer only creates files inside existing folders - it never creates a folder; each non-LR slot is a complete save folder ' +
+              '(it also holds icon.sys and icon files), so creating only the folder would produce something the game will not accept.', `カード層は既存のフォルダの中にしかファイルを作りません（フォルダは作りません）。非 LR の各スロットは完全なセーブフォルダで（エンブレムのほかに icon.sys とアイコンファイルも入ります）、フォルダだけ作るとゲームが受け付けない半端なものができます。`, `카드 계층은 기존 폴더 안에만 파일을 만들고 폴더는 만들지 않습니다. 비 LR의 각 슬롯은 완전한 세이브 폴더이며(엠블럼 외에 icon.sys 와 아이콘 파일도 들어 있습니다), 폴더만 만들면 게임이 인식하지 못하는 반쪽짜리가 됩니다.`,
+          ),
     );
   }
 
@@ -129,8 +163,8 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
     return {
       target: { slotIndex, dirName, fileName: existing, isNew: false, cluster: 0, length: 0 },
       warning: t(
-        `槽位 ${slotIndex + 1}：目录 ${dirName} 里已有 ${existing}，但模型判定该槽为空 —— 将以**覆盖**方式写它。`,
-        `Slot ${slotIndex + 1}: folder ${dirName} already contains ${existing}, but the model says this slot is empty - it will be overwritten.`,
+        `槽位 ${slotIndex + 1}：目录 ${dirName} 里已有 ${existing}，但模型判定该槽为空 —— 将以覆盖方式写它。`,
+        `Slot ${slotIndex + 1}: folder ${dirName} already contains ${existing}, but the model says this slot is empty - it will be overwritten.`, `スロット ${slotIndex + 1}：フォルダ ${dirName} にはすでに ${existing} がありますが、モデルはこのスロットを空と判定しています —— 上書きとして書き込みます。`, `슬롯 ${slotIndex + 1}: 폴더 ${dirName}에 이미 ${existing}이(가) 있지만, 모델은 이 슬롯을 비어 있다고 판정했습니다 —— 덮어쓰기 방식으로 씁니다.`,
       ),
       error: null,
     };
@@ -142,7 +176,7 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
       `槽位 ${slotIndex + 1}：目录 ${dirName} 里没有"与目录同名"的徽章文件，将新建 ${fileName}。` +
         '游戏可能还需要同目录里的 icon.sys / 图标文件才会显示这个槽。',
       `Slot ${slotIndex + 1}: folder ${dirName} has no emblem file named after the folder; ${fileName} will be created. ` +
-        'The game may also need icon.sys / icon files in that folder before it shows the slot.',
+        'The game may also need icon.sys / icon files in that folder before it shows the slot.', `スロット ${slotIndex + 1}：フォルダ ${dirName} に「フォルダと同名」のエンブレムファイルがないため、${fileName} を新規作成します。ゲームがこのスロットを表示するには、同じフォルダ内の icon.sys / アイコンファイルも必要かもしれません。`, `슬롯 ${slotIndex + 1}: 폴더 ${dirName} 에 "폴더와 같은 이름"의 엠블럼 파일이 없어 ${fileName} 을(를) 새로 만듭니다. 게임이 이 슬롯을 표시하려면 같은 폴더의 icon.sys / 아이콘 파일도 필요할 수 있습니다.`,
     ),
     error: null,
   };

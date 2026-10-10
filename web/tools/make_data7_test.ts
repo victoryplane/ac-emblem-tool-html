@@ -22,13 +22,26 @@
  *
  *     node web\tools\make_data7_test.ts
  *
- * 输出：`out\Mcd001_data7test.ps2` + 拷一份到 PCSX2 记忆卡目录。
+ * 输出：`out\Mcd001_data7test.ps2`（**只写仓库里的 out\**，不碰你的 PCSX2）。
+ *
+ * ★★ 要顺便拷进 PCSX2 记忆卡目录，必须**显式**加开关：
+ *
+ *     node web\tools\make_data7_test.ts --to-memcards
+ *     node web\tools\make_data7_test.ts --to-memcards --force      # 覆盖已存在的同名卡
+ *     node web\tools\make_data7_test.ts --to-memcards --memcards "D:\PCSX2\memcards"
+ *
+ * ⚠ 为什么默认不写记忆卡目录（0.41 改的）：那个目录是**机主真正的 PCSX2 记忆卡目录**，
+ *   里面每一张卡都可能是玩家自己的存档；脚本一进来就 `copyFileSync` 覆盖同名文件
+ *   属于"跑一次判据顺手毁一份存档"。现在：
+ *     · 默认只写 `out\`；
+ *     · `--to-memcards` 才写，而且目标**已存在时默认拒绝**（要 `--force` 才覆盖）；
+ *     · 写之前会打印醒目警告（必须先完全退出 PCSX2）。
  * ⚠ 源卡 `out\evidence\Mcd001_embdata2.ps2` **只读**：本脚本用 `readCardFromBuffer`（默认先复制），
- *   并在末尾用 SHA-256 自证源卡未变。写卡前请**完全退出 PCSX2**。
+ *   并在末尾用 SHA-256 自证源卡未变。
  */
 import { readFileSync, writeFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { readCardFromBuffer, type Card } from '../src/core/card.ts';
@@ -39,9 +52,35 @@ const PROJ = dirname(dirname(HERE));                        // …\emblem-tool
 const SRC = join(PROJ, 'out', 'evidence', 'Mcd001_embdata2.ps2');
 const BLOCKS = join(PROJ, 'web', 'test', 'fixtures', 'blocks');
 const OUT_CARD = join(PROJ, 'out', 'Mcd001_data7test.ps2');
-const MC_DIR = 'C:\\Users\\M\\Documents\\PCSX2\\memcards';
-const MC_CARD = join(MC_DIR, 'Mcd001_data7test.ps2');
+/** 默认的 PCSX2 记忆卡目录（只有 `--to-memcards` 时才会碰）。 */
+const DEFAULT_MC_DIR = 'C:\\Users\\M\\Documents\\PCSX2\\memcards';
 const LR_DIR = 'BISLPS-25462EMB';
+
+// ── 命令行 ─────────────────────────────────────────────────────────────────
+const argv = process.argv.slice(2);
+
+/** 取 `--name value`；没有就返回 null。 */
+function argValue(name: string): string | null {
+  const i = argv.indexOf(name);
+  if (i < 0) return null;
+  const v = argv[i + 1];
+  if (!v || v.startsWith('--')) return null;
+  return v;
+}
+
+const knownFlags = ['--to-memcards', '--force', '--memcards'];
+const unknown = argv.filter((a, i) => a.startsWith('--') && !knownFlags.includes(a));
+if (unknown.length) {
+  console.error(`✗ 不认识的参数：${unknown.join(' ')}（只支持 --to-memcards / --force / --memcards <目录>）`);
+  process.exit(2);
+}
+/** ★ 只有显式开关才会碰 PCSX2 记忆卡目录。 */
+const toMemcards = argv.includes('--to-memcards');
+/** ★ 目标卡已存在时必须再加 `--force` 才覆盖。 */
+const force = argv.includes('--force');
+const MC_DIR = argValue('--memcards') ?? DEFAULT_MC_DIR;
+const MC_CARD = join(MC_DIR, basename(OUT_CARD));
+
 
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex').toUpperCase();
 const hex = (n: number) => '0x' + n.toString(16).toUpperCase();
@@ -127,11 +166,28 @@ const outBytes = card.buf;
 mkdirSync(dirname(OUT_CARD), { recursive: true });
 writeFileSync(OUT_CARD, outBytes);
 console.log(`\n写出        : ${OUT_CARD}`);
-if (existsSync(MC_DIR)) {
+if (!toMemcards) {
+  console.log('（默认**不碰** PCSX2 记忆卡目录。要拷进去请显式加开关：');
+  console.log(`   node web\\tools\\make_data7_test.ts --to-memcards        # 目标目录：${MC_DIR}`);
+  console.log('   ⚠ 跑之前先**完全退出 PCSX2** —— 它退出时会用手里的旧卡写回文件。）');
+} else if (!existsSync(MC_DIR)) {
+  console.log(`（--to-memcards 给了，但没找到记忆卡目录 ${MC_DIR}，只写了 out\\；`);
+  console.log('   用 --memcards <目录> 指定你自己的 PCSX2 memcards 路径。）');
+} else if (existsSync(MC_CARD) && !force) {
+  console.log('');
+  console.log('  ⚠⚠ 目标卡已存在，**默认拒绝覆盖**：');
+  console.log(`      ${MC_CARD}`);
+  console.log('      · 想覆盖：加 --force（先确认那张卡不是你要留的存档！）');
+  console.log('      · 想换个目录：--memcards <目录>');
+  console.log('      · 只想留在仓库里：不加 --to-memcards 就行。');
+} else {
+  console.log('');
+  console.log('  ⚠⚠ 即将写入 PCSX2 记忆卡目录（**覆盖同名文件**）：');
+  console.log(`      ${MC_CARD}`);
+  console.log('      · 必须先**完全退出 PCSX2**（关窗口，不是 reset），否则它会把旧卡写回去；');
+  console.log('      · 这一步只做"拷一份"；下面第 2 步再去 PCSX2 里把 Slot 2 指到它。');
   copyFileSync(OUT_CARD, MC_CARD);
   console.log(`已拷到      : ${MC_CARD}`);
-} else {
-  console.log(`（未找到记忆卡目录 ${MC_DIR}，只写了 out\\）`);
 }
 
 const same = sha(new Uint8Array(readFileSync(SRC))) === srcSha;
@@ -144,8 +200,11 @@ console.log(`
 
 1. ★ 先**完全退出 PCSX2**（关窗口，不是 reset）；刚才它是关着的，别又开着。
 2. 打开 PCSX2 → 设置 → 记忆卡插槽：把 **Slot 2** 指到 \`Mcd001_data7test.ps2\`
-   （先跑一遍 \`python tools\\check_pcsx2_slots.py\` 确认"没有任何每游戏覆盖"，
-     否则 LR 会读别的卡 —— 这个坑我们今天刚踩过一轮）。
+   （先把 \`inis\\PCSX2.ini\` + \`gamesettings\\*.ini\` 拖进产物的「PCSX2 自检」那一栏，
+     确认"没有任何每游戏覆盖"，否则 LR 会读别的卡 —— 这个坑我们今天刚踩过一轮；
+     ⚠ 原来这里让你跑 \`python tools\\check_pcsx2_slots.py\`，那个脚本 0.19 已归档，
+     结论现值由 \`web/src/ui/logic/pcsx2.ts\` 承接、就在网页那一栏里）。
+   ⚠ 若你**没**加 \`--to-memcards\`：请自己把 \`out\\Mcd001_data7test.ps2\` 拷进 memcards。
 3. 启动 LR（用你那张 CN 测试 ISO）→ 进**徽章画面** → 选 \`MEMORY CARD slot 2\`。
 
 期望看到 **5 格**（顺序按槽号）：

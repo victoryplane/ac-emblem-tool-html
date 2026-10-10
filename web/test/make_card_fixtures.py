@@ -667,7 +667,9 @@ def main() -> int:
                     page=pg,
                     dataAllFF=(d == b'\xFF' * PAGE),
                     spareHex=sp.hex(),
-                    spareHexSpaced=sp.hex(' '),
+                    # ★ 0.46：这里原来还有 `spareHexSpaced`（带空格的人眼版）与下面 rep 里的
+                    #   `fileDataPattern`（一句散文说明）—— 两者在 TS 侧**一个读者都没有**
+                    #   （前者只在接口里声明过、后者连接口条目都没有）⇒ 删掉（证据链不靠它们）。
                     spareIsComputedECC=(sp == MC.page_ecc(d)),
                     spareIsVirginFFFF=(sp == b'\xFF' * ECC),
                     modeAllFF=(d[:4] == b'\xFF' * 4),
@@ -682,8 +684,6 @@ def main() -> int:
                 fileName=spec['file'],
                 fileLength=WRITE_LEN,
                 fileDataSHA256=sha(WRITE_DATA),
-                fileDataPattern='bytes(range(256)) repeated and truncated to '
-                                '17440 (first 64 B = 00..3F)',
                 changedPageCount=len(changed),
                 changedPages=changed,
                 touchedPages=sorted(touched),
@@ -721,7 +721,7 @@ def main() -> int:
             for f_ in empty_forms:
                 print('   新簇铺页    : %d  数据全FF=%s（全 FF = 保留为空槽；否则 = 被新 dirent 占用）'
                       '  备用区=%s  =page_ecc(该页数据)=%s  =FF×16=%s'
-                      % (f_['page'], f_['dataAllFF'], f_['spareHexSpaced'],
+                      % (f_['page'], f_['dataAllFF'], ' '.join(f_['spareHex'][i:i + 2] for i in range(0, len(f_['spareHex']), 2)),
                          f_['spareIsComputedECC'], f_['spareIsVirginFFFF']))
             print('   变化页      : %d 页 %s' % (len(changed), changed_pages))
             if noop:

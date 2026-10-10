@@ -82,8 +82,8 @@ testdata/
 
 | 文件 | 大小 | 是什么 |
 |---|---|---|
-| `sample_A_60colors.png` | 677 B | 128×128、56 色、左上角一块全透明的样品图（合成存档的内容源） |
-| `sample_B_40colors.png` | 688 B | 128×128、41 色的样品图（备选内容源） |
+| `sample_A_60colors.png` | 677 B | 128×128、56 色、左上角一块全透明的样品图（**合成存档的内容源**，由 `tools\make_testdata.py` 生成） |
+| `sample_B_40colors.png` | 688 B | 128×128、41 色的样品图（备选内容源，同上） |
 | `synth_ac3_BASLUS-20435E00.raw` | 17,472 (0x4440) | 非 LR 徽章存档，内容 = 图 A |
 | `synth_lr_BASLUS-21338EMB_data0.raw` | 17,440 (0x4420) | Last Raven 徽章存档，内容 = 图 A |
 | `synth_container_with_emblem.bin` | 17,984 | 0x200 字节前缀 + 非 LR 徽章块（测"靠魔数定位"那条路） |
@@ -92,6 +92,9 @@ testdata/
 但内容全是合成的（图 A 按格式编码）。
 
 `_work/` 是 `selftest.py` / `prepare_image.py` 的临时目录，**可随时删**。
+★ 上面那两张 `sample_*.png` 只有 `tools\make_testdata.py` 会重新生成；
+`tools\selftest.py` 每次跑出来的 A/B 图写在 `_work\sample_*.png`，**不会**覆盖仓库里这两张
+（以前会覆盖 —— 于是每跑一次 `node web\check.mjs`，`git status` 里就多两个被改动的二进制文件）。
 
 ---
 
@@ -109,20 +112,22 @@ python tools\selftest.py          # 重建 _work\ 并跑与官方 exe 的交叉�
 ## 四、拿它们干什么
 
 ```powershell
-# ★ 先用真实存档试 —— 这是最硬的验证
-python tools\acet_cli.py testdata\real\BASLUS-20644E02_rawblock.raw --info
-python tools\acet_cli.py testdata\real\BASLUS-20644E02_rawblock.raw --verify
+# ★ 先用真实存档试 —— 这是最硬的验证（现在的入口是 TypeScript 核心层）
+node web\test\core.test.ts          # 10 份 real/*.raw 全部读出来逐字节比对
+node web\test\image.test.ts         # 图像管线（含 PNG 往返闭环）
 
-# 容器路径（靠 12 字节魔数定位）
-python tools\acet_cli.py testdata\real\BASLUS-20644E02_AC3SL_Emblem3.PSV --info
-
-# 官方 exe 也认这份
+# 官方 exe 也认这份（上游二进制不进仓库，路径按你本机的来）
 dist\v1.0.2\acet.exe testdata\real\BASLUS-20644E02_rawblock.raw
 # → 生成 .raw.png
 
-# 合成存档随便改（改坏了不心疼）
-python tools\acet_cli.py testdata\synth_ac3_BASLUS-20435E00.raw testdata\sample_B_40colors.png
+# Python 参考实现（零依赖）—— 合成存档随便改，改坏了不心疼
+python tools\acet_format.py                       # 核心自检
+python tools\selftest.py                          # 与官方 exe 交叉验证（缺 exe 时 exit 2 = 跳过）
+python _selftest\validate_writer.py               # 10 份真实存档逐字节复原
 ```
+
+> ⚠ 上面原来写的是 `python tools\acet_cli.py …`：那个脚本 **0.19 已归档**（`tools\README.md` 有清单）。
+> 现在"读一张 .raw 并给出信息"的入口是官方 exe 或 `web\test\core.test.ts`。
 
 ★ `synth_*.raw` 与 `real/*.raw` **都可以直接用官方工具读**，
 所以它们也适合当"第三方实现正确性"的对照物：任何人写的解析器，
