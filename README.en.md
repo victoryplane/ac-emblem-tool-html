@@ -11,12 +11,11 @@ the interface comes in **Chinese / English / Japanese / Korean**, switchable at 
 (it follows your browser language unless you pick one, and remembers your pick).
 
 > **Verified so far**: reading (11 real samples + cross-validation against the official `acet.exe`) · writing and
-> creating slots (non-LR and LR, tested in-game) · round-trip fidelity.
+> creating slots (non-LR, LR and **FF**, tested in-game) · round-trip fidelity.
 > **Not verified yet**: creating a new `E##` save folder · real samples for AC3 / AC2 / AC2AA / NB · whether the
-> game validates the 9-byte per-game constant · **writing Formula Front** (reading is verified against a real card:
-> the pixels, the MD5 and the byte-exact round-trip of `BISLPS-25461emb00` all line up — see
-> `docs/01-项目理解/02-存档格式规范.md` §九; writing is just "same block, new image, recomputed MD5", but it has
-> not been looked at in-game yet) · PS1 (this tool does not do PS1).
+> game validates the 9-byte per-game constant · PS1 (this tool does not do PS1).
+> **Formula Front** (confirmed in-game 2026-10-20): the decoded pixels match the in-game picture, and both
+> overwriting slot 1 and creating slot 2 are read back by the game - see `docs/01-项目理解/02-存档格式规范.md` §九.
 > ⇒ So the page opens with a notice you have to dismiss: **back up your memory card yourself**, and
 > **fully exit PCSX2 before writing**.
 
@@ -62,7 +61,7 @@ confirm → overwrite → read-back path) · **Save card as** saves the current 
 | Silent Line (US / JP) | `BASLUS-20644E02` / `BISLPS-25169E##` | ✅ real samples + verified in-game |
 | Nexus | `BISLPS-25338E##` | ✅ same |
 | Last Raven | `BISLPS-25462EMB\data0..7` | ✅ same (including creating a slot, verified in-game) |
-| Formula Front (JP) | `BISLPS-25461emb##` (one folder per slot) | 📖 reading verified on a real card · ✍ writing awaits an in-game check |
+| Formula Front (JP) | `BISLPS-25461emb##` (one folder per slot) | ✅ real sample + verified in-game (including creating a slot) |
 | AC3 · AC2 · AC2AA · Nine Breaker | `<game ID>E##` | ⚠ same rule, but **no real samples** ⇒ the UI marks them "unverified" |
 | Custom | type the game ID yourself (e.g. `BASLUS-20435`) | fallback for anything not listed |
 

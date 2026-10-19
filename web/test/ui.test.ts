@@ -205,7 +205,8 @@ eq(GAMES.filter((g) => g.id !== 'custom').length, 9, '固定作品项数');
 
 // SPEC.md §七：SL（美/日）/ NX / LR 有实机证据 ✅，其余 ⚠ 未验证
 const verifiedIds = GAMES.filter((g) => g.verified).map((g) => g.id).sort();
-eq(verifiedIds.join(','), 'lr-jp,nx-jp,sl-jp,sl-us', '有实机证据的作品（SPEC.md §七 的 ✅ 那一档）');
+// ★ 0.48：FF（ff-jp）2026-10-20 实机确认 —— 覆盖槽 1 与新建槽 2 都能被游戏读出来 ⇒ 进 ✅ 这一档
+eq(verifiedIds.join(','), 'ff-jp,lr-jp,nx-jp,sl-jp,sl-us', '有实机证据的作品（SPEC.md §七 的 ✅ 那一档）');
 for (const id of ['ac3', 'ac2', 'ac2aa', 'nb']) {
   const g = findGame(id);
   ok(!!g, `作品 ${id} 存在`);

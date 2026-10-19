@@ -135,14 +135,14 @@ export const GAMES: readonly GameEntry[] = [
     hasSerial: true,
     serial: 'SLPS-25461',
     form: 'per-slot-emb',
-    verified: false,
-    note: '⚠ 读取已用真卡存档验证（BISLPS-25461emb00，逐像素复现）；写入只覆盖已有槽、尚未实机验证 ⇒ 写完请进游戏确认。',
+    verified: true,
+    note: '真实样本 BISLPS-25461emb00（读出像素与游戏里那张图逐点一致）+ 实机验证：覆盖槽 1 与「新建槽 2」都能在游戏里正常读取。',
     noteEn:
-      '⚠ Reading verified on a real card (BISLPS-25461emb00, pixel-exact); writing only overwrites an existing slot and is not verified in-game yet - check it after writing.',
+      'Real sample BISLPS-25461emb00 (the decoded pixels match the in-game picture) + verified in-game: both overwriting slot 1 and creating slot 2 are read back by the game.',
     noteJa:
-      '⚠ 読み込みは実カードのセーブデータ（BISLPS-25461emb00、ピクセル単位で一致）で確認済み。書き込みは既存スロットの上書きのみで、実機確認はまだです ⇒ 書き込み後にゲーム内で確認してください。',
+      '実サンプル BISLPS-25461emb00（読み出した画素がゲーム内の画像と一致）+ 実機で確認済み：スロット 1 の上書きと「スロット 2 の新規作成」のどちらもゲーム内で読み込めます。',
     noteKo:
-      '⚠ 읽기는 실제 카드의 세이브 데이터(BISLPS-25461emb00, 픽셀 단위 일치)로 확인했습니다. 쓰기는 기존 슬롯 덮어쓰기만 지원하며 실기 확인은 아직입니다 ⇒ 쓰기 후 게임에서 확인하세요.',
+      '실제 샘플 BISLPS-25461emb00(읽어 낸 픽셀이 게임 화면의 그림과 일치) + 실기 확인 완료: 슬롯 1 덮어쓰기와 "슬롯 2 새로 만들기" 모두 게임에서 정상적으로 읽힙니다.',
   },
   {
     id: 'ac3',
