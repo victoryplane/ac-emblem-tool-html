@@ -27,9 +27,20 @@ import {
   findOffset,
   saveKind,
   verifyChecksums,
+  type SaveKind,
 } from '../core/emblem.ts';
-import type { GameContext } from './logic/games.ts';
-import { resolveHeaderTail, serialFromDirName } from './logic/games.ts';
+// ★ 0.48：Formula Front（PS2）是另一种布局（0x44D8 + MD5），见 `core/ff.ts` 的文件头。
+import {
+  FF_SAVE_SIZE,
+  ffEncodeEmblem,
+  ffExtractImage,
+  ffLooksValid,
+  ffRetitleIconSys,
+  ffVerifyChecksums,
+  isFfSave,
+} from '../core/ff.ts';
+import type { EmblemLayout, GameContext } from './logic/games.ts';
+import { dirNameFor, resolveHeaderTail, serialFromDirName } from './logic/games.ts';
 import type { SlotDirLike, SlotModel } from './logic/slots.ts';
 import { buildGameSlotModel } from './logic/slots.ts';
 import { planWriteTargetIn, type WritePlan, type WriteTarget } from './logic/planWrite.ts';
@@ -172,11 +183,12 @@ export function sameGameBlocks(ctx: GameContext): Array<{ dir: string; file: str
     if (isEmb !== (ctx.entry.form === 'lr-archive')) continue;
     for (const e of card.listDir(dirName)) {
       if (e.isDot || e.isDir) continue;
-      if (e.length !== SAVE_SIZE && e.length !== LR_SAVE_SIZE) continue;
+      // ★ 0.48：FF 的块是 0x44D8（比非 LR 的 0x4440 长）—— 三个长度都要认。
+      if (e.length !== SAVE_SIZE && e.length !== LR_SAVE_SIZE && e.length !== FF_SAVE_SIZE) continue;
       try {
         const bytes = new Uint8Array(card.readFile(e.cluster, e.length));
         const kind = saveKind(bytes);
-        if (kind !== 'emblem-raw' && kind !== 'emblem-lr') continue;
+        if (kind !== 'emblem-raw' && kind !== 'emblem-lr' && kind !== 'emblem-ff') continue;
         out.push({ dir: dirName, file: e.name, block: bytes });
       } catch {
         /* 读不出来的跳过（不猜） */
@@ -195,6 +207,8 @@ export interface BlockCheck {
   checksumsOk: boolean;
   detail: string;
   offset: number;
+  /** `saveKind()` 的结论（调用方据此决定用哪套取图函数）。 */
+  kind: SaveKind;
 }
 
 /**
@@ -203,6 +217,17 @@ export interface BlockCheck {
  */
 function checkBlock(bytes: Uint8Array): BlockCheck {
   const kind = saveKind(bytes);
+  // ★ 0.48：FF 是**整套独立的布局**（0x44D8、没有 18 段校验、末尾是 MD5）——
+  //   它比非 LR 的 0x4440 长，绝不能掉进下面 findOffset/verifyChecksums 那条路。
+  if (kind === 'emblem-ff') {
+    const v = ffVerifyChecksums(bytes);
+    const detail = v.ok
+      ? 'MD5'
+      : v.badSegments
+          .map((s) => `MD5@${hex(s.offset, 4)} ${hex(s.got)}≠${hex(s.expect)}`)
+          .join(' ');
+    return { ok: v.ok, checksumsOk: v.ok, detail, offset: 0, kind };
+  }
   const isLr = kind === 'emblem-lr';
   if (kind !== 'emblem-raw' && kind !== 'emblem-lr') {
     return {
@@ -210,6 +235,7 @@ function checkBlock(bytes: Uint8Array): BlockCheck {
       checksumsOk: false,
       detail: t(`saveKind=${kind}（不是徽章块）`, `saveKind=${kind} (not an emblem block)`, `saveKind=${kind}（エンブレムのブロックではありません）`, `saveKind=${kind}(엠블럼 블록이 아닙니다)`),
       offset: -1,
+      kind,
     };
   }
   let offset = 0;
@@ -221,6 +247,7 @@ function checkBlock(bytes: Uint8Array): BlockCheck {
       checksumsOk: false,
       detail: e instanceof Error ? e.message : String(e),
       offset: -1,
+      kind,
     };
   }
   const block = bytes.subarray(offset, offset + (isLr ? LR_SAVE_SIZE : SAVE_SIZE));
@@ -232,7 +259,7 @@ function checkBlock(bytes: Uint8Array): BlockCheck {
         .map((s) => `${s.name}@${hex(s.offset, 4)}`)
         .join(' ')
         .concat(v.badSegments.length > 3 ? t(` …共 ${v.badSegments.length} 段`, ` …${v.badSegments.length} segments in total`, ` …全 ${v.badSegments.length} セグメント`, ` …총 ${v.badSegments.length}개 세그먼트`) : '');
-  return { ok: v.ok, checksumsOk: v.ok, detail, offset };
+  return { ok: v.ok, checksumsOk: v.ok, detail, offset, kind };
 }
 
 /** 一个槽的缩略图（游戏口径 index0）。 */
@@ -248,8 +275,12 @@ function buildThumb(cluster: number, length: number): SlotThumb | null {
   const chk = checkBlock(raw);
   let rgba: Uint8Array;
   try {
-    // ★ 'index0' = 游戏里看到的样子（SPEC.md §五 ★ 实机口径）
-    rgba = extractImage(chk.offset > 0 ? raw.subarray(chk.offset) : raw, 'index0');
+    // ★ 'index0' = 游戏里看到的样子（SPEC.md §五 ★ 实机口径）；
+    //   FF 的 `ffExtractImage()` 就是同一口径（索引 0 = 透明，其余按存下来的 A）。
+    rgba =
+      chk.kind === 'emblem-ff'
+        ? ffExtractImage(raw)
+        : extractImage(chk.offset > 0 ? raw.subarray(chk.offset) : raw, 'index0');
   } catch (e) {
     return {
       data: new Uint8ClampedArray(128 * 128 * 4),
@@ -418,6 +449,8 @@ export function planWriteTarget(ctx: GameContext, slotIndex: number): WritePlan 
     ctx,
     slotIndex,
     emblemFileInDir,
+    // ★ 0.48：FF 的槽目录不存在时，可以按卡上同作品的真实目录当模板新建。
+    ffTemplateDir: ctx.entry.form === 'per-slot-emb' ? ffTemplateDirFor() : null,
   });
   // 非 LR 的"已有文件"要补回真实簇/长度（模型里只有"占用的槽"，用户填的作品可能不同）
   const tgt = plan.target;
@@ -429,6 +462,81 @@ export function planWriteTarget(ctx: GameContext, slotIndex: number): WritePlan 
     }
   }
   return plan;
+}
+
+/**
+ * ★ 0.48：卡上**同作品**的 FF 徽章目录（优先"里面有徽章文件"的那个）—— 新建槽时的模板。
+ *
+ * 返回 null = 卡上没有可照抄的 FF 目录 ⇒ 调用方拒绝新建（不凭空造 icon.sys / 图标）。
+ */
+function ffTemplateDirFor(): string | null {
+  const lc = state.card;
+  const model = state.model;
+  if (!lc || !model) return null;
+  let fallback: string | null = null;
+  for (const d of model.dirNames) {
+    if (!/EMB\d\d$/i.test(d)) continue;
+    if (emblemFileInDir(d)) return d;
+    fallback ??= d;
+  }
+  return fallback;
+}
+
+/**
+ * ★ 0.48：FF 写入需要一份**真实 FF 块**当模板（它的调色板与那 200 字节元数据原样继承）。
+ *
+ * 优先级（顺序即优先级）：
+ *   ① 目标槽里已有的那个文件（覆盖写 —— 最可靠：就是这一槽原来的字节）；
+ *   ② 卡上**同作品**的任意一份 FF 块（`sameGameBlocks()`）。
+ * 都没有 ⇒ 返回 null，调用方**拒绝写入**（不凭空造调色板/元数据）。
+ */
+function ffTemplateFor(ctx: GameContext, target: WriteTarget): Uint8Array | null {
+  const lc = state.card;
+  if (!lc) return null;
+  const card = lc.card;
+  if (!target.isNew) {
+    const e = card.listDir(target.dirName).find((d) => !d.isDot && d.name === target.fileName);
+    if (e && e.length === FF_SAVE_SIZE) {
+      const bytes = new Uint8Array(card.readFile(e.cluster, e.length));
+      if (isFfSave(bytes)) return bytes;
+    }
+  }
+  for (const s of sameGameBlocks(ctx)) {
+    if (isFfSave(s.block)) return s.block;
+  }
+  return null;
+}
+
+/**
+ * ★ 0.48：把 FF 的槽目录**按模板目录建出来**（新建槽那条路）。
+ *
+ * 只做三件事：建目录骨架 → 抄模板目录里的 `icon.sys`（标题编号改成目标槽号）和图标文件 →
+ * 返回改动的页（给 ECC 自检用）。**徽章文件不在这里写** —— 它由 `writeBlockToTarget()` 写，
+ * 这样"块生成了没有"与"目录建好了没有"两件事各自有各自的失败点、日志也分得开。
+ */
+function createFfSlotDir(
+  lc: NonNullable<typeof state.card>,
+  newDir: string,
+  templateDir: string,
+  slotIndex: number,
+): { touchedPages: number[]; files: string[] } {
+  const card = lc.card;
+  const tplEntries = card.listDir(templateDir);
+  const templateDirent = tplEntries.find((e) => !e.isDot && !e.isDir && e.length > 0) ?? null;
+  const made = card.createDirInRoot(newDir, templateDir);
+  const touched: number[] = [...made.touchedPages];
+  const files: string[] = [];
+  for (const f of tplEntries) {
+    if (f.isDot || f.isDir) continue;
+    // 模板目录里那个"与目录同名"的文件是**徽章本体** —— 不抄（它会被新块盖掉/新建）
+    if (f.name.toUpperCase() === templateDir.toUpperCase()) continue;
+    let bytes = new Uint8Array(card.readFile(f.cluster, f.length));
+    if (f.name.toLowerCase() === 'icon.sys') bytes = ffRetitleIconSys(bytes, slotIndex + 1);
+    const r = card.createFileInDir(newDir, f.name, bytes, { templateDirent });
+    touched.push(...r.touchedPages);
+    files.push(f.name);
+  }
+  return { touchedPages: [...new Set(touched)].sort((a, b) => a - b), files };
 }
 
 function writeBlockToTarget(
@@ -565,7 +673,7 @@ function refusedRedo(fn: () => string | null, hintLine = true): { note: () => st
 export async function writeSlot(
   ctx: GameContext,
   slotIndex: number,
-  opts: { isLr: boolean; finalCheck: () => { ok: boolean; issues: string[] } },
+  opts: { layout: EmblemLayout; finalCheck: () => { ok: boolean; issues: string[] } },
 ): Promise<WriteOutcome> {
   const lc = state.card;
   const prepared = state.prepared;
@@ -623,7 +731,7 @@ export async function writeSlot(
   //   否则日志框会在"什么都没做"的时候自己弹出来）。
   let headerTail: Uint8Array | null = null;
   let headerTailLine: string | null = null;
-  if (!opts.isLr) {
+  if (opts.layout === 'ac') {
     const same = sameGameBlocks(ctx);
     const res = resolveHeaderTail(ctx.serial, same.map((s) => s.block), KNOWN_HEADER_TAIL);
     // ★ 0.43：预检拒绝（不写日志）—— 那 9 字节的完整理由在提示行上已经有一行常驻警告
@@ -661,9 +769,17 @@ export async function writeSlot(
   //   模型是按作品过滤的，所以这条恒成立；不成立说明"模型与 ctx 不同步"
   //   （例如切了作品却没重建模型）—— 那就**拒绝写盘**，绝不能写到别的作品上。
   const model = state.model;
+  // ★ 0.48：FF 的"新建槽"目标目录**本来就还不在卡上**（计划里 isNew=true）——
+  //   这时改判"目录名必须等于 dirNameFor(ctx, slot)"（仍然保证写不到别的作品上去）。
+  const isNewFfDir =
+    !!target &&
+    opts.layout === 'ff' &&
+    target.isNew &&
+    target.dirName.toUpperCase() === dirNameFor(ctx, target.slotIndex).toUpperCase();
   if (
     target &&
     model &&
+    !isNewFfDir &&
     !model.dirNames.some((d) => d.toUpperCase() === target.dirName.toUpperCase())
   ) {
     return reject(
@@ -684,14 +800,72 @@ export async function writeSlot(
     return reject(refusedNote('没有可写的目标槽', 'there is no target slot to write to', '書き込み先のスロットがありません', '쓸 대상 슬롯이 없습니다', false));
   }
 
+  // ③′ ★ 0.48：FF 必须先找到模板块（调色板 + 元数据从它继承，不猜）。
+  let ffTemplate: Uint8Array | null = null;
+  if (opts.layout === 'ff') {
+    ffTemplate = ffTemplateFor(ctx, target);
+    if (!ffTemplate) {
+      return reject(
+        refusedNote(
+          '卡上没有可作模板的 FF 徽章存档 —— 先在游戏里存一个 FF 徽章，再回来写',
+          'the card has no FF emblem save to use as a template - save one FF emblem in the game first, then come back', 'カード上にテンプレートにできる FF エンブレムのセーブがありません —— 先にゲーム内で FF のエンブレムを 1 つ保存してから、戻って書き込んでください', '카드에 템플릿으로 쓸 FF 엠블럼 세이브가 없습니다 — 먼저 게임에서 FF 엠블럼을 하나 저장한 뒤 다시 쓰세요',
+          false,
+        ),
+      );
+    }
+  }
+
   // ★ 0.43：**预检全过**了 —— 到这里才承认"这次真的要写"，日志从这一行开始有内容。
   if (headerTailLine) lines.push(headerTailLine);
+  if (opts.layout === 'ff' && ffTemplate) {
+    lines.push(
+      t(
+        `调色板与元数据取自卡上的真实 FF 存档（${humanBytes(ffTemplate.length)}，MD5 ${ffLooksValid(ffTemplate) ? '自洽' : '不自洽 —— 仅作模板'}）`,
+        `Palette and metadata inherited from a real FF save on the card (${humanBytes(ffTemplate.length)}, MD5 ${ffLooksValid(ffTemplate) ? 'valid' : 'invalid - template only'})`, `パレットとメタデータはカード上の実 FF セーブから継承します（${humanBytes(ffTemplate.length)}、MD5 ${ffLooksValid(ffTemplate) ? '整合' : '不整合 —— テンプレートとしてのみ使用'}）`, `팔레트와 메타데이터는 카드의 실제 FF 세이브에서 상속합니다(${humanBytes(ffTemplate.length)}, MD5 ${ffLooksValid(ffTemplate) ? '정상' : '비정상 — 템플릿으로만 사용'})`,
+      ),
+    );
+  }
   if (plan.warning) lines.push('⚠ ' + plan.warning);
+
+  // ③″ ★ 0.48：FF 的槽目录还不存在 ⇒ 先按模板目录**建目录 + 抄 icon.sys / 图标**
+  //   （徽章文件留给下面的 writeBlockToTarget() 写，两件事各管各的失败点）
+  let setupPages: number[] = [];
+  if (opts.layout === 'ff' && !lc.card.findInRoot(target.dirName)) {
+    const templateDir = ffTemplateDirFor();
+    if (!templateDir) {
+      return fail(
+        t(
+          `卡上没有可作模板的 FF 徽章目录，无法新建 ${target.dirName}`,
+          `There is no FF emblem folder on the card to use as a template, so ${target.dirName} cannot be created`, `雛形にできる FF エンブレムフォルダがカード上にないため、${target.dirName} を新規作成できません`, `본보기로 쓸 FF 엠블럼 폴더가 카드에 없어 ${target.dirName} 을(를) 새로 만들 수 없습니다`,
+        ),
+      );
+    }
+    try {
+      const made = createFfSlotDir(lc, target.dirName, templateDir, target.slotIndex);
+      setupPages = made.touchedPages;
+      lines.push(
+        t(
+          `新建槽目录 ${target.dirName}（模板 ${templateDir}；抄了 ${made.files.join('、')}，标题编号改成 ${String(target.slotIndex + 1).padStart(2, '0')}）`,
+          `Created slot folder ${target.dirName} (template ${templateDir}; copied ${made.files.join(', ')}, title renumbered to ${String(target.slotIndex + 1).padStart(2, '0')})`, `スロットフォルダ ${target.dirName} を新規作成（雛形 ${templateDir}；${made.files.join('、')} を複製、タイトル番号を ${String(target.slotIndex + 1).padStart(2, '0')} に変更）`, `슬롯 폴더 ${target.dirName} 새로 만듦(본보기 ${templateDir}; ${made.files.join(', ')} 복사, 제목 번호 ${String(target.slotIndex + 1).padStart(2, '0')} 로 변경)`,
+        ),
+      );
+    } catch (e) {
+      return fail(
+        t(
+          `新建槽目录失败（${target.dirName}）：${e instanceof Error ? e.message : String(e)}`,
+          `Failed to create the slot folder (${target.dirName}): ${e instanceof Error ? e.message : String(e)}`, `スロットフォルダの新規作成に失敗（${target.dirName}）：${e instanceof Error ? e.message : String(e)}`, `슬롯 폴더 생성 실패(${target.dirName}): ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+    }
+  }
 
   // ④ 写进内存副本 + 立刻回读自检
   let block: Uint8Array;
   try {
-    block = encodeEmblem(prepared.rgba, { isLr: opts.isLr, headerTail });
+    block =
+      opts.layout === 'ff'
+        ? ffEncodeEmblem(prepared.rgba, ffTemplate)
+        : encodeEmblem(prepared.rgba, { isLr: opts.layout === 'lr', headerTail });
   } catch (e) {
     return fail(
       t(
@@ -700,7 +874,8 @@ export async function writeSlot(
       ),
     );
   }
-  const expectLen = opts.isLr ? LR_SAVE_SIZE : SAVE_SIZE;
+  const expectLen =
+    opts.layout === 'ff' ? FF_SAVE_SIZE : opts.layout === 'lr' ? LR_SAVE_SIZE : SAVE_SIZE;
   if (block.length !== expectLen) {
     return fail(
       t(
@@ -737,9 +912,13 @@ export async function writeSlot(
   const decision = verifyWrite({
     readback,
     expected: block,
-    checksums: verifyChecksums(chkBlock),
+    // ★ 0.48：FF 没有 18 段校验，末尾那 16 字节是 MD5 —— 走同一道闸门，但文案要分开说。
+    checksums:
+      opts.layout === 'ff' ? ffVerifyChecksums(chkBlock) : verifyChecksums(chkBlock),
+    checksumKind: opts.layout === 'ff' ? 'md5' : 'segments',
     // ★ 0.19（D4）：验**全部改动页**（原先只验首簇 ⇒ 18 簇的块只查了 2 页）。
-    badEccPages: badEccPages(written.touched),
+    // ★ 0.48：新建槽时**目录骨架与 icon 文件**的页也算进来。
+    badEccPages: badEccPages([...written.touched, ...setupPages]),
     compliance: prepared.report.compliance,
   });
   const head = t(

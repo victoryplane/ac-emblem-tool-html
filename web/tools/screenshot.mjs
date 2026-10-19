@@ -63,6 +63,8 @@ const preview = process.argv.includes('--preview');
 /** ★ 0.26：`--boot` = 不点掉开机告知弹窗，截"用户双击打开产物时看到的第一个画面"。 */
 const boot = process.argv.includes('--boot');
 const cardPath = argOf('--card', null);
+/** ★ 0.48：`--game ff-jp` = 打开卡之后再切到某个作品（否则截到的是默认作品 LR 的 8 格）。 */
+const game = argOf('--game', null);
 /** ★ 0.28：`--lang en` = 切到英文界面再截；★ 0.47 起也收 `ja` / `ko`（默认 `zh`，与产物默认一致）。 */
 const lang = argOf('--lang', 'zh');
 const size = argOf('--size', cardPath ? '1500,2300' : '1600,950');
@@ -127,6 +129,14 @@ function cardScript(path) {
   var zone = document.getElementById('card-drop');
   if (!zone) throw new Error('找不到 #card-drop（产物结构变了？）');
   zone.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  ${
+    game
+      ? `setTimeout(function () {
+    var sel = document.getElementById('game-select');
+    if (sel) { sel.value = ${JSON.stringify(game)}; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+  }, 1200);`
+      : ''
+  }
 `;
 }
 

@@ -66,10 +66,25 @@ testdata/
 2. `E##` 存档目录的形状与 `S##` 一样：**数据文件 + `AC*E.ICO` + `icon.sys`** 三个文件。
    （SL 是 `AC3SLE.ICO`、NX 是 `ACNEXUSE.ICO`，都是 37,440 B。）
 
+### ④ ★ Formula Front（PS2 日版）—— **第三种布局**（2026-10-20 新增）
+
+来源：同一张卡 `C:\Users\M\Documents\PCSX2\memcards\Mcd001_embdata2.ps2`（2026-10-20 快照）→
+根目录项 `BISLPS-25461emb00` → 同名文件。用户在游戏里存出的**唯一一份** FF 徽章：
+红/白/黑的「FFA」三角 logo，与用户提供的截图一致。
+
+| 文件 | 大小 | 是什么 |
+|---|---|---|
+| `real/BISLPS-25461emb00.raw` | 17,624 | FF 徽章存档（`0x44D8`：图 `0x4000` + 调色板 `0x400` + 元数据 `0xC8` + MD5 `16`） |
+| `real/BISLPS-25461emb00.md` | — | 这个样本的来历 + 复算方法（`ff.ts` 的文件头指向它） |
+
+★ 这是**第三种布局**，不是前两种的变体：没有 36 字节存档头、没有 18 段校验、调色板也不乱序。
+末尾 16 字节 = `md5(前 0x44C8 字节)`（已复算命中）。规范见 `../docs/01-项目理解/02-存档格式规范.md` §九；
+判据见 `../web/test/core.test.ts` 的 (ff) 分节。
+
 ### 小结
 
-这些样本合起来意味着：**格式理解在非 LR 与 LR 两种布局上都已被真实数据验证**，
-而且**跨了三个作品**（Silent Line / Nexus / Last Raven）。
+这些样本合起来意味着：**格式理解在非 LR / LR / FF 三种布局上都已被真实数据验证**，
+而且**跨了四个作品**（Silent Line / Nexus / Last Raven / Formula Front）。
 完整报告：`../_selftest/02-真实存档验证.md`。
 
 ⚠ **都是第三方的玩家存档**，只作本地测试用；要再分发请回到原始来源取。
@@ -113,7 +128,7 @@ python tools\selftest.py          # 重建 _work\ 并跑与官方 exe 的交叉�
 
 ```powershell
 # ★ 先用真实存档试 —— 这是最硬的验证（现在的入口是 TypeScript 核心层）
-node web\test\core.test.ts          # 10 份 real/*.raw 全部读出来逐字节比对
+node web\test\core.test.ts          # 10 份 AC 家族 real/*.raw 全部读出来逐字节比对（FF 那份走 (ff) 分节）
 node web\test\image.test.ts         # 图像管线（含 PNG 往返闭环）
 
 # 官方 exe 也认这份（上游二进制不进仓库，路径按你本机的来）

@@ -38,8 +38,14 @@ export interface ReadbackFacts {
   readback: Uint8Array;
   /** 我们期望写进去的字节。 */
   expected: Uint8Array;
-  /** 回读内容的 `verifyChecksums()` 结果。 */
+  /** 回读内容的 `verifyChecksums()`（AC/LR）或 `ffVerifyChecksums()`（FF）结果。 */
   checksums: ChecksumLike;
+  /**
+   * ★ 0.48：校验口径 —— 默认 `'segments'`（18 段，AC3 / SL / NX / LR），
+   * `'md5'` 是 Formula Front（0x44D8 布局，末尾 16 字节 MD5）。
+   * 只影响**文案**（"18 段校验 18/18" vs "MD5 校验通过"），判定逻辑完全相同。
+   */
+  checksumKind?: 'segments' | 'md5';
   /** 相关页里 ECC 不自洽的**绝对页号**列表。 */
   badEccPages: readonly number[];
   /** 图像合规结论（可选；写入路径上一定给）。 */
@@ -110,7 +116,8 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
     passed.push(t(`逐字节比对一致（${facts.readback.length} 字节）`, `Byte-for-byte identical (${facts.readback.length} bytes)`, `バイト単位の比較で一致（${facts.readback.length} バイト）`, `바이트 단위 비교 일치(${facts.readback.length}바이트)`));
   }
 
-  // ── ② 18 段校验独立复核 ──
+  // ── ② 校验独立复核（AC/LR = 18 段；FF = 末尾 MD5）──
+  const md5Kind = facts.checksumKind === 'md5';
   if (!facts.checksums || !facts.checksums.ok) {
     const bad = facts.checksums && facts.checksums.badSegments ? facts.checksums.badSegments : [];
     const detail = bad.length
@@ -125,13 +132,22 @@ export function verifyWrite(facts: ReadbackFacts): Decision {
           .join(t('；', '; ', '；', '; '))
       : t('（没有明细）', '(no details)', '（明細なし）', '(세부 내역 없음)');
     reasons.push(
-      t(
-        `18 段校验不通过：${bad.length} 段出错 —— ${detail}`,
-        `18-segment checksum FAILED: ${bad.length} segment(s) wrong - ${detail}`, `18 セグメントのチェックサム不合格：${bad.length} セグメントでエラー —— ${detail}`, `18개 세그먼트 체크섬 불합격: ${bad.length}개 세그먼트 오류 —— ${detail}`,
-      ),
+      md5Kind
+        ? t(
+            `MD5 校验不通过：${detail}`,
+            `MD5 checksum FAILED: ${detail}`, `MD5 チェックサム不合格：${detail}`, `MD5 체크섬 불합격: ${detail}`,
+          )
+        : t(
+            `18 段校验不通过：${bad.length} 段出错 —— ${detail}`,
+            `18-segment checksum FAILED: ${bad.length} segment(s) wrong - ${detail}`, `18 セグメントのチェックサム不合格：${bad.length} セグメントでエラー —— ${detail}`, `18개 세그먼트 체크섬 불합격: ${bad.length}개 세그먼트 오류 —— ${detail}`,
+          ),
     );
   } else {
-    passed.push(t('18 段校验 18/18', '18/18 checksums', '18 セグメントのチェックサム 18/18', '18개 세그먼트 체크섬 18/18'));
+    passed.push(
+      md5Kind
+        ? t('MD5 校验通过', 'MD5 checksum OK', 'MD5 チェックサム合格', 'MD5 체크섬 통과')
+        : t('18 段校验 18/18', '18/18 checksums', '18 セグメントのチェックサム 18/18', '18개 세그먼트 체크섬 18/18'),
+    );
   }
 
   // ── ③ ECC 正确性 ──

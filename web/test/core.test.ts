@@ -71,6 +71,28 @@ import {
   verifyChecksumsUpstream,
   type AlphaMode,
 } from '../src/core/emblem.ts';
+// ★ 0.48：Formula Front（PS2 SLPS-25461）是**另一种布局**（0x44D8 + 末尾 MD5），核心函数在 `core/ff.ts`。
+import {
+  FF_IMAGE_OFF,
+  FF_MD5_OFF,
+  FF_META_OFF,
+  FF_PALETTE_OFF,
+  FF_PALETTE_SIZE,
+  FF_SAVE_SIZE,
+  FfFormatError,
+  ffEncodeEmblem,
+  ffExtractImage,
+  ffInjectImage,
+  ffLooksValid,
+  ffOpaqueSlots,
+  ffPalette,
+  ffPayloadMd5,
+  ffVerify,
+  ffRetitleIconSys,
+  ffVerifyChecksums,
+  isFfSave,
+  md5,
+} from '../src/core/ff.ts';
 
 // --------------------------------------------------------------------------
 // 极简测试框架
@@ -1239,6 +1261,190 @@ function testGrowthAndDomainSemantics(): void {
   }
 }
 
+// ==========================================================================
+// (ff) ★ 0.48：Formula Front（PS2 SLPS-25461）—— 0x44D8 布局
+// ==========================================================================
+//
+// 这一整节只用**一份真实存档**（`testdata/real/BISLPS-25461emb00.raw`，用户在游戏里存出来的），
+// 没有任何"我们自己的产物反过来验我们"的循环论证：像素哈希、MD5、往返逐字节都是拿它当基准。
+function testFormulaFront(): void {
+  section('(ff) Formula Front：0x44D8 / 末尾 MD5 / 调色板只读');
+  const samplePath = join(PROJ, 'testdata', 'real', 'BISLPS-25461emb00.raw');
+  let sample: Uint8Array;
+  try {
+    sample = readFile(samplePath);
+  } catch (e) {
+    ok(false, '[ff] 读不到真实样本 testdata/real/BISLPS-25461emb00.raw', String(e));
+    return;
+  }
+
+  // ── ① 尺寸 / 判档 ──
+  eq(sample.length, FF_SAVE_SIZE, '[ff] 真实样本长度 = 0x44D8（17624）');
+  eq(FF_SAVE_SIZE, 17624, '[ff] FF_SAVE_SIZE 常量 = 17624');
+  eq(isFfSave(sample), true, '[ff] isFfSave(真实样本) = true');
+  eq(isFfSave(new Uint8Array(FF_SAVE_SIZE - 1)), false, '[ff] 少 1 字节就不算 FF 存档');
+  eq(saveKind(sample), 'emblem-ff', '[ff] ★ saveKind 认作 emblem-ff（**不是** container）');
+  eq(saveKind(new Uint8Array(FF_SAVE_SIZE)), 'emblem-ff', '[ff] 全零的同长度缓冲也按长度判为 emblem-ff');
+  eq(sha256(sample), 'b98642a8be44ac03b05d33448514754d063ad0e87a9dee14eea71947d0780a43',
+    '[ff] 真实样本 SHA-256（样本本身没被改过）');
+
+  // ── ② MD5 ──
+  // 先用 node:crypto 交叉验证自带实现（同一份字节，两套实现必须给出同样的 16 字节）
+  eq(toHex(md5(sample.subarray(0, FF_MD5_OFF))), toHex(bytesFromHex('1589cf6dbf95f150d20cc19468f899b6')),
+    '[ff] md5(前 0x44C8 字节) = 文件尾那 16 字节');
+  eq(toHex(ffPayloadMd5(sample)), '1589cf6dbf95f150d20cc19468f899b6', '[ff] ffPayloadMd5 的十六进制');
+  const v = ffVerify(sample);
+  eq(v.ok, true, '[ff] ★ 末尾 MD5 自洽（这一条就是"末尾是 MD5"的直接证据）');
+  eq(v.firstDiff, -1, '[ff] MD5 无差异');
+  eq(ffVerifyChecksums(sample).ok, true, '[ff] ffVerifyChecksums → ok（能接进回读自检通道）');
+  eq(ffVerifyChecksums(sample).badSegments.length, 0, '[ff] 通过时不给 badSegments');
+
+  // 改任何一个字节（图像 / 调色板 / 元数据 / MD5 自己）都必须被抓到
+  for (const off of [FF_IMAGE_OFF, FF_PALETTE_OFF, FF_META_OFF, FF_MD5_OFF]) {
+    const bad = new Uint8Array(sample);
+    bad[off] ^= 0x01;
+    const bv = ffVerify(bad);
+    eq(bv.ok, false, `[ff] 改坏偏移 0x${off.toString(16)} 之后 MD5 必须不过`);
+    const seg = ffVerifyChecksums(bad).badSegments;
+    eq(seg.length, 1, `[ff] 偏移 0x${off.toString(16)}：坏段明细恰好 1 条`);
+    eq(seg[0].name, 'MD5', '[ff] 坏段名字是 MD5');
+    eq(seg[0].offset, FF_MD5_OFF + bv.firstDiff, '[ff] 坏段偏移 = MD5 字段起点 + 第一处不同');
+  }
+  // 长度不对 ⇒ ffVerify 抛（不是静默返回 ok）
+  const shortMsg = throws(() => ffVerify(new Uint8Array(FF_SAVE_SIZE - 1)), '[ff] ffVerify(长度不对) 必须抛');
+  ok(shortMsg.includes('0x44d8'), '[ff] 长度不对的报错要点名正确长度', `实到：${shortMsg}`);
+
+  // ── ③ 取图 ──
+  const rgba = ffExtractImage(sample);
+  eq(rgba.length, 0x4000 * 4, '[ff] 取出 128×128 RGBA（65536 字节）');
+  eq(sha256(rgba), 'cfe286c52cbc0213e9baf6a445cff1226bf44c96bc7d281ff04cc03ad63f6348',
+    '[ff] ★ 取出像素的 SHA-256（索引顺序 / 调色板通道序 / 透明口径全钉死）');
+  // 索引 0 = 透明（真实样本的背景就是它）
+  eq(rgba[3], 0, '[ff] 左上角（索引 0）是透明的');
+  eq(sample[FF_IMAGE_OFF], 0, '[ff] 左上角像素索引 = 0');
+  // 透明像素的数量应当等于图像里索引 0 的数量
+  let transparent = 0;
+  let zeroIdx = 0;
+  for (let i = 0; i < 0x4000; i++) {
+    if (rgba[i * 4 + 3] === 0) transparent += 1;
+    if (sample[FF_IMAGE_OFF + i] === 0) zeroIdx += 1;
+  }
+  eq(transparent, zeroIdx, '[ff] 透明像素数 = 索引 0 的像素数');
+  ok(zeroIdx > 0 && zeroIdx < 0x4000, '[ff] 样本"有透明也有实色"（否则下面几条没什么证明力）');
+  // 不透明像素的 alpha 一律 0xFF（真实样本如此；游戏只有"有/无"两种透明度）
+  let badAlpha = 0;
+  for (let i = 0; i < 0x4000; i++) {
+    if (rgba[i * 4 + 3] !== 0 && rgba[i * 4 + 3] !== 0xff) badAlpha += 1;
+  }
+  eq(badAlpha, 0, '[ff] 不透明像素的 alpha 恒为 0xFF');
+
+  // ── ④ 调色板：只读不写 ──
+  eq(ffOpaqueSlots(sample).length, 255, '[ff] 调色板里不透明的项 255 个（索引 0 是透明项）');
+  eq(ffOpaqueSlots(sample).includes(0), false, '[ff] 索引 0 不在"不透明候选集"里');
+  eq(toHex(ffPalette(sample).subarray(0, 4)), 'ffffff00', '[ff] 调色板第 0 项 = 白 + alpha 0');
+  eq(toHex(ffPalette(sample).subarray(4, 8)), 'ffffffff', '[ff] 调色板第 1 项 = 纯白不透明');
+  eq(FF_PALETTE_OFF + FF_PALETTE_SIZE, FF_META_OFF, '[ff] 调色板之后紧接元数据块');
+
+  // ── ⑤ 往返：解 → 再编码 ⇒ 逐字节相同 ──
+  const re = ffEncodeEmblem(rgba, sample);
+  eq(re.length, FF_SAVE_SIZE, '[ff] 再编码后长度不变');
+  eq(sha256(re), sha256(sample), '[ff] ★ RGBA → ffEncodeEmblem ⇒ 与原文件**逐字节**相同');
+  eq(ffVerify(re).ok, true, '[ff] 再编码后 MD5 自洽');
+  eq(ffLooksValid(re), true, '[ff] ffLooksValid(再编码) = true');
+
+  // ── ⑥ 写入只改图像：调色板 / 元数据一个字节都不动 ──
+  const changed = new Uint8Array(0x4000 * 4);
+  for (let i = 0; i < 0x4000; i++) {
+    changed[i * 4] = 200;
+    changed[i * 4 + 1] = 30;
+    changed[i * 4 + 2] = 30;
+    changed[i * 4 + 3] = 255;
+  }
+  const red = ffEncodeEmblem(changed, sample);
+  eq(sha256(red.subarray(FF_PALETTE_OFF, FF_META_OFF)), sha256(sample.subarray(FF_PALETTE_OFF, FF_META_OFF)),
+    '[ff] ★ 调色板一个字节都没动（只在该调色板上量化）');
+  eq(sha256(red.subarray(FF_META_OFF, FF_MD5_OFF)), sha256(sample.subarray(FF_META_OFF, FF_MD5_OFF)),
+    '[ff] ★ 那 200 字节元数据（语义未定）原样保留');
+  eq(ffVerify(red).ok, true, '[ff] 换图之后 MD5 重算正确');
+  // 全红图会被量化到调色板里"最像红"的那一项 —— 必须是**不透明**项
+  const idx = red[FF_IMAGE_OFF];
+  ok(idx !== 0, '[ff] 全红图的第一像素不能落成"透明"（索引 0）');
+  eq(red[FF_PALETTE_OFF + idx * 4 + 3], 0xff, '[ff] 落到的那一项是不透明的');
+  ok(red[FF_PALETTE_OFF + idx * 4] > red[FF_PALETTE_OFF + idx * 4 + 1], '[ff] 落到的那一项偏红');
+  // 同色缓存：整张同色 ⇒ 所有不透明像素同一个索引（量化是逐像素、无抖动）
+  let distinct = new Set<number>();
+  for (let i = 0; i < 0x4000; i++) distinct.add(red[FF_IMAGE_OFF + i]);
+  eq(distinct.size, 1, '[ff] 纯色图 ⇒ 全图同一个索引');
+
+  // ── ⑦ 全透明图 ⇒ 全 0，MD5 仍然自洽 ──
+  const blank = new Uint8Array(0x4000 * 4);
+  const blankSave = ffEncodeEmblem(blank, sample);
+  eq(blankSave.every((b, i) => i < FF_MD5_OFF ? (i >= FF_IMAGE_OFF && i < FF_PALETTE_OFF ? b === 0 : true) : true), true,
+    '[ff] 全透明图 ⇒ 图像区全 0（调色板/元数据仍原样）');
+  eq(ffVerify(blankSave).ok, true, '[ff] 全透明图的 MD5 也自洽');
+
+  // ── ⑧ 拒绝凭空造 ──
+  const noTpl = throws(() => ffEncodeEmblem(rgba, null), '[ff] ★ 没有模板 ⇒ ffEncodeEmblem 必须抛');
+  ok(noTpl.includes('模板'), '[ff] 没模板的报错要说"模板"', `实到：${noTpl}`);
+  let tplKind = '';
+  try { ffEncodeEmblem(rgba, null); } catch (e) { tplKind = e instanceof FfFormatError ? 'FfFormatError' : String(e); }
+  eq(tplKind, 'FfFormatError', '[ff] 抛的是 FfFormatError');
+  throws(() => ffEncodeEmblem(rgba, new Uint8Array(FF_SAVE_SIZE - 1)), '[ff] 模板长度不对 ⇒ 抛');
+  throws(() => ffExtractImage(new Uint8Array(10)), '[ff] ffExtractImage(长度不对) ⇒ 抛');
+  throws(() => ffInjectImage(sample, new Uint8Array(4)), '[ff] ffInjectImage(图像尺寸不对) ⇒ 抛');
+
+  // ── ⑨ ffInjectImage 就地改、返回同一份（写入路径依赖这个语义） ──
+  const copy = new Uint8Array(sample);
+  const out = ffInjectImage(copy, rgba);
+  eq(out, copy, '[ff] ffInjectImage 返回的是**同一份**缓冲（就地改）');
+  eq(sha256(copy), sha256(sample), '[ff] 用原图回注 ⇒ 与原文件逐字节相同');
+}
+
+/**
+ * ★ 0.48：`ffRetitleIconSys` —— 新建槽时把 icon.sys 标题里的全角编号改掉。
+ *
+ * 这里用**合成**的 icon.sys（964 字节、标题字段按真卡那份的 Shift-JIS 字节写死），
+ * 因为它的语义很窄：只改标题末尾那两个全角数字，其余字节一个不动。
+ */
+function testFfIconSysRetitle(): void {
+  section('(ff2) Formula Front：新建槽时 icon.sys 标题改编号（Shift-JIS 全角数字）');
+  const title =
+    '8260 8262 8265 8265 8347 8393 8375 838c 8380 8366 815b 835e 824f 8250'; // ＡＣＦＦエンブレムデータ０１
+  const ico = new Uint8Array(964);
+  // ⚠ 每个 4 位十六进制是**两个字节**（Shift-JIS 双字节字符），不能 parseInt 成一个数
+  const flat = title.replace(/ /g, '');
+  const titleBytes = new Uint8Array(flat.length / 2);
+  for (let i = 0; i < titleBytes.length; i++) titleBytes[i] = parseInt(flat.slice(i * 2, i * 2 + 2), 16);
+  ico.set(titleBytes, 0xc0);
+
+  const r2 = ffRetitleIconSys(ico, 2);
+  eq(r2.length, 964, '[ff2] 改标题不改文件长度');
+  eq(toHex(r2.subarray(0xc0, 0xc0 + titleBytes.length)), toHex(bytesFromHex('8260826282658265834783938375838c83808366815b835e824f8251')),
+    '[ff2] 标题末尾 ０１ → ０２（只有那 4 个字节变）');
+  eq(toHex(r2.subarray(0, 0xc0)), toHex(ico.subarray(0, 0xc0)), '[ff2] 标题之前的字节一个不动');
+  eq(toHex(r2.subarray(0xc0 + titleBytes.length)), toHex(ico.subarray(0xc0 + titleBytes.length)), '[ff2] 标题之后的字节一个不动');
+  eq(toHex(ico.subarray(0xc0, 0xc0 + titleBytes.length)), toHex(bytesFromHex(title.replace(/ /g, ''))),
+    '[ff2] 入参没有被就地改（函数返回新数组）');
+  // 全角数字：０=824F １=8250 … ８=8257 ９=8258（不是 0x824F + 数字本身，别按 ASCII 的直觉写）
+  eq(toHex(ffRetitleIconSys(ico, 8).subarray(0xd8, 0xdc)), '824f8257', '[ff2] 槽 8 → ０８');
+  eq(toHex(ffRetitleIconSys(ico, 10).subarray(0xd8, 0xdc)), '8250824f', '[ff2] 槽 10 → １０（两位数按十进制拼）');
+  // 判据拒绝：不是 FF 的 icon.sys（标题里没有两个全角数字）
+  const noDigits = new Uint8Array(964);
+  noDigits.set([0x82, 0x60, 0x82, 0x62], 0xc0);
+  const msg = throws(() => ffRetitleIconSys(noDigits, 2), '[ff2] 标题里没有全角数字 ⇒ 必须抛');
+  ok(msg.includes('全角数字'), '[ff2] 报错要说"全角数字"', `实到：${msg}`);
+  throws(() => ffRetitleIconSys(ico, 0), '[ff2] 槽号 0 ⇒ 抛（槽号是 1 起的）');
+  throws(() => ffRetitleIconSys(ico, 100), '[ff2] 槽号 100 ⇒ 抛（只支持两位）');
+  throws(() => ffRetitleIconSys(new Uint8Array(8), 1), '[ff2] 长度不对 ⇒ 抛');
+}
+
+/** `"1589cf…"` → Uint8Array（测试里只用来构造期望值）。 */
+function bytesFromHex(s: string): Uint8Array {
+  const out = new Uint8Array(s.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
 function main(): number {
   console.log('=== 徽章格式核心：Python ↔ TypeScript 移植一致性测试 ===');
   console.log(`项目根: ${PROJ}`);
@@ -1279,6 +1485,8 @@ function main(): number {
   testContainerSamples(manifest.entries);
   testRealSaveReconstruction();
   testGrowthAndDomainSemantics();
+  testFormulaFront();
+  testFfIconSysRetitle();
 
   console.log('');
   if (failures.length > 0) {

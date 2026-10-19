@@ -10,10 +10,13 @@ or pull emblems off a card and export them as PNG.
 the interface comes in **Chinese / English / Japanese / Korean**, switchable at the top right
 (it follows your browser language unless you pick one, and remembers your pick).
 
-> **Verified so far**: reading (10 real samples + cross-validation against the official `acet.exe`) · writing and
+> **Verified so far**: reading (11 real samples + cross-validation against the official `acet.exe`) · writing and
 > creating slots (non-LR and LR, tested in-game) · round-trip fidelity.
 > **Not verified yet**: creating a new `E##` save folder · real samples for AC3 / AC2 / AC2AA / NB · whether the
-> game validates the 9-byte per-game constant · PS1 (this tool does not do PS1).
+> game validates the 9-byte per-game constant · **writing Formula Front** (reading is verified against a real card:
+> the pixels, the MD5 and the byte-exact round-trip of `BISLPS-25461emb00` all line up — see
+> `docs/01-项目理解/02-存档格式规范.md` §九; writing is just "same block, new image, recomputed MD5", but it has
+> not been looked at in-game yet) · PS1 (this tool does not do PS1).
 > ⇒ So the page opens with a notice you have to dismiss: **back up your memory card yourself**, and
 > **fully exit PCSX2 before writing**.
 
@@ -45,6 +48,10 @@ confirm → overwrite → read-back path) · **Save card as** saves the current 
 > ⚠ **"This card has no directory for that game" is refused**: for non-LR games every slot is a complete save
 > directory (an emblem plus `icon.sys` and icon files), and creating just the directory would produce something the
 > game rejects. Fix: **save an emblem into that slot in the game first**, then come back.
+> ★ **The one exception is Formula Front** (v0.48): its slot folder holds only three files, so as long as the card
+> has **any** FF emblem folder of the same game, the tool **creates** the target slot after it (copying `icon.sys` /
+> the icon file and renumbering the title). That new path is **not verified in-game yet** - the hint line says
+> "this slot is new" before you write.
 > The full reason appears only in the line **above** the write button (hover it for the mechanics) — nothing was
 > written, not a single byte.
 
@@ -55,6 +62,7 @@ confirm → overwrite → read-back path) · **Save card as** saves the current 
 | Silent Line (US / JP) | `BASLUS-20644E02` / `BISLPS-25169E##` | ✅ real samples + verified in-game |
 | Nexus | `BISLPS-25338E##` | ✅ same |
 | Last Raven | `BISLPS-25462EMB\data0..7` | ✅ same (including creating a slot, verified in-game) |
+| Formula Front (JP) | `BISLPS-25461emb##` (one folder per slot) | 📖 reading verified on a real card · ✍ writing awaits an in-game check |
 | AC3 · AC2 · AC2AA · Nine Breaker | `<game ID>E##` | ⚠ same rule, but **no real samples** ⇒ the UI marks them "unverified" |
 | Custom | type the game ID yourself (e.g. `BASLUS-20435`) | fallback for anything not listed |
 
@@ -76,7 +84,7 @@ confirm → overwrite → read-back path) · **Save card as** saves the current 
 | `web/` | ★ The tool itself: `dist/emblem-tool.html` (the deliverable, double-click to run) · `src/core/` format & image core · `src/ui/` interface · `test/` four test suites · `check.mjs` one-command checks · `SPEC.md` / `PORT-NOTES.md` (technical contract & implementation notes) |
 | `docs/` | Reverse-engineering notes: save format, image pipeline, memory cards & save handling, known limits, sources & checksums |
 | `tools/` | Python cross-check layer (`acet_format.py` / `prepare_image.py` / `selftest.py`) |
-| `testdata/` | Test samples: synthetic ones + 10 real emblem saves |
+| `testdata/` | Test samples: synthetic ones + 11 real emblem saves (including FF's `BISLPS-25461emb00.raw`) |
 | `_selftest/` | Self-check reports + the real-save regression check |
 
 To build it yourself, run the checks, or read why the UI works the way it does, see `web/README.md`

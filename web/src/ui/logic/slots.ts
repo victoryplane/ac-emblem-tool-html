@@ -99,10 +99,15 @@ function isDotName(name: string): boolean {
   return name === '.' || name === '..';
 }
 
-/** 目录名像不像"徽章存档目录"：`E##` 结尾（SL/NX/… 每槽一个目录）或 `EMB` 结尾（LR）。 */
+/**
+ * 目录名像不像"徽章存档目录"：
+ *   · `E##` 结尾（SL / NX / AC3 … 每槽一个目录）
+ *   · `EMB` 结尾（LR：一个目录装 8 槽）
+ *   · `EMB##` 结尾（★ 0.48 FF：`BISLPS-25461emb00` —— 每槽一个目录，**小写 emb + 两位槽号**）
+ */
 function isEmblemDirName(name: string): boolean {
   const upper = name.toUpperCase();
-  return /E\d\d$/.test(upper) || upper.endsWith('EMB');
+  return /E\d\d$/.test(upper) || upper.endsWith('EMB') || /EMB\d\d$/.test(upper);
 }
 
 function localIndexFromFileName(name: string): number | null {
@@ -186,8 +191,11 @@ function buildSlotModel(dirs: readonly SlotDirLike[]): SlotModel {
   for (const dir of dirs) {
     const upper = dir.name.toUpperCase();
     const isLrArchive = upper.endsWith('EMB');
-    const eMatch = /E(\d\d)$/.exec(upper);
-    if (!isLrArchive && !eMatch) continue; // 不认这个目录
+    // ★ 0.48：FF 的 `…emb##` —— 与 `…EMB`、`…E##` 都不是一回事，单独认。
+    //   ⚠ `/E(\d\d)$/` 不会误吃 `…EMB00`（末尾三字是 `B00`，E 不在位），所以两者可以并存。
+    const ffMatch = /EMB(\d\d)$/.exec(upper);
+    const eMatch = ffMatch ? null : /E(\d\d)$/.exec(upper);
+    if (!isLrArchive && !ffMatch && !eMatch) continue; // 不认这个目录
     dirNames.push(dir.name);
 
     if (isLrArchive) {
@@ -209,7 +217,8 @@ function buildSlotModel(dirs: readonly SlotDirLike[]): SlotModel {
       continue;
     }
 
-    const dirIndex = Number(eMatch![1]);
+    // FF 与 `E##` 同一个口径：目录名末尾那两位就是就地槽号
+    const dirIndex = Number(ffMatch ? ffMatch[1] : eMatch![1]);
     if (!perSlotDirIndices.includes(dirIndex)) perSlotDirIndices.push(dirIndex);
     // 一个 `E##` 目录只占**一个**槽：优先就地槽号 = dirIndex
     const li = dirIndex < SLOT_COUNT ? dirIndex : dirIndex % SLOT_COUNT;

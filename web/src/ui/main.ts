@@ -17,7 +17,7 @@
 import type { ScaleKernelChoice } from '../core/image.ts';
 
 import { DEFAULT_PARAMS, KERNEL_LABELS, PARAM_LIMITS } from './logic/defaults.ts';
-import { GAMES, DEFAULT_GAME_ID, findGame, resolveGame, type GameContext } from './logic/games.ts';
+import { GAMES, DEFAULT_GAME_ID, findGame, layoutOf, resolveGame, type GameContext } from './logic/games.ts';
 import { MCD_SLOT_OF, analyzePcsx2, type IniFileLike } from './logic/pcsx2.ts';
 import {
   DEFAULT_PCSX2_DIR,
@@ -362,6 +362,12 @@ function onGameChanged(): void {
       setStatus(redo(), redo);
     } else {
       // ★ 0.37：切作品只报"切到了哪个作品"（原来后面还挂一句槽位摘要，那句已按用户要求整句删除）。
+      // ★ 0.48：**`entry` 必须在这里自己取** —— 原来直接用了 `renderGameBlock()` 里的局部变量，
+      //   `onGameChanged()` 作用域里根本没有它 ⇒ 只要"切到一个卡上**有**目录的作品"就抛
+      //   `ReferenceError: entry is not defined`（0.48 打开 FF 卡时截图抓到的）。
+      //   ⚠ 这条路径只在 `dirNames.length > 0` 时走，所以"切到没目录的作品"那半边一直是好的 ——
+      //   这正是它藏了这么久的原因。
+      const entry = findGame(($('game-select') as HTMLSelectElement | null)?.value ?? '');
       setStatusPair(`已切到「${entry?.label ?? ''}」`, `Switched to "${entry?.en ?? ''}"`, `「${entry?.ja ?? ''}」に切り替えました`, `"${entry?.ko ?? ''}"(으)로 전환했습니다`);
     }
   }
@@ -377,7 +383,8 @@ function updateWriteHints(): void {
     return;
   }
   const ctx = r.ctx;
-  const isLr = ctx.entry.form === 'lr-archive';
+  // ★ 0.48：'ac' / 'lr' / 'ff' —— 只有 'ac' 需要那 9 字节作品常量（FF 连块头都没有）。
+  const layout = layoutOf(ctx);
   // ★ 0.21：单槽（〔批量写 8 槽〕已删）⇒ 一个目标、一条提醒、一条拒绝理由。
   const plan = planWriteTarget(ctx, state.selectedSlot);
   if (plan.error) {
@@ -400,7 +407,7 @@ function updateWriteHints(): void {
   if (state.model.dirNames.length === 0) {
     host.appendChild(el('div', { class: 'warn', text: '⚠ ' + noDirForGameText(state.model.serial, state.model.excludedDirNames.length) }));
   }
-  if (!isLr) {
+  if (layout === 'ac') {
     const same = sameGameBlocks(ctx);
     host.appendChild(
       el('div', {
@@ -737,8 +744,9 @@ async function doWrite(slotIndex: number, what: string): Promise<void> {
   }
   setBusy(true, t(`${what}中：生成徽章块 → 在内存副本上写 → 回读自检 …`, `${what} in progress: build the emblem block → write to the in-memory copy → read back to verify …`, `${what}中：エンブレムブロックを生成 → メモリー上のコピーに書き込み → 読み戻して自己検証 …`, `${what} 중: 엠블럼 블록 생성 → 메모리 사본에 쓰기 → 다시 읽어 자체 검증 …`));
   try {
-    const isLr = r.ctx.entry.form === 'lr-archive';
-    const outcome = await writeSlot(r.ctx, slotIndex, { isLr, finalCheck: recheckFinal });
+    // ★ 0.48：`'ac'` / `'lr'` / `'ff'` —— 三种块布局，写入路径按它分派（见 `logic/games.ts::EmblemLayout`）。
+    const layout = layoutOf(r.ctx);
+    const outcome = await writeSlot(r.ctx, slotIndex, { layout, finalCheck: recheckFinal });
     showLog(outcome.lines);
     // ★★ 0.40（审查抓到的真 bug）：**无论成败都要重建视图** —— `writeSlot()` 的顺序是
     //   "先在内存副本上写 → 弹落盘确认框 → 回读自检"，所以用户在确认框里按**取消**、或回读自检

@@ -340,6 +340,15 @@ export interface CreateFileOptions {
   countLocation?: 'rootEntry' | 'dotEntry' | 'none';
   /** 目录链放不下新项时，允许再分配一个簇（默认 true）。 */
   extendDir?: boolean;
+  /**
+   * ★ 0.48：目录里**还没有任何文件**时用的"克隆模板"（来自别的目录的一条文件 dirent）。
+   *
+   * 用途：Formula Front 的"新建槽"要先建目录、再往里面写 icon.sys / 图标 / 徽章。
+   * 目录刚建好时里面只有 `.` / `..`，找不到可克隆的同目录文件 —— 没有模板就只能
+   * `makeDirent()`（时间戳等字段是 0xFF，与游戏产物不同）。传一条真实文件 dirent 进来，
+   * 建出来的条目就与游戏自己写的同形。
+   */
+  templateDirent?: Dirent | null;
 }
 
 // ─────────────────────────── Card ───────────────────────────
@@ -1166,12 +1175,15 @@ export class Card {
       slot = dirChain.length * this.ppc; // 新簇的第 0 页
     }
 
-    // 克隆一条同目录下、有内容的文件 dirent（时间戳等字段随之合法）
-    let template: Dirent | null = null;
-    for (const s of this.dirents(dirFirst, Math.max(dirCount, 1))) {
-      if (!s.isDot && s.length > 0 && s.cluster > 0) {
-        template = s;
-        break;
+    // 克隆一条有内容的文件 dirent（时间戳等字段随之合法）。
+    // ★ 0.48：调用方可以指定模板（新建目录后写第一个文件时，同目录里还没有可克隆的文件）。
+    let template: Dirent | null = opts.templateDirent ?? null;
+    if (!template) {
+      for (const s of this.dirents(dirFirst, Math.max(dirCount, 1))) {
+        if (!s.isDot && s.length > 0 && s.cluster > 0) {
+          template = s;
+          break;
+        }
       }
     }
     const entry = template
@@ -1204,6 +1216,107 @@ export class Card {
       dirExtensionClusters,
       touchedPages: [...new Set(touched)].sort((a, b) => a - b),
       dirCountUpdate,
+    };
+  }
+
+  // ── 高层：在根目录里新建一个目录 ──
+
+  /**
+   * ★ 0.48：在根目录里新建一个**目录**（克隆一个已存在的目录的形态）。
+   *
+   * 这是"Formula Front 新建徽章槽"那一半：游戏会为每个徽章槽建一个
+   * `BISLPS-25461embNN` 目录（`.` / `..` / 徽章文件 / icon.sys / icon1.ico）。
+   * 本函数只负责**建目录骨架**；里面的文件由调用方用 `createFileInDir()` 写。
+   *
+   * 步骤（与 `createFileInDir()` 同一条已验证的路子）：
+   *   1. 分配 N 簇（默认 2 = 4 个目录项槽），**每一页都铺成"整页 FF 空 dirent + 算好的 ECC"**；
+   *   2. 写 FAT 链（末簇 = `0x80000000 | 0x7FFFFFFF`）；
+   *   3. 在根目录里找空槽；**根目录满了就扩 1 簇**（与子目录扩簇完全同一套逻辑）；
+   *   4. 根目录条目 = **克隆模板目录的根条目**（mode / 时间戳全继承），只改名字 / 首簇 / 项数；
+   *   5. `.` / `..` = 克隆模板目录里的那两条，只把 `.` 的 parent 改成新目录在根目录里的项号；
+   *   6. 根目录项数 +1（根目录的项数记在它自己的 `.` 项的 length 上）。
+   *
+   * ⚠ 根目录扩簇是**全卡最危险的一次分配**（根目录坏 = 整张卡认不出来）：走的是
+   *   `createFileInDir()` 里已经在真卡上验证过的同一段代码（`BISLPS-25462EMB` 扩目录簇），
+   *   并且新簇的两页都初始化成空槽形态 —— 不是"只写用到的那个槽"。
+   */
+  createDirInRoot(
+    dirName: string,
+    templateDirName: string,
+    opts: { clusters?: number } = {},
+  ): {
+    dirName: string;
+    firstCluster: number;
+    clusters: number[];
+    rootSlot: number;
+    rootExtensionClusters: number[];
+    touchedPages: number[];
+  } {
+    if (!dirName || dirName.length > 32) throw new Error(`目录名不合法：${JSON.stringify(dirName)}`);
+    if (this.findInRoot(dirName)) throw new Error(`根目录里已经有 ${dirName}`);
+    const tpl = this.findInRoot(templateDirName);
+    if (!tpl) throw new Error(`根目录里没有模板目录 ${templateDirName}`);
+    if (!modeIsDir(tpl.mode)) throw new Error(`${templateDirName} 不是目录（mode=0x${tpl.mode.toString(16)}）`);
+
+    const touched: number[] = [];
+    const used = this.collectUsedClusters();
+    const ncl = Math.max(1, Math.floor(opts.clusters ?? 2));
+    const clusters = this.allocateClusters(ncl, used);
+    for (const cl of clusters) {
+      for (let k = 0; k < this.ppc; k++) {
+        const page = this.dataPage(cl, k);
+        this.writePageRaw(page, this.emptyDirent());
+        touched.push(page);
+      }
+      touched.push(...this.fatPages(cl));
+    }
+    this.writeFatChain(clusters);
+
+    // ---- 根目录里找个空槽；满了就把根目录链也扩 1 簇 ----
+    const rootCount = this.dirCount(this.rootdir);
+    const rootExtensionClusters: number[] = [];
+    let slot = this.findFreeSlot(this.rootdir, rootCount);
+    if (slot < 0) {
+      const used2 = this.collectUsedClusters();
+      for (const cl of clusters) used2.add(cl);
+      const newCl = this.allocateClusters(1, used2)[0];
+      rootExtensionClusters.push(newCl);
+      const rootChain = this.chain(this.rootdir, 4096);
+      const tail = rootChain[rootChain.length - 1];
+      touched.push(...this.fatPages(tail), ...this.fatPages(newCl));
+      this.writeFat(tail, (0x80000000 | newCl) >>> 0);
+      this.writeFat(newCl, (0x80000000 | FAT_END) >>> 0);
+      touched.push(this.dataPage(newCl, 0), this.dataPage(newCl, 1));
+      this.writePageRaw(this.dataPage(newCl, 0), this.emptyDirent());
+      this.writePageRaw(this.dataPage(newCl, 1), this.emptyDirent());
+      slot = rootChain.length * this.ppc;
+    }
+
+    // ---- 根目录条目（克隆模板：mode 0x8427 / 时间戳都跟着走）----
+    const rootEntry = this.cloneDirent(tpl, dirName, clusters[0], 0);
+    touched.push(this.writeDirentIntoSlot(this.rootdir, slot, rootEntry));
+
+    // ---- `.` / `..` ----
+    const tplEntries = this.dirents(tpl.cluster, Math.max(tpl.length, 1));
+    const dot = tplEntries.find((e) => e.name === '.');
+    const dotdot = tplEntries.find((e) => e.name === '..');
+    if (dot) {
+      const e = this.cloneDirent(dot, '.', 0, 0);
+      setU32le(e, DIRENT_PARENT, slot >>> 0);
+      touched.push(this.writeDirent(clusters[0], 0, e));
+    }
+    if (dotdot) touched.push(this.writeDirent(clusters[0], 1, this.cloneDirent(dotdot, '..', 0, 0)));
+
+    // ---- 根目录项数 +1（记在根目录自己的 `.` 项上）----
+    touched.push(this.setDirentLength(this.rootdir, 0, Math.max(rootCount, slot + 1)));
+
+    return {
+      dirName,
+      firstCluster: clusters[0],
+      clusters,
+      rootSlot: slot,
+      rootExtensionClusters,
+      touchedPages: [...new Set(touched)].sort((a, b) => a - b),
     };
   }
 
@@ -1266,10 +1379,21 @@ export function modeIsDir(mode: number): boolean {
   return (mode & 0x80) === 0; // bit7 = "是文件" ⇒ 取反就是目录
 }
 
-/** `E##` 结尾（SL / NX / NB 的徽章槽目录）或 `EMB` 结尾（LR 的徽章目录）。 */
+/**
+ * 徽章目录名判据（**按名字**，不看 mode 位）：
+ *   · `E##` 结尾  —— SL / NX / NB / AC3 … 每槽一个目录
+ *   · `EMB` 结尾 —— LR 的归档目录（一个目录装 `data0..7`）
+ *   · `emb##` 结尾（★ 0.48）—— FF（PS2 SLPS-25461）每槽一个目录，真卡是 `BISLPS-25461emb00`
+ *
+ * ⚠ `E##` 那条不会误吃 `…emb00`（末尾三字符是 `b00`），两条可以并存。
+ * ⚠ 大小写：真卡上 FF 的目录名是**小写 emb**，但这里一律按大写比较 ——
+ *   卡上的名字来自 dirent，别指望它的大小写总是对。
+ */
 export function isEmblemArchiveDirName(name: string): boolean {
-  if (/E\d\d$/.test(name)) return true;
-  return name.endsWith('EMB');
+  const upper = name.toUpperCase();
+  if (/E\d\d$/.test(upper)) return true;
+  if (upper.endsWith('EMB')) return true;
+  return /EMB\d\d$/.test(upper);
 }
 
 // ─────────────────────────── 入口 ───────────────────────────

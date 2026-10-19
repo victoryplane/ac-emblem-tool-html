@@ -63,6 +63,8 @@
  *   判 `破損ファイル`。本实现按真实位置写，详见 applyChecksums / verifyChecksums。
  */
 
+import { FF_SAVE_SIZE } from './ff.ts';
+
 // --------------------------------------------------------------------------
 // 常量（对应上游 acet/acet.h）
 // --------------------------------------------------------------------------
@@ -213,8 +215,15 @@ export const MAX_COLORS = 255;
 /** extractImage 的三种 alpha 口径。 */
 export type AlphaMode = 'acet' | 'gs' | 'index0';
 
-/** saveKind 的四档结果。 */
-export type SaveKind = 'emblem-raw' | 'emblem-lr' | 'container' | 'unknown';
+/**
+ * saveKind 的五档结果。
+ *
+ * ★ `'emblem-ff'`（0.48）：Formula Front（PS2 SLPS-25461）的徽章存档是**另一种布局**
+ *   （17624 字节 = 0x44D8，图/调色板/元数据/MD5，没有 18 段校验）—— 见 `ff.ts`。
+ *   它比非 LR 的 0x4440 **长**，旧逻辑会把它当 `container` 去找那 12 字节魔数（必然找不到），
+ *   所以在"容器"分支之前先按长度认领它。
+ */
+export type SaveKind = 'emblem-raw' | 'emblem-lr' | 'emblem-ff' | 'container' | 'unknown';
 
 /** 一段校验的布局：(段起点, 数据字节数, 校验字节位置, 种子)。 */
 export type Segment = {
@@ -1153,10 +1162,11 @@ export function encodeEmblem(image: Uint8Array, options: EncodeEmblemOptions = {
   return applyChecksums(save);
 }
 
-/** 尽力判断这是什么。返回 'emblem-raw' / 'emblem-lr' / 'container' / 'unknown'。 */
+/** 尽力判断这是什么。返回 'emblem-raw' / 'emblem-lr' / 'emblem-ff' / 'container' / 'unknown'。 */
 export function saveKind(save: Uint8Array): SaveKind {
   const n = save.length;
   if (n === LR_SAVE_SIZE) return 'emblem-lr';
+  if (n === FF_SAVE_SIZE) return 'emblem-ff';
   if (n === SAVE_SIZE) return 'emblem-raw';
   if (n > SAVE_SIZE) {
     try {

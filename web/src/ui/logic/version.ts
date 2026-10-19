@@ -25,10 +25,11 @@
  */
 
 /** 交付版本号（用户可见）。规则见文件头。 */
-export const APP_VERSION = '0.47';
+export const APP_VERSION = '0.48';
 
-/** 界面开发标记（只有我们看；每次**界面改动** +1）。★ 0.47 加日/韩语 = 界面改动 ⇒ +1。 */
-export const UI_BUILD_TAG = 'M4-UI-48';
+/** 界面开发标记（只有我们看；每次**界面改动** +1）。★ 0.48 加 Formula Front 作品项 = 界面改动 ⇒ +1。 */
+export const UI_BUILD_TAG = 'M4-UI-49';
 
-/** `v0.47` 这种带 `v` 前缀的显示形式（界面上统一用它）。 */
+/** 带 `v` 前缀的显示形式（界面上统一用它）。**别在这里写死版本号**：
+ *  `ui.test.ts` 有一条判据要求「产物里只出现一个 0.x 字面量」，注释也会进产物。 */
 export const APP_VERSION_LABEL = `v${APP_VERSION}`;

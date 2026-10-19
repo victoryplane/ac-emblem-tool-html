@@ -16,8 +16,16 @@
 
 import { t } from './i18n.ts';
 
-/** 存档目录名的布局：LR 是单个 `…EMB` 目录包 8 个 `dataN`；其余是每槽一个 `…E##` 目录。 */
-export type WorksForm = 'per-slot' | 'lr-archive';
+/**
+ * 存档目录名的布局：
+ *   · `'lr-archive'`：LR 是单个 `…EMB` 目录包 8 个 `dataN`；
+ *   · `'per-slot'`：每槽一个 `…E##` 目录（目录里是与目录同名的徽章文件）；
+ *   · `'per-slot-emb'`：★ 0.48 —— Formula Front 每槽一个 `…emb##` 目录（**小写 emb**，
+ *     后面还跟两位槽号）。真卡实测 `BISLPS-25461emb00\BISLPS-25461emb00`。
+ *     ⚠ 它**不是** LR 那种 `…EMB` 归档目录：`…EMB` 一个目录装 8 个 `dataN`，
+ *     `…emb##` 一个目录只装一个徽章。两者名字只差大小写 + 末尾两位数字，别认错。
+ */
+export type WorksForm = 'per-slot' | 'per-slot-emb' | 'lr-archive';
 
 export interface GameEntry {
   /** 稳定 id（UI 的 `<select>` 用它做 value；不要改，会被测试钉住）。 */
@@ -119,6 +127,24 @@ export const GAMES: readonly GameEntry[] = [
   noteKo: 'BISLPS-25462EMB\\data0..7, "새 슬롯 만들기" 실기 확인 포함.',
   },
   {
+    id: 'ff-jp',
+    label: 'Formula Front 日版',
+    en: 'Formula Front (JP)',
+    ja: 'Formula Front 日本版',
+    ko: 'Formula Front 일본판',
+    hasSerial: true,
+    serial: 'SLPS-25461',
+    form: 'per-slot-emb',
+    verified: false,
+    note: '⚠ 读取已用真卡存档验证（BISLPS-25461emb00，逐像素复现）；写入只覆盖已有槽、尚未实机验证 ⇒ 写完请进游戏确认。',
+    noteEn:
+      '⚠ Reading verified on a real card (BISLPS-25461emb00, pixel-exact); writing only overwrites an existing slot and is not verified in-game yet - check it after writing.',
+    noteJa:
+      '⚠ 読み込みは実カードのセーブデータ（BISLPS-25461emb00、ピクセル単位で一致）で確認済み。書き込みは既存スロットの上書きのみで、実機確認はまだです ⇒ 書き込み後にゲーム内で確認してください。',
+    noteKo:
+      '⚠ 읽기는 실제 카드의 세이브 데이터(BISLPS-25461emb00, 픽셀 단위 일치)로 확인했습니다. 쓰기는 기존 슬롯 덮어쓰기만 지원하며 실기 확인은 아직입니다 ⇒ 쓰기 후 게임에서 확인하세요.',
+  },
+  {
     id: 'ac3',
     label: 'AC3',
     en: 'AC3',
@@ -197,6 +223,26 @@ export const GAMES: readonly GameEntry[] = [
 
 export function findGame(id: string): GameEntry | undefined {
   return GAMES.find((g) => g.id === id);
+}
+
+/**
+ * ★ 0.48：徽章块的**布局档** —— 只由作品形态决定，写入/取图两侧都按它分派。
+ *
+ *   · `'ac'`：AC3 / SL / NX / NB / … 那套 0x4440（36 字节头 + 18 段校验 + 调色板乱序）
+ *   · `'lr'`：Last Raven 0x4420（4 字节头 + 18 段校验）
+ *   · `'ff'`：Formula Front 0x44D8（无头 + 无 18 段校验 + 末尾 MD5）
+ */
+export type EmblemLayout = 'ac' | 'lr' | 'ff';
+
+export function layoutOfEntry(entry: GameEntry): EmblemLayout {
+  if (entry.form === 'lr-archive') return 'lr';
+  if (entry.form === 'per-slot-emb') return 'ff';
+  return 'ac';
+}
+
+/** 上面那个的上下文版（写入路径上到处都要用）。 */
+export function layoutOf(ctx: GameContext): EmblemLayout {
+  return layoutOfEntry(ctx.entry);
 }
 
 /** 默认选中的作品：LR 日版（唯一"新建槽"走过实机的形态）。 */
@@ -315,20 +361,29 @@ export function slotDirSuffix(slotIndex: number): string {
   return `E${String(slotIndex).padStart(2, '0')}`;
 }
 
-/** 非 LR：`E##` 目录名；LR：`…EMB` 目录名。 */
+/**
+ * 存档目录名：
+ *   · LR   ⇒ `…EMB`（一个目录装 8 槽）
+ *   · FF   ⇒ `…emb##`（**小写 emb** + 两位槽号；一个目录一槽）
+ *   · 其余 ⇒ `…E##`
+ */
 export function dirNameFor(ctx: GameContext, slotIndex: number): string {
   if (ctx.entry.form === 'lr-archive') return `${ctx.prefix}${ctx.serial}EMB`;
+  // ⚠ FF 的两位槽号**不带 `E`**（真卡是 `…emb00`，不是 `…embE00`）——
+  //   `slotDirSuffix()` 会给出 `E00`，这里只取它的两位数字部分（顺带复用那层入参校验）。
+  if (ctx.entry.form === 'per-slot-emb') return `${ctx.prefix}${ctx.serial}emb${slotDirSuffix(slotIndex).slice(1)}`;
   return `${ctx.prefix}${ctx.serial}${slotDirSuffix(slotIndex)}`;
 }
 
 /**
  * 从目录名里剥出盘序列号（用于把卡上的槽对上作品表）。
  *
- * `BISLPS-25169E01` → `SLPS-25169`；`BASLUS-25462EMB` → `SLUS-25462`。
+ * `BISLPS-25169E01` → `SLPS-25169`；`BASLUS-25462EMB` → `SLUS-25462`；
+ * `BISLPS-25461EMB00` → `SLPS-25461`（★ 0.48 的 FF 形态）。
  * ⚠ 前缀必须是 2 个字母，且后面紧跟系列码 —— 认不出就返回 `null`，**不猜**。
  */
 export function serialFromDirName(name: string): string | null {
-  const m = /^(BA|BI|BE)([A-Z]{4}-?\d{3,5})(?:E\d\d|EMB)$/.exec(name.toUpperCase());
+  const m = /^(BA|BI|BE)([A-Z]{4}-?\d{3,5})(?:E\d\d|EMB|EMB\d\d)$/.exec(name.toUpperCase());
   if (!m) return null;
   const digits = m[2];
   const dash = digits.indexOf('-');

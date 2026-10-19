@@ -36,6 +36,8 @@ import {
   SERIAL_KINDS,
   dirNameFor,
   findGame,
+  layoutOf,
+  layoutOfEntry,
   parseSerial,
   prefixForSerial,
   resolveGame,
@@ -195,11 +197,11 @@ const sha256 = (data: Uint8Array): string => createHash('sha256').update(data).d
 // (a) 作品表
 // ==========================================================================
 
-section('(a) 作品表：七个作品 + 自定义');
+section('(a) 作品表：八个作品 + 自定义');
 
-eq(GAMES.length, 9, '作品表项数（7 个作品 + AC2AA + 自定义，SPEC.md §七 的七部作品：AC2 / AC2AA / AC3 / SL / NX / NB / LR）');
+eq(GAMES.length, 10, '作品表项数（8 个作品 + 自定义，SPEC.md §七：AC2 / AC2AA / AC3 / SL / NX / NB / LR / FF）');
 ok(GAMES[GAMES.length - 1].id === 'custom', '最后一项必须是「自定义」');
-eq(GAMES.filter((g) => g.id !== 'custom').length, 8, '固定作品项数');
+eq(GAMES.filter((g) => g.id !== 'custom').length, 9, '固定作品项数');
 
 // SPEC.md §七：SL（美/日）/ NX / LR 有实机证据 ✅，其余 ⚠ 未验证
 const verifiedIds = GAMES.filter((g) => g.verified).map((g) => g.id).sort();
@@ -222,6 +224,8 @@ const serialTable: Array<[string, string]> = [
   ['ac2', 'SLUS-20014'],
   ['ac2aa', 'SLUS-20249'],
   ['nb', 'SLUS-21200'],
+  // ★ 0.48：Formula Front（PS2 日版）。卡上真实目录 BISLPS-25461emb00BISLPS-25461emb00。
+  ['ff-jp', 'SLPS-25461'],
 ];
 for (const [id, serial] of serialTable) {
   eq(findGame(id)?.serial, serial, `${id} 的盘序列号（文档 §六 总表）`);
@@ -233,7 +237,10 @@ eq(serialFromDirName('BISLPS-25169E01'), 'SLPS-25169', 'SL 日版：BISLPS-25169
 eq(serialFromDirName('BASLUS-20644E02'), 'SLUS-20644', 'SL 美版：BASLUS-20644E02 → SLUS-20644');
 eq(serialFromDirName('BISLPS-25462EMB'), 'SLPS-25462', 'LR：BISLPS-25462EMB → SLPS-25462');
 eq(serialFromDirName('BISLPS-25338E04'), 'SLPS-25338', 'NX：BISLPS-25338E04 → SLPS-25338');
-eq(serialFromDirName('BISLPS-25462GAME'), null, '非 E##/EMB 结尾 → null（不猜）');
+// ★ 0.48：FF 的 `…emb##`（小写 emb + 两位槽号）与 LR 的 `…EMB` 只差大小写/两位数字，两条都要认对
+eq(serialFromDirName('BISLPS-25461emb00'), 'SLPS-25461', 'FF：BISLPS-25461emb00 → SLPS-25461');
+eq(serialFromDirName('BISLPS-25461EMB07'), 'SLPS-25461', 'FF：大写形式也应认（大小写无关）');
+eq(serialFromDirName('BISLPS-25462GAME'), null, '非 E##/EMB/emb## 结尾 → null（不猜）');
 eq(serialFromDirName('icon.sys'), null, '普通文件名 → null');
 
 // ★ 0.19：原来这里还有 gameForDirName()/slotIndexFromDirName() 两组断言 —— 那两个函数
@@ -286,6 +293,12 @@ ok('error' in rg4, '未知作品 id ⇒ 报错');
 
 eq(dirNameFor({ entry: findGame('lr-jp')!, serial: 'SLPS-25462', prefix: 'BI', customSerial: false }, 3), 'BISLPS-25462EMB', 'LR 目录名与槽号无关');
 eq(dirNameFor({ entry: findGame('sl-jp')!, serial: 'SLPS-25169', prefix: 'BI', customSerial: false }, 3), 'BISLPS-25169E03', 'SL 目录名带 E##');
+// ★ 0.48：FF 的目录名 = `BISLPS-25461` + **小写 `emb`** + 两位槽号（与真卡逐字符一致）
+eq(dirNameFor({ entry: findGame('ff-jp')!, serial: 'SLPS-25461', prefix: 'BI', customSerial: false }, 0), 'BISLPS-25461emb00', 'FF 目录名 emb00');
+eq(dirNameFor({ entry: findGame('ff-jp')!, serial: 'SLPS-25461', prefix: 'BI', customSerial: false }, 7), 'BISLPS-25461emb07', 'FF 目录名 emb07');
+eq(layoutOfEntry(findGame('ff-jp')!), 'ff', 'FF 的块布局档 = ff');
+eq(layoutOfEntry(findGame('lr-jp')!), 'lr', 'LR 的块布局档 = lr');
+eq(layoutOfEntry(findGame('sl-jp')!), 'ac', 'SL 的块布局档 = ac');
 eq(DEFAULT_GAME_ID, 'lr-jp', '默认作品 = LR 日版');
 
 // ==========================================================================
@@ -399,6 +412,34 @@ eq(perSlot.slots[2].occupied, false, '槽 2 空');
 eq(perSlot.perSlotDirIndices.join(','), '0,1,5', '出现的 E## 槽号');
 eq(perSlot.slots[7].occupied, false, '槽 7 空');
 eq(perSlot.slots.filter((s) => s.occupied).length, 3, '非 LR 占用数 3');
+
+// ★ 0.48：FF 形态 —— `…emb##` 一个目录一槽（**不是** LR 的归档目录）
+const ffModel = buildGameSlotModel([
+  {
+    name: 'BISLPS-25461emb00',
+    entries: [
+      { name: '.', length: 0, cluster: 0, isDir: true },
+      { name: '..', length: 0, cluster: 0, isDir: true },
+      { name: 'BISLPS-25461emb00', length: 17624, cluster: 500, isDir: false },
+      { name: 'icon1.ico', length: 37728, cluster: 501, isDir: false },
+      { name: 'icon.sys', length: 964, cluster: 502, isDir: false },
+    ],
+  },
+  { name: 'BISLPS-25461sav00', entries: [] }, // 游戏存档目录：不是徽章目录，必须被忽略
+  {
+    // LR 的 EMB 目录仍然要走归档那条路，不能被 `emb` 规则吃错
+    name: 'BISLPS-25462EMB',
+    entries: [{ name: 'data0', length: 17440, cluster: 600, isDir: false }],
+  },
+]);
+eq(ffModel.hasLrArchive, true, 'FF 卡里混了 LR 归档目录 ⇒ hasLrArchive 仍为 true（按目录名判定）');
+eq(ffModel.slots[0].occupied, true, 'FF：emb00 → 槽 0 占用');
+eq(ffModel.slots[0].fileName, 'BISLPS-25461emb00', 'FF：槽 0 的文件名 = 与目录同名那个');
+eq(ffModel.slots[0].dirSlotIndex, 0, 'FF：槽 0 的 emb## 号 = 0');
+eq(ffModel.slots[0].length, 17624, 'FF：槽 0 的字节数（0x44D8）');
+eq(ffModel.slots[0].isLrArchive, false, 'FF 的槽**不是** LR 归档形态');
+eq(ffModel.dirNames.join(','), 'BISLPS-25461emb00,BISLPS-25462EMB', '只把 emb##/EMB 目录算进来（sav00 被忽略）');
+eq(layoutOf({ entry: findGame('ff-jp')!, serial: 'SLPS-25461', prefix: 'BI', customSerial: false }), 'ff', 'layoutOf(ctx) = ff');
 
 // 空卡
 const empty = buildGameSlotModel([]);
@@ -556,6 +597,50 @@ const allSlots = <T>(f: (i: number) => T): T[] => [0, 1, 2, 3, 4, 5, 6, 7].map(f
   ok(p.error!.includes('先在游戏里'), '拒绝理由要给出路："先在游戏里存一个徽章"');
   ok(p.error!.includes('BISLPS-25338E05'), '拒绝理由要点名缺哪个目录');
   eq(p.target, null, '拒绝时不产生任何写入目标');
+}
+// ★ 0.48：FF —— 每槽一个 `…emb##` 目录，规矩与 `E##` 相同（目录必须在，文件与目录同名）
+const ffCtx = { entry: findGame('ff-jp')!, serial: 'SLPS-25461', prefix: 'BI', customSerial: false };
+const ffCardDirs = ['BISLPS-25461emb00'];
+const ffView = buildGameSlotModel(
+  [{ name: 'BISLPS-25461emb00', entries: [{ name: 'BISLPS-25461emb00', length: 17624, cluster: 700, isDir: false }] }],
+  { serial: 'SLPS-25461' },
+);
+{
+  const p = planWriteTargetIn({ model: ffView, cardDirNames: ffCardDirs, ctx: ffCtx, slotIndex: 0 });
+  eq(p.error, null, 'FF 槽 1：目录在 ⇒ 可以写');
+  eq(p.target!.fileName, 'BISLPS-25461emb00', 'FF：目标文件名与目录同名');
+  eq(p.target!.isNew, false, 'FF：已有文件 ⇒ 视为覆盖');
+  eq(p.target!.cluster, 700, 'FF：带回真实首簇');
+}
+// ★ 0.48：目录不在、但卡上有**同作品的真实 FF 目录**当模板 ⇒ 允许"新建槽"
+{
+  const p = planWriteTargetIn({
+    model: ffView,
+    cardDirNames: ffCardDirs,
+    ctx: ffCtx,
+    slotIndex: 1,
+    ffTemplateDir: 'BISLPS-25461emb00',
+  });
+  eq(p.error, null, 'FF 槽 2（目录不在）但给了模板 ⇒ 允许新建');
+  eq(p.target!.dirName, 'BISLPS-25461emb01', 'FF 新建的目录名');
+  eq(p.target!.fileName, 'BISLPS-25461emb01', 'FF 新建的文件名 = 目录名');
+  eq(p.target!.isNew, true, 'FF 新槽标成"新建"');
+  ok(!!p.warning && /新建/.test(p.warning), 'FF 新槽必须提前说明"这是新建的"', p.warning ?? '');
+  ok(!!p.warning && p.warning.includes('02'), '警告里要写明标题编号会改成 02', p.warning ?? '');
+}
+{
+  // 没有模板 ⇒ 仍然拒绝（不凭空造 icon.sys / 图标）
+  const p = planWriteTargetIn({ model: ffView, cardDirNames: ffCardDirs, ctx: ffCtx, slotIndex: 1 });
+  ok(p.error !== null, 'FF 槽 2 且卡上没有模板 ⇒ 仍然拒绝');
+  eq(p.target, null, '没有模板时不产生目标');
+}
+{
+  const p = planWriteTargetIn({ model: ffView, cardDirNames: ffCardDirs, ctx: ffCtx, slotIndex: 4 });
+  ok(p.error !== null, 'FF 槽 5（emb04 目录不在卡上）⇒ 拒绝写入');
+  ok(
+    p.error!.includes('BISLPS-25461emb04'),
+    `FF 拒绝理由要点名缺哪个目录（应是 …emb04，不是 …b04）——实到：${p.error}`,
+  );
 }
 // AC3：模型是空的 ⇒ 8 个槽逐个查都得拒
 {
@@ -962,29 +1047,29 @@ if (!existsSync(DIST)) {
 // (h) ★ 版本号（用户要求：顶栏显示版本号，规则钉死）
 // ==========================================================================
 
-section('(h) ★ 版本号：顶栏显示 v0.47，规则从 0.1 起每次交付 +0.01');
+section('(h) ★ 版本号：顶栏显示 v0.48，规则从 0.1 起每次交付 +0.01');
 
 // 规则（用户 2026-10-05 定）：从 0.1 起、每次交付 +0.01；只有用户明确说"可以发布了"才进 1.x
 ok(/^0\.\d+$/.test(APP_VERSION), `APP_VERSION 必须是 0.x 形式（实到 "${APP_VERSION}"）`);
-eq(APP_VERSION, '0.47', '当前交付版本 = 0.47（本轮：加日语 / 韩语 —— 四语内联，受众中日欧美韩 ⇒ +0.01）');
-eq(APP_VERSION_LABEL, 'v0.47', '带 v 前缀的显示形式 = v0.47');
+eq(APP_VERSION, '0.48', '当前交付版本 = 0.48（本轮：加 Formula Front 作品项 + 第三种块布局 ⇒ +0.01）');
+eq(APP_VERSION_LABEL, 'v0.48', '带 v 前缀的显示形式 = v0.48');
 ok(!/^1\./.test(APP_VERSION), '★ 还没到 1.x（只有用户明确说"可以发布了"才允许进 1.x）');
 ok(/^M4-UI-\d+$/.test(UI_BUILD_TAG), `开发标记形如 M4-UI-N（实到 "${UI_BUILD_TAG}"）`);
-eq(UI_BUILD_TAG, 'M4-UI-48', '界面改动（四语）⇒ 开发标记递增到 M4-UI-48');
+eq(UI_BUILD_TAG, 'M4-UI-49', '界面改动（FF 作品项）⇒ 开发标记递增到 M4-UI-49');
 eq(readAppVersion(), APP_VERSION, 'build.mjs::readAppVersion() 读出来的与源码常量一致（不写死两份）');
 
 {
   const dist = existsSync(DIST) ? readFileSync(DIST, 'utf8') : '';
-  ok(dist.includes('v0.47'), '★ 产物里印着 v0.47');
+  ok(dist.includes('v0.48'), '★ 产物里印着 v0.48');
   ok(!dist.includes('单文件离线版'), '★ 产物里**不再有**"单文件离线版"那句占位文字');
   ok(dist.includes('id="app-version"'), '顶栏有版本号挂载点 #app-version');
-  ok(dist.includes('data-app-version="v0.47"'), '产物 HTML 里 #app-version 的标记值已是 v0.47（构建时替换，不是 JS 填的）');
+  ok(dist.includes('data-app-version="v0.48"'), '产物 HTML 里 #app-version 的标记值已是 v0.48（构建时替换，不是 JS 填的）');
   // ⚠ 必须用 indexOf（纯字符串），不能写正则 `/>v?</span>/` —— 那里的 `?` 是正则量词，
   //   会匹配到 `>v</span>`（本测试第一版就因此误报过一次）。
   ok(!dist.includes('>v?</span>'), '产物里没有残留的 `>v?<` 占位文本（JS 没跑起来也不会显示 v?）');
   eq((dist.match(/id="app-version"/g) ?? []).length, 1, '顶栏只有 1 个版本号挂载点');
   eq((dist.match(/data-app-version/g) ?? []).length, 1, '版本号标记只出现 1 次（没有第二份写死的）');
-  ok(dist.includes('id="app-version"') && /id="app-version"[^>]*>v0\.47</.test(dist), '#app-version 的可见文本就是 v0.47');
+  ok(dist.includes('id="app-version"') && /id="app-version"[^>]*>v0\.48</.test(dist), '#app-version 的可见文本就是 v0.48');
   // 欢迎日志：产物里看到的是模板字面量本身（运行时才插值），所以断言它的两个组成部分都在
   // ★ 0.18：那 8 行"欢迎 + ①②③④ + ★ 说明"**整块按用户要求删除**（"这几句话也删掉"）⇒
   //   版本号不再从日志里看，改看**顶栏** `#app-version`（构建时替换 + JS 兜底）。
@@ -1000,7 +1085,7 @@ eq(readAppVersion(), APP_VERSION, 'build.mjs::readAppVersion() 读出来的与�
   // 版本号只该有一个来源：产物里 `v0.47` 之外不该再出现别的 0.x 字面量
   //  ⚠ 注释里也别写出带 `v` 的旧版本号 —— 注释会被打进产物，这条断言就会被自己的注释弄红。
   const labels = new Set(dist.match(/v0\.\d+/g) ?? []);
-  eq([...labels].join(','), 'v0.47', '产物里只出现一个 0.x 版本号（没有第二份写死的）');
+  eq([...labels].join(','), 'v0.48', '产物里只出现一个 0.x 版本号（没有第二份写死的）');
 }
 
 // ==========================================================================

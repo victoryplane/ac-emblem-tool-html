@@ -63,6 +63,15 @@ export interface PlanInput {
   slotIndex: number;
   /** 某个 `E##` 目录里"与目录同名"的徽章文件名（没有则 null）；非 LR 用。 */
   emblemFileInDir?: (dirName: string) => string | null;
+  /**
+   * ★ 0.48：卡上**同作品**的某个 FF 徽章目录（`…emb##`，且它里面有徽章文件）。
+   *
+   * 用途：FF 的槽目录不存在时，可以**按它当模板新建**（复制 `icon.sys` / 图标、标题编号改成目标槽号）。
+   * 为什么只有 FF 允许这么做：FF 的槽目录只装 3 个文件，而模板就在卡上，可以逐文件照抄 ——
+   * 建出来的是**与游戏产物同形**的完整目录，不是"只建目录"的半成品。
+   * 其它作品（`E##`）仍旧拒绝新建目录（它们的目录里还有别的东西，且没有"整目录照抄"的依据）。
+   */
+  ffTemplateDir?: string | null;
 }
 
 /**
@@ -118,6 +127,20 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
 
   const dirName = dirNameFor(ctx, slotIndex);
   if (!model.dirNames.some((d) => d.toUpperCase() === dirName.toUpperCase())) {
+    // ★ 0.48：FF 的槽目录可以**按卡上同作品的真实目录当模板新建**（见 PlanInput.ffTemplateDir）。
+    //   ⚠ 这条必须在下面那条"拒绝"之前：否则永远走不到。
+    if (ctx.entry.form === 'per-slot-emb' && input.ffTemplateDir) {
+      return {
+        target: { slotIndex, dirName, fileName: dirName, isNew: true, cluster: 0, length: 0 },
+        warning: t(
+          `槽位 ${slotIndex + 1}：卡上还没有目录 ${dirName} —— 将按 ${input.ffTemplateDir} 新建` +
+            `（复制 icon.sys / 图标，标题编号改成 ${String(slotIndex + 1).padStart(2, '0')}）。这个槽是「新建」的，游戏是否认它还没实机验证。`,
+          `Slot ${slotIndex + 1}: the card has no folder ${dirName} yet - it will be CREATED after ${input.ffTemplateDir}` +
+            ` (copying icon.sys / icons and renumbering the title to ${String(slotIndex + 1).padStart(2, '0')}). This slot is new; whether the game accepts it is not verified in-game yet.`, `スロット ${slotIndex + 1}：カード上にフォルダ ${dirName} がまだありません —— ${input.ffTemplateDir} を雛形に「新規作成」します（icon.sys / アイコンを複製し、タイトルの番号を ${String(slotIndex + 1).padStart(2, '0')} に変更）。このスロットは新規で、ゲームが認識するかは実機未検証です。`, `슬롯 ${slotIndex + 1}: 카드에 폴더 ${dirName} 이(가) 아직 없습니다 —— ${input.ffTemplateDir} 을(를) 본보기로 새로 만듭니다(icon.sys / 아이콘 복사, 제목 번호를 ${String(slotIndex + 1).padStart(2, '0')} 로 변경). 이 슬롯은 신규이며 게임이 인식하는지는 실기 미검증입니다.`,
+        ),
+        error: null,
+      };
+    }
     const onCardButOtherGame = input.cardDirNames.map((n) => n.toUpperCase()).includes(dirName.toUpperCase());
     const isLr = ctx.entry.form === 'lr-archive';
     // ★ 0.43：正文压成**一行**（"为什么写不了 + 怎么办"），机制解释进 `errorDetail`（hover 才看）。
@@ -169,7 +192,10 @@ export function planWriteTargetIn(input: PlanInput): WritePlan {
       error: null,
     };
   }
-  const fileName = `${ctx.prefix}${ctx.serial}${dirName.slice(-3)}`;
+  // ★ 0.48：FF 的 `…emb##` 目录里，徽章文件与目录**同名**（真卡实测 BISLPS-25461emb00）。
+  //   ⚠ 不能用 `dirName.slice(-3)`（那是给 `E##` 用的）：对 `…emb00` 会拼出 `…b00`。
+  const fileName =
+    ctx.entry.form === 'per-slot-emb' ? dirName : `${ctx.prefix}${ctx.serial}${dirName.slice(-3)}`;
   return {
     target: { slotIndex, dirName, fileName, isNew: true, cluster: 0, length: 0 },
     warning: t(
